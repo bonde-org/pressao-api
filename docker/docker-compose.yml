@@ -1,0 +1,84 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql://pressao:pressao123@postgres:5432/pressao
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=pressao
+      - KEYCLOAK_CLIENT_ID=pressao-api
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-mock-secret}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-mock-key}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-mock-sid}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-mock-token}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - LOG_LEVEL=INFO
+      - METRICS_ENABLED=true
+    depends_on:
+      - postgres
+      - keycloak
+    restart: unless-stopped
+    volumes:
+      - ../logs:/app/logs
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: pressao
+      POSTGRES_PASSWORD: pressao123
+      POSTGRES_DB: postgres  # Banco padrão para conexão inicial
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pressao"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0.1
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: pressao
+      KC_DB_PASSWORD: pressao123
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+    ports:
+      - "8080:8080"
+    command: start-dev
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  grafana_data:
