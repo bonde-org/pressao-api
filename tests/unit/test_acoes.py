@@ -1,10 +1,10 @@
 import pytest
 from uuid import uuid4
 from datetime import datetime, timedelta
-from app.models.acao import Acao
-from app.schemas.acao import StatusAcaoEnum, ProximoPassoTipoEnum, CanalEnum
-from app.services.metricas import CalculadoraMetricas
-from app.services.orquestrador import OrquestradorCanais
+from pressao_api.models.acao import Acao
+from pressao_api.schemas.acao import StatusAcaoEnum, ProximoPassoTipoEnum, CanalEnum
+from pressao_api.services.metricas import CalculadoraMetricas
+from pressao_api.services.orquestrador import OrquestradorCanais
 
 class TestMetricas:
     """Testes para calculadora de métricas."""

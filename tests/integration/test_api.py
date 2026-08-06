@@ -1,6 +1,6 @@
 import pytest
 from uuid import uuid4
-from app.schemas.acao import CanalEnum
+from pressao_api.schemas.acao import CanalEnum
 
 class TestAPI:
     """Testes de integração da API."""

@@ -10,7 +10,6 @@ from pressao_api.schemas.acao import (
     RespostaAcaoResponse,
     AcaoDetailResponse,
     AcaoStatusResponse,
-    ConfirmarAcaoRequest,
     StatusAcaoEnum,
     ProximoPassoResponse,
     ProximoPassoTipoEnum,
@@ -161,7 +160,6 @@ async def obter_status_acao(
 )
 async def confirmar_acao(
     acao_id: UUID,
-    request: ConfirmarAcaoRequest,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):

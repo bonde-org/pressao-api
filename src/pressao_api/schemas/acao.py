@@ -37,9 +37,6 @@ class CriarAcaoRequest(BaseModel):
     class Config:
         use_enum_values = True
 
-class ConfirmarAcaoRequest(BaseModel):
-    pass  # Sem dados no corpo
-
 # Response schemas
 class ProximoPassoResponse(BaseModel):
     tipo: ProximoPassoTipoEnum

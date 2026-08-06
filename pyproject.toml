@@ -51,6 +51,12 @@ dev = [
     "mypy>=1.7.0",
     "pre-commit>=3.5.0",
     "faker>=20.0.0",
+
+    # Banco SQLite APENAS para testes
+    "aiosqlite>=0.19.0",
+    
+    # Para debug local
+    "ipython>=8.12.0",
 ]
 
 [tool.uv]
