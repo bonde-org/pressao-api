@@ -1,17 +1,51 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import make_asgi_app
+from prometheus_client import make_asgi_app, REGISTRY
 import structlog
 
 from pressao_api.core.config import settings
 from pressao_api.core.database import engine
 from pressao_api.api.v1.router import api_router
 from pressao_api.utils.logger import setup_logging
+from pressao_api.core.metrics import MetricsMiddleware, setup_db_metrics, APP_NAMESPACE
+
 
 setup_logging()
 logger = structlog.get_logger()
 
+def register_collector(collector_class, name):
+    """Registra um collector de forma segura"""
+    try:
+        REGISTRY.register(collector_class())
+        logger.info(f"✅ {name} registrado")
+    except Exception as e:
+        if "Duplicated" in str(e) or "already" in str(e).lower():
+            logger.info(f"⏭️ {name} já registrado")
+        else:
+            logger.warning(f"⚠️ {name}: {e}")
+
+# Python GC (Garbage Collector)
+try:
+    from prometheus_client import GCCollector
+    register_collector(GCCollector, "GCCollector")
+    logger.info("Metricas do Garbage Collector habilitadas")
+except ImportError:
+    logger.warning("GCCollector nao disponivel")
+
+# Plataforma (Info do sistema)
+try:
+    from prometheus_client import PlatformCollector
+    register_collector(PlatformCollector, "PlatformCollector")
+    logger.info("Metricas de plataforma habilitadas")
+except ImportError:
+    logger.warning("PlatformCollector nao disponivel")
+
+# CONFIGURA MÉTRICAS DO BANCO
+setup_db_metrics(engine)
+
+
+# LIFESPAN
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gerencia o ciclo de vida da aplicação."""
@@ -49,8 +83,13 @@ app.add_middleware(
 
 # Configura monitoramento
 if settings.METRICS_ENABLED:
+    # Middleware de métricas
+    app.add_middleware(MetricsMiddleware)
+    
     metrics_app = make_asgi_app()
     app.mount("/api/metrics", metrics_app)
+    
+    logger.info(f"✅ Métricas habilitadas em /api/metrics (namespace: {APP_NAMESPACE})")
 
 # Registra as rotas
 app.include_router(api_router, prefix="/api/v1")

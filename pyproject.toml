@@ -36,6 +36,7 @@ dependencies = [
     # Monitoramento
     "prometheus-client>=0.19.0",
     "structlog>=24.1.0",
+    "psutil",
     
     # Utilitários
     "tenacity>=8.2.3",
