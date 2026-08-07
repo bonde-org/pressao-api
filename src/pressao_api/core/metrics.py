@@ -104,3 +104,38 @@ def setup_db_metrics(engine):
     @event.listens_for(engine.sync_engine, 'checkin')
     def on_checkin(dbapi_conn, connection_record):
         db_connections_active.dec()
+
+
+# Métricas de Negócio
+# Ações criadas por canal
+acoes_criadas_total = Counter(
+    'acoes_criadas_total',
+    'Total de ações de pressão criadas',
+    ['canal', 'status'],  # status: success, error
+    namespace=APP_NAMESPACE
+)
+
+# Tempo de confirmação
+acoes_tempo_confirmacao_seconds = Histogram(
+    'acoes_tempo_confirmacao_seconds',
+    'Tempo entre criação e confirmação da ação em segundos',
+    ['campanha_id', 'canal'],
+    buckets=[1, 5, 10, 30, 60, 120, 300, 600],
+    namespace=APP_NAMESPACE
+)
+
+# Ações por campanha
+acoes_por_campanha_total = Counter(
+    'acoes_por_campanha_total',
+    'Ações realizadas por campanha',
+    ['campanha_id', 'canal'],
+    namespace=APP_NAMESPACE
+)
+
+# Ações aguardando confirmação (Backlog)
+acoes_aguardando_confirmacao = Gauge(
+    'acoes_aguardando_confirmacao',
+    'Ações aguardando confirmação manual',
+    ['campanha_id', 'canal'],
+    namespace=APP_NAMESPACE
+)
