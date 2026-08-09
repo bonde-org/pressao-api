@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, UUID4, field_validator, model_validator
 from datetime import datetime
 from typing import Optional, Dict, Any
 from enum import Enum
+from pressao_api.utils.validadores import validar_email, validar_telefone
 
 class CanalEnum(str, Enum):
     EMAIL = "email"
@@ -30,15 +31,22 @@ class MetricaQualidadeEnum(str, Enum):
 # Request schemas
 
 class AtivistaInfo(BaseModel):
-    nome: Optional[str] = Field(None, max_length=200)
-    email: Optional[str] = Field(None, max_length=200)
-    telefone: Optional[str] = Field(None, max_length=20)
+    nome: Optional[str] = Field(None, max_length=200, description="Nome completo do ativista")
+    email: Optional[str] = Field(None, max_length=200, description="Email do ativista")
+    telefone: Optional[str] = Field(None, max_length=20, description="Telefone do ativista")
     
     @field_validator('email')
     @classmethod
     def validate_email(cls, v: Optional[str]) -> Optional[str]:
-        if v and '@' not in v:
-            raise ValueError('Email inválido')
+        if v and not validar_email(v):
+            raise ValueError('Formato de e-mail inválido')
+        return v
+    
+    @field_validator('telefone')
+    @classmethod
+    def validate_telefone(cls, v: Optional[str]) -> Optional[str]:
+        if v and not validar_telefone(v):
+            raise ValueError('Formato de telefone inválido. Use: (11) 99999-9999 ou 11999999999')
         return v
 
 class CriarAcaoRequest(BaseModel):

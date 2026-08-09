@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pressao_api.core.database import get_db
-from pressao_api.core.security import get_current_user, get_current_user_optional
+from pressao_api.core.security import get_current_user
 from pressao_api.schemas.acao import (
     CriarAcaoRequest,
     RespostaAcaoResponse,
@@ -13,13 +13,15 @@ from pressao_api.schemas.acao import (
     StatusAcaoEnum,
     ProximoPassoResponse,
     ProximoPassoTipoEnum,
-    MetricaQualidadeEnum,
 )
 from pressao_api.repositories.acao_repository import AcaoRepository
+from pressao_api.repositories.alvo_repository import AlvoRepository
+from pressao_api.repositories.campanha_repository import CampanhaRepository
 from pressao_api.services.orquestrador import orquestrador
 from pressao_api.core.metrics import acoes_criadas_total, acoes_por_campanha_total, acoes_aguardando_confirmacao, acoes_tempo_confirmacao_seconds
 from pressao_api.services.metricas import calculadora
-from pressao_api.models.acao import Acao
+from pressao_api.utils.validadores import validar_compatibilidade_canal_alvo, obter_mensagem_erro_compatibilidade
+
 import structlog
 
 logger = structlog.get_logger()
@@ -46,13 +48,44 @@ async def criar_acao(
     canal = None
     try:
         canal = request.canal.value if hasattr(request.canal, 'value') else request.canal
-        # Validações básicas (mock)
 
-        # Mock: valida se alvo pertence à campanha
-        # Em implementação real, consultar banco
+        # ========================
+        # Validações iniciais
+        # ========================
+
+        # Valida se a campanha existe
+        campanha_repo = CampanhaRepository(db)
+        campanha = await campanha_repo.buscar_por_id(request.campanha_id)
+        if not campanha:
+            raise HTTPException(status_code=404, detail="Campanha não encontrada")
+        
+        # Valida se a campanha está ativa
+        if not campanha.ativa:
+            raise HTTPException(status_code=400, detail="Campanha inativa")
+        
+        # Valida se o alvo existe e pertence à campanha
+        alvo_repo = AlvoRepository(db)
+        alvo = await alvo_repo.buscar_por_id(request.alvo_id)
+        if not alvo:
+            raise HTTPException(status_code=404, detail="Alvo não encontrado")
+        
+        # Valida se o alvo pertence à campanha
+        if alvo.campanha_id != request.campanha_id:
+            raise HTTPException(status_code=400, detail="Alvo não pertence à campanha informada")
+        
+        # Valida se o alvo está ativo
+        if not alvo.ativo:
+            raise HTTPException(status_code=400, detail="Alvo inativo")
+        
+        # VALIDA COMPATIBILIDADE CANAL X TIPO DE CONTATO
+        if not validar_compatibilidade_canal_alvo(canal, alvo.tipo_contato.value):
+            raise HTTPException(
+                status_code=400,
+                detail=obter_mensagem_erro_compatibilidade(canal, alvo.tipo_contato.value)
+            )
         
         # ============================================
-        # PREPARA DADOS DA AÇÃO
+        # Preparando dados da Ação
         # ============================================
         
         acao_data = {

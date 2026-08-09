@@ -14,7 +14,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from pressao_api.core.config import settings
 from pressao_api.core.database import Base
-from pressao_api.models.acao import Acao # Importa todos os modelos
+from pressao_api.models.acao import Acao
+from pressao_api.models.campanha import Campanha
+from pressao_api.models.alvo import Alvo
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

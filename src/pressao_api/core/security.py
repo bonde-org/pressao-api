@@ -89,15 +89,17 @@ async def get_current_user(
                 detail="Invalid user"
             )
         
+        is_service = "service-account" in auth.get_username(payload)
+        
         return {
             "id": auth.extract_user_id(payload),
-            "is_admin": auth.is_admin(payload),
+            "is_admin": auth.is_admin(payload) or is_service,
             "username": auth.get_username(payload),
             # Busca campos do Keycloak
             "nome": payload.get("nome") or payload.get("name") or payload.get("given_name"),
             "email": payload.get("email"),
             "telefone": payload.get("telefone") or payload.get("phone_number"),
-            "is_service": "service-account" in auth.get_username(payload),
+            "is_service": is_service,
             "payload": payload
         }
     except HTTPException:

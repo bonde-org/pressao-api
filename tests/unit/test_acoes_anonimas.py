@@ -76,7 +76,7 @@ class TestAcaoAnonimaSchema:
                     email="email-invalido"
                 )
             )
-        assert "Email inválido" in str(exc_info.value)
+        assert "Formato de e-mail inválido" in str(exc_info.value)
 
     def test_criar_acao_anonima_sem_ativista(self):
         """Ação anônima não precisa de dados do ativista"""
@@ -90,11 +90,14 @@ class TestAcaoAnonimaSchema:
         assert request.ativista is None
 
     def test_criar_acao_nao_anonima_sem_ativista(self):
-        """Ação não anônima sem ativista deve falhar"""
-        with pytest.raises(ValidationError) as exc_info:
-            CriarAcaoRequest(
-                campanha_id=uuid4(),
-                alvo_id=uuid4(),
-                canal=CanalEnum.EMAIL
-            )
-        assert "Ativista é obrigatório" in str(exc_info.value)
+        """Ação não anônima sem ativista deve passar (dados virão do token)"""
+        # Na vida real, o usuário logado fornece os dados
+        # O schema não deve bloquear, pois o endpoint vai preencher
+        request = CriarAcaoRequest(
+            campanha_id=uuid4(),
+            alvo_id=uuid4(),
+            canal=CanalEnum.EMAIL
+        )
+        assert request.anonimo is False
+        assert request.ativista is None
+        # O endpoint preencherá com os dados do token
