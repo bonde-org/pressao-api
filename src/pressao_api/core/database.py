@@ -23,6 +23,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 Base = declarative_base()
 
+
 async def get_db():
     """Dependência para obter sessão do banco."""
     async with AsyncSessionLocal() as session:

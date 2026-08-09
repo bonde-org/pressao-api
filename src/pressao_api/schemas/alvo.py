@@ -13,6 +13,7 @@ class TipoContato(str, Enum):
     WHATSAPP = "whatsapp"
     INSTAGRAM = "instagram"
 
+
 class AlvoBase(BaseModel):
     nome: str = Field(..., min_length=1, max_length=200, description="Nome do alvo")
     contato: str = Field(..., max_length=200, description="Contato (email ou telefone)")
@@ -20,18 +21,20 @@ class AlvoBase(BaseModel):
     metadados: dict[str, Any] | None = Field(None, description="Dados extras do alvo")
     ativo: bool = Field(default=True, description="Se o alvo está ativo")
 
+
 class AlvoCreate(AlvoBase):
     campanha_id: UUID4 = Field(..., description="ID da campanha")
-    
-    @model_validator(mode='after')
-    def validate_contato(self) -> 'AlvoCreate':
+
+    @model_validator(mode="after")
+    def validate_contato(self) -> "AlvoCreate":
         """Valida o contato baseado no tipo após a criação do modelo"""
         if self.tipo_contato == TipoContato.EMAIL and not validar_email(self.contato):
-            raise ValueError('Formato de e-mail inválido')
+            raise ValueError("Formato de e-mail inválido")
         elif self.tipo_contato == TipoContato.TELEFONE and not validar_telefone(self.contato):
-            raise ValueError('Formato de telefone inválido')
+            raise ValueError("Formato de telefone inválido")
         # WhatsApp e Instagram não têm validação específica
         return self
+
 
 class AlvoUpdate(BaseModel):
     nome: str | None = Field(None, min_length=1, max_length=200)
@@ -40,11 +43,12 @@ class AlvoUpdate(BaseModel):
     metadados: dict[str, Any] | None = None
     ativo: bool | None = None
 
+
 class AlvoResponse(AlvoBase):
     id: UUID4
     campanha_id: UUID4
     criado_em: datetime
     atualizado_em: datetime
-    
+
     class Config:
         from_attributes = True
