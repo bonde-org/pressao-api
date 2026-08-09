@@ -19,6 +19,10 @@ class KeycloakAuth:
         )
         self.audience = settings.KEYCLOAK_CLIENT_ID
         self.issuer = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
+        
+    def get_username(self, payload: dict[str, Any]) -> str:
+        """Extrai username do payload."""
+        return payload.get("preferred_username", "")
     
     async def validate_token(self, token: str) -> dict[str, Any]:
         """Valida token JWT do Keycloak."""

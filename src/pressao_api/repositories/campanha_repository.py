@@ -31,7 +31,7 @@ class CampanhaRepository:
         if ativa is not None:
             query = query.where(Campanha.ativa == ativa)
         result = await self.session.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
     
     async def atualizar(self, campanha_id: UUID, dados: dict) -> Campanha | None:
         campanha = await self.buscar_por_id(campanha_id)
