@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 import pytest
 import pytest_asyncio
 from typing import AsyncGenerator
@@ -32,6 +37,18 @@ def mock_admin():
     return {
         "id": "admin-123",
         "is_admin": True,
+        "payload": {}
+    }
+    
+@pytest.fixture
+def mock_service_account():
+    return {
+        "id": "service-account-123",
+        "is_admin": True,
+        "username": "service-account-pressao-api",
+        "nome": "Service Account",
+        "email": "service@pressao.com",
+        "is_service": True,
         "payload": {}
     }
 

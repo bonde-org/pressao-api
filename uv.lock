@@ -1179,6 +1179,7 @@ name = "pressao-api"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiosqlite" },
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "fastapi" },
@@ -1202,7 +1203,6 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "aiosqlite" },
     { name = "black" },
     { name = "faker" },
     { name = "ipython" },
@@ -1223,7 +1223,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.19.0" },
+    { name = "aiosqlite", specifier = ">=0.19.0" },
+    { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "alembic", specifier = ">=1.12.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.11.0" },

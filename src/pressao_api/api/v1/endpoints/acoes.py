@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pressao_api.core.database import get_db
-from pressao_api.core.security import get_current_user
+from pressao_api.core.security import get_current_user, get_current_user_optional
 from pressao_api.schemas.acao import (
     CriarAcaoRequest,
     RespostaAcaoResponse,
@@ -42,37 +42,82 @@ async def criar_acao(
 ):
     """
     Cria uma nova ação de pressão.
-    
-    - Valida autenticação
-    - Valida se alvo pertence à campanha (mock)
-    - Valida se canal é suportado
-    - Executa estratégia do canal
-    - Retorna próximo passo
     """
+    canal = None
     try:
+        canal = request.canal.value if hasattr(request.canal, 'value') else request.canal
         # Validações básicas (mock)
-        if not current_user:
-            raise HTTPException(status_code=401, detail="Usuário não autenticado")
-        
+
         # Mock: valida se alvo pertence à campanha
         # Em implementação real, consultar banco
         
-        # Cria ação
+        # ============================================
+        # PREPARA DADOS DA AÇÃO
+        # ============================================
         
-        canal_value = request.canal.value if hasattr(request.canal, 'value') else request.canal
         acao_data = {
-            "ativista_id": current_user["id"],
             "campanha_id": request.campanha_id,
             "alvo_id": request.alvo_id,
-            "canal": canal_value,
+            "canal": canal,
             "template_id": request.template_id,
             "status": StatusAcaoEnum.PROCESSANDO,
         }
         
+        is_service = current_user.get("is_service", False)
+        
+        # Usuário comum (logado)
+        if not is_service:
+            if request.anonimo:
+                acao_data.update({
+                    "anonimo": True,
+                    "ativista_id": None,
+                    "ativista_nome": None,
+                    "ativista_email": None,
+                    "ativista_telefone": None,
+                })
+                logger.info("Ação anônima criada por usuário logado", user_id=current_user["id"])
+            else:
+                acao_data.update({
+                    "ativista_id": current_user["id"],
+                    "ativista_nome": current_user.get("nome"),
+                    "ativista_email": current_user.get("email"),
+                    "ativista_telefone": current_user.get("telefone"),
+                    "anonimo": False,
+                })
+                logger.info("Ação criada por usuário logado", user_id=current_user["id"])
+        
+        # Service Account
+        else:
+            if request.anonimo:
+                acao_data.update({
+                    "anonimo": True,
+                    "ativista_nome": None,
+                    "ativista_email": None,
+                    "ativista_telefone": None,
+                    # ativista_id fica None
+                })
+                logger.info("Ação anônima via service account")
+            else:
+                acao_data.update({
+                    "anonimo": False,
+                    "ativista_nome": request.ativista.nome if request.ativista else None,
+                    "ativista_email": request.ativista.email if request.ativista else None,
+                    "ativista_telefone": request.ativista.telefone if request.ativista else None,
+                    # ativista_id fica None (service account não é o ativista)
+                })
+                logger.info("Ação via service account para ativista")
+        
+        # Importante: se for anônimo, garantir que ativista_id seja None
+        if acao_data.get("anonimo", False):
+            acao_data["ativista_id"] = None
+        
+        # ============================================
+        # CRIA AÇÃO
+        # ============================================
+        
         repo = AcaoRepository(db)
         acao = await repo.criar(acao_data)
         
-        # Executa orquestrador
         try:
             acao = await orquestrador.executar(acao)
             await repo.salvar(acao)
@@ -84,29 +129,36 @@ async def criar_acao(
                 detail=f"Erro ao executar ação: {str(e)}"
             )
         
-        # Coletando métricas de negócio
+        # ============================================
+        # MÉTRICAS DE NEGÓCIO
+        # ============================================
+        
         # Ação criada com sucesso por canal
         acoes_criadas_total.labels(
-            canal=canal_value,
+            canal=canal,
             status='success'
         ).inc()
         
         # Ação por campanha
         acoes_por_campanha_total.labels(
             campanha_id=str(request.campanha_id),
-            canal=canal_value
+            canal=canal
         ).inc()
         
         # Ação aguardando confirmação (se aplicável)
         acoes_aguardando_confirmacao.labels(
             campanha_id=str(request.campanha_id),
-            canal=canal_value
+            canal=canal
         ).inc()
         
         # Prepara resposta
         return RespostaAcaoResponse(
             acao_id=acao.id,
             ativista_id=acao.ativista_id,
+            ativista_nome=acao.ativista_nome,
+            ativista_email=acao.ativista_email,
+            ativista_telefone=acao.ativista_telefone,
+            anonimo=acao.anonimo,
             campanha_id=acao.campanha_id,
             alvo_id=acao.alvo_id,
             status_atual=acao.status,
@@ -117,20 +169,20 @@ async def criar_acao(
             )
         )
     except HTTPException:
-        canal_value = request.canal.value if hasattr(request.canal, 'value') else request.canal
-        # 📊 Métrica: Erro na criação
-        acoes_criadas_total.labels(
-            canal=canal_value,
-            status='error'
-        ).inc()
+        if canal:
+            # Métrica: Erro na criação
+            acoes_criadas_total.labels(
+                canal=canal,
+                status='error'
+            ).inc()
         raise
     except Exception as e:
-        canal_value = request.canal.value if hasattr(request.canal, 'value') else request.canal
-        # 📊 Métrica: Erro na criação
-        acoes_criadas_total.labels(
-            canal=canal_value,
-            status='error'
-        ).inc()
+        if canal:
+            # Métrica: Erro na criação
+            acoes_criadas_total.labels(
+                canal=canal,
+                status='error'
+            ).inc()
         logger.error("Erro inesperado ao criar ação", error=str(e))
         raise HTTPException(status_code=500, detail="Erro interno ao criar ação")
 

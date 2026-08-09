@@ -1,5 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, JSON, Integer
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, DateTime, Enum, JSON, Integer, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
@@ -11,7 +10,15 @@ class Acao(Base):
     __tablename__ = "acoes"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    ativista_id = Column(String(100), nullable=False, index=True)
+    
+    # Ativista (opcional para anônimos)
+    ativista_id = Column(String(100), nullable=True, index=True)
+    ativista_nome = Column(String(200), nullable=True)
+    ativista_email = Column(String(200), nullable=True, index=True)
+    ativista_telefone = Column(String(20), nullable=True, index=True)
+    anonimo = Column(Boolean, nullable=False, default=False)
+    
+    # Ação
     campanha_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     alvo_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     canal = Column(String(20), nullable=False)

@@ -70,20 +70,43 @@ class KeycloakAuth:
 security = HTTPBearer()
 auth = KeycloakAuth()
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)):
-    """Dependência para obter usuário atual."""
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Security(security)
+) -> dict:
+    """
+    Dependência para obter usuário atual (OBRIGATÓRIA).
+    Levanta exceção se não autenticado.
+    """
     token = credentials.credentials
-    payload = await auth.validate_token(token)
-    user_id = auth.extract_user_id(payload)
     
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid user")
-    
-    return {
-        "id": user_id,
-        "is_admin": auth.is_admin(payload),
-        "payload": payload
-    }
+    try:
+        payload = await auth.validate_token(token)
+        user_id = auth.extract_user_id(payload)
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid user"
+            )
+        
+        return {
+            "id": auth.extract_user_id(payload),
+            "is_admin": auth.is_admin(payload),
+            "username": auth.get_username(payload),
+            # Busca campos do Keycloak
+            "nome": payload.get("nome") or payload.get("name") or payload.get("given_name"),
+            "email": payload.get("email"),
+            "telefone": payload.get("telefone") or payload.get("phone_number"),
+            "is_service": "service-account" in auth.get_username(payload),
+            "payload": payload
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication failed"
+        )
 
 async def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
@@ -94,9 +117,20 @@ async def get_current_user_optional(
     
     try:
         payload = await auth.validate_token(credentials.credentials)
+        user_id = auth.extract_user_id(payload)
+        
+        if not user_id:
+            return None
+        
         return {
             "id": auth.extract_user_id(payload),
             "is_admin": auth.is_admin(payload),
+            "username": auth.get_username(payload),
+            # Busca campos do Keycloak
+            "nome": payload.get("nome") or payload.get("name") or payload.get("given_name"),
+            "email": payload.get("email"),
+            "telefone": payload.get("telefone") or payload.get("phone_number"),
+            "is_service": "service-account" in auth.get_username(payload),
             "payload": payload
         }
     except:

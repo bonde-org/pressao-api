@@ -12,7 +12,12 @@ class TestAPI:
             json={
                 "campanha_id": str(uuid4()),
                 "alvo_id": str(uuid4()),
-                "canal": CanalEnum.EMAIL.value
+                "canal": CanalEnum.EMAIL.value,
+                "anonimo": False,
+                "ativista": {
+                    "nome": "Teste",
+                    "email": "teste@email.com"
+                }
             }
         )
         
@@ -28,7 +33,12 @@ class TestAPI:
             json={
                 "campanha_id": str(uuid4()),
                 "alvo_id": str(uuid4()),
-                "canal": CanalEnum.WHATSAPP.value
+                "canal": CanalEnum.WHATSAPP.value,
+                "anonimo": False,
+                "ativista": {
+                    "nome": "Teste",
+                    "email": "teste@email.com"
+                }
             }
         )
         
@@ -46,7 +56,12 @@ class TestAPI:
             json={
                 "campanha_id": str(uuid4()),
                 "alvo_id": str(uuid4()),
-                "canal": CanalEnum.EMAIL.value
+                "canal": CanalEnum.EMAIL.value,
+                "anonimo": False,
+                "ativista": {
+                    "nome": "Teste",
+                    "email": "teste@email.com"
+                }
             }
         )
         acao_id = create_resp.json()["acao_id"]
@@ -66,7 +81,12 @@ class TestAPI:
             json={
                 "campanha_id": str(uuid4()),
                 "alvo_id": str(uuid4()),
-                "canal": CanalEnum.EMAIL.value
+                "canal": CanalEnum.EMAIL.value,
+                "anonimo": False,
+                "ativista": {
+                    "nome": "Teste",
+                    "email": "teste@email.com"
+                }
             }
         )
         acao_id = create_resp.json()["acao_id"]
@@ -86,7 +106,12 @@ class TestAPI:
             json={
                 "campanha_id": str(uuid4()),
                 "alvo_id": str(uuid4()),
-                "canal": CanalEnum.WHATSAPP.value
+                "canal": CanalEnum.WHATSAPP.value,
+                "anonimo": False,
+                "ativista": {
+                    "nome": "Teste",
+                    "email": "teste@email.com"
+                }
             }
         )
         acao_id = create_resp.json()["acao_id"]

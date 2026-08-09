@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -29,6 +29,12 @@ class AcaoRepository:
     async def buscar_por_ativista(self, ativista_id: str) -> list[Acao]:
         """Busca ações de um ativista."""
         query = select(Acao).where(Acao.ativista_id == ativista_id)
+        result = await self.session.execute(query)
+        return result.scalars().all()
+    
+    async def buscar_por_email(self, email: str) -> List[Acao]:
+        """Busca ações por email do ativista"""
+        query = select(Acao).where(Acao.ativista_email == email)
         result = await self.session.execute(query)
         return result.scalars().all()
     

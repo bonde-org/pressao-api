@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field, UUID4, field_validator, model_validator
 from datetime import datetime
 from typing import Optional, Dict, Any
 from enum import Enum
@@ -28,14 +28,41 @@ class MetricaQualidadeEnum(str, Enum):
     BAIXA = "baixa"
 
 # Request schemas
+
+class AtivistaInfo(BaseModel):
+    nome: Optional[str] = Field(None, max_length=200)
+    email: Optional[str] = Field(None, max_length=200)
+    telefone: Optional[str] = Field(None, max_length=20)
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        if v and '@' not in v:
+            raise ValueError('Email inválido')
+        return v
+
 class CriarAcaoRequest(BaseModel):
     campanha_id: UUID4
     alvo_id: UUID4
     canal: CanalEnum
     template_id: Optional[UUID4] = None
     
-    class Config:
-        use_enum_values = True
+    ativista: Optional[AtivistaInfo] = None
+    anonimo: bool = False
+    
+    @model_validator(mode='after')
+    def validate_identificacao(self) -> 'CriarAcaoRequest':
+        """Valida que pelo menos um identificador foi fornecido"""
+        if self.anonimo:
+            return self
+        
+        if not self.ativista:
+            return self
+        
+        if not self.ativista.email and not self.ativista.telefone:
+            raise ValueError('É necessário fornecer email ou telefone do ativista')
+        
+        return self
 
 # Response schemas
 class ProximoPassoResponse(BaseModel):
@@ -45,7 +72,11 @@ class ProximoPassoResponse(BaseModel):
 
 class RespostaAcaoResponse(BaseModel):
     acao_id: UUID4
-    ativista_id: str
+    ativista_id: Optional[str] = None
+    ativista_nome: Optional[str] = None
+    ativista_email: Optional[str] = None
+    ativista_telefone: Optional[str] = None
+    anonimo: bool = False  # ← IMPORTANTE!
     campanha_id: UUID4
     alvo_id: UUID4
     status_atual: StatusAcaoEnum
@@ -54,6 +85,10 @@ class RespostaAcaoResponse(BaseModel):
 class AcaoDetailResponse(BaseModel):
     id: UUID4
     ativista_id: str
+    ativista_nome: Optional[str] = None
+    ativista_email: Optional[str] = None
+    ativista_telefone: Optional[str] = None
+    anonimo: bool = False
     campanha_id: UUID4
     alvo_id: UUID4
     canal: str
