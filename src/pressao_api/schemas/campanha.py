@@ -1,11 +1,12 @@
-from pydantic import BaseModel, Field, UUID4, field_validator
-from typing import Optional, List
 from datetime import datetime
+
+from pydantic import UUID4, BaseModel, Field, field_validator
+
 
 class CampanhaBase(BaseModel):
     nome: str = Field(..., min_length=3, max_length=200, description="Nome da campanha")
-    descricao: Optional[str] = Field(None, description="Descrição da campanha")
-    dominios_permitidos: Optional[List[str]] = Field(default=[], description="Domínios autorizados para acessar esta campanha")
+    descricao: str | None = Field(None, description="Descrição da campanha")
+    dominios_permitidos: list[str] | None = Field(default=[], description="Domínios autorizados para acessar esta campanha")
     ativa: bool = Field(default=True, description="Se a campanha está ativa")
     
     @field_validator('dominios_permitidos', mode='before')
@@ -20,10 +21,10 @@ class CampanhaCreate(CampanhaBase):
     pass
 
 class CampanhaUpdate(BaseModel):
-    nome: Optional[str] = Field(None, min_length=3, max_length=200)
-    descricao: Optional[str] = None
-    dominios_permitidos: Optional[List[str]] = None
-    ativa: Optional[bool] = None
+    nome: str | None = Field(None, min_length=3, max_length=200)
+    descricao: str | None = None
+    dominios_permitidos: list[str] | None = None
+    ativa: bool | None = None
     
     @field_validator('dominios_permitidos', mode='before')
     @classmethod

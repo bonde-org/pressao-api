@@ -1,7 +1,10 @@
-import pytest
 from uuid import uuid4
-from pressao_api.repositories.acao_repository import AcaoRepository
+
+import pytest
+
 from pressao_api.models.acao import Acao
+from pressao_api.repositories.acao_repository import AcaoRepository
+
 
 class TestAcaoRepositoryAnonimo:
     """Testes do repositório com dados anônimos"""
@@ -69,7 +72,7 @@ class TestAcaoRepositoryAnonimo:
 
     @pytest.mark.asyncio
     async def test_buscar_acoes_por_email(self, db_session):
-        repo = AcaoRepository(db_session)
+        AcaoRepository(db_session)
         
         email = "busca@email.com"
         

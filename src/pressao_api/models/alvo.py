@@ -1,9 +1,12 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, JSON, Enum, Boolean
-from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
-import uuid
-from pressao_api.core.database import Base
 import enum
+import uuid
+from datetime import datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, String
+from sqlalchemy.dialects.postgresql import UUID
+
+from pressao_api.core.database import Base
+
 
 class TipoContato(str, enum.Enum):
     EMAIL = "email"

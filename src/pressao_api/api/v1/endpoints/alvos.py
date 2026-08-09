@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
 from uuid import UUID
-from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pressao_api.core.database import get_db
 from pressao_api.core.security import get_current_user
-from pressao_api.schemas.alvo import AlvoCreate, AlvoUpdate, AlvoResponse
 from pressao_api.repositories.alvo_repository import AlvoRepository
 from pressao_api.repositories.campanha_repository import CampanhaRepository
+from pressao_api.schemas.alvo import AlvoCreate, AlvoResponse, AlvoUpdate
 
 router = APIRouter(prefix="/alvos", tags=["Alvos"])
 
@@ -37,10 +37,10 @@ async def criar_alvo(
     alvo = await alvo_repo.criar(request.model_dump())
     return alvo
 
-@router.get("/campanha/{campanha_id}", response_model=List[AlvoResponse])
+@router.get("/campanha/{campanha_id}", response_model=list[AlvoResponse])
 async def listar_alvos_por_campanha(
     campanha_id: UUID,
-    ativo: Optional[bool] = None,
+    ativo: bool | None = None,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):

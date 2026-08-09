@@ -1,6 +1,8 @@
 from datetime import datetime
-from pressao_api.schemas.acao import MetricaQualidadeEnum
+
 import structlog
+
+from pressao_api.schemas.acao import MetricaQualidadeEnum
 
 logger = structlog.get_logger()
 

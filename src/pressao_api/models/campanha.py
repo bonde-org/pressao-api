@@ -1,8 +1,11 @@
-from sqlalchemy import Column, String, DateTime, Text, Boolean, JSON
-from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
 import uuid
+from datetime import datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+
 from pressao_api.core.database import Base
+
 
 class Campanha(Base):
     __tablename__ = "campanhas"

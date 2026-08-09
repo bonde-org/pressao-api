@@ -1,23 +1,16 @@
-from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
-from alembic import context
-
 # Importa as configurações e modelos
 import sys
+from logging.config import fileConfig
 from pathlib import Path
+
+from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Adiciona o diretório src ao PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from pressao_api.core.config import settings
 from pressao_api.core.database import Base
-from pressao_api.models.acao import Acao
-from pressao_api.models.campanha import Campanha
-from pressao_api.models.alvo import Alvo
-
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

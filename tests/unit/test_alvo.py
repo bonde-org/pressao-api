@@ -1,8 +1,11 @@
-import pytest
 from uuid import uuid4
+
+import pytest
 from pydantic import ValidationError
+
 from pressao_api.models.alvo import Alvo, TipoContato
 from pressao_api.schemas.alvo import AlvoCreate
+
 
 class TestAlvo:
     

@@ -1,12 +1,7 @@
-from typing import Dict, Any
-from uuid import UUID
-from datetime import datetime
-from pressao_api.models.acao import Acao
-from pressao_api.schemas.acao import (
-    CanalEnum, StatusAcaoEnum, ProximoPassoTipoEnum,
-    ProximoPassoResponse
-)
 import structlog
+
+from pressao_api.models.acao import Acao
+from pressao_api.schemas.acao import CanalEnum, ProximoPassoTipoEnum, StatusAcaoEnum
 
 logger = structlog.get_logger()
 
@@ -78,7 +73,7 @@ class OrquestradorCanais:
         acao.proximo_passo_tipo = ProximoPassoTipoEnum.REDIRECIONAR_LINK
         acao.proximo_passo_instrucao = "Clique no link para enviar a mensagem no WhatsApp"
         acao.proximo_passo_dados = {
-            "link": f"https://wa.me/5511999999999?text=Ol%C3%A1%2C%20esta%20%C3%A9%20uma%20mensagem%20de%20press%C3%A3o",
+            "link": "https://wa.me/5511999999999?text=Ol%C3%A1%2C%20esta%20%C3%A9%20uma%20mensagem%20de%20press%C3%A3o",
             "texto": "Olá, esta é uma mensagem de pressão sobre o tema X"
         }
         logger.info("Link WhatsApp gerado", acao_id=str(acao.id))

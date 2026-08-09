@@ -1,7 +1,9 @@
+
 import pytest
-from uuid import uuid4
+
 from pressao_api.models.campanha import Campanha
 from pressao_api.schemas.campanha import CampanhaCreate
+
 
 class TestCampanha:
     

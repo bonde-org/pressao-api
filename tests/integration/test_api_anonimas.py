@@ -1,9 +1,9 @@
+
 import pytest
-from uuid import uuid4
-from fastapi.testclient import TestClient
-from pressao_api.main import app
-from pressao_api.core.database import get_db
+
 from pressao_api.core.security import get_current_user, get_current_user_optional
+from pressao_api.main import app
+
 
 class TestAPIAnonima:
     
@@ -42,7 +42,7 @@ class TestAPIAnonima:
             )
             # Verifica se a resposta é válida
             if resp.status_code != 201:
-                raise Exception(f"Falha ao criar alvo {tipo}: {resp.text}")
+                raise ValueError(f"Falha ao criar alvo {tipo}: {resp.text}")
             alvos[tipo] = resp.json()
             # Verifica se tem ID
             assert "id" in alvos[tipo], f"Alvo {tipo} sem ID: {alvos[tipo]}"

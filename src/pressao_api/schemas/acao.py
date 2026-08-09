@@ -1,8 +1,11 @@
-from pydantic import BaseModel, Field, UUID4, field_validator, model_validator
 from datetime import datetime
-from typing import Optional, Dict, Any
 from enum import Enum
+from typing import Any
+
+from pydantic import UUID4, BaseModel, Field, field_validator, model_validator
+
 from pressao_api.utils.validadores import validar_email, validar_telefone
+
 
 class CanalEnum(str, Enum):
     EMAIL = "email"
@@ -31,20 +34,20 @@ class MetricaQualidadeEnum(str, Enum):
 # Request schemas
 
 class AtivistaInfo(BaseModel):
-    nome: Optional[str] = Field(None, max_length=200, description="Nome completo do ativista")
-    email: Optional[str] = Field(None, max_length=200, description="Email do ativista")
-    telefone: Optional[str] = Field(None, max_length=20, description="Telefone do ativista")
+    nome: str | None = Field(None, max_length=200, description="Nome completo do ativista")
+    email: str | None = Field(None, max_length=200, description="Email do ativista")
+    telefone: str | None = Field(None, max_length=20, description="Telefone do ativista")
     
     @field_validator('email')
     @classmethod
-    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+    def validate_email(cls, v: str | None) -> str | None:
         if v and not validar_email(v):
             raise ValueError('Formato de e-mail inválido')
         return v
     
     @field_validator('telefone')
     @classmethod
-    def validate_telefone(cls, v: Optional[str]) -> Optional[str]:
+    def validate_telefone(cls, v: str | None) -> str | None:
         if v and not validar_telefone(v):
             raise ValueError('Formato de telefone inválido. Use: (11) 99999-9999 ou 11999999999')
         return v
@@ -53,9 +56,9 @@ class CriarAcaoRequest(BaseModel):
     campanha_id: UUID4
     alvo_id: UUID4
     canal: CanalEnum
-    template_id: Optional[UUID4] = None
+    template_id: UUID4 | None = None
     
-    ativista: Optional[AtivistaInfo] = None
+    ativista: AtivistaInfo | None = None
     anonimo: bool = False
     
     @model_validator(mode='after')
@@ -76,14 +79,14 @@ class CriarAcaoRequest(BaseModel):
 class ProximoPassoResponse(BaseModel):
     tipo: ProximoPassoTipoEnum
     instrucao: str
-    dados: Dict[str, Any]
+    dados: dict[str, Any]
 
 class RespostaAcaoResponse(BaseModel):
     acao_id: UUID4
-    ativista_id: Optional[str] = None
-    ativista_nome: Optional[str] = None
-    ativista_email: Optional[str] = None
-    ativista_telefone: Optional[str] = None
+    ativista_id: str | None = None
+    ativista_nome: str | None = None
+    ativista_email: str | None = None
+    ativista_telefone: str | None = None
     anonimo: bool = False  # ← IMPORTANTE!
     campanha_id: UUID4
     alvo_id: UUID4
@@ -93,18 +96,18 @@ class RespostaAcaoResponse(BaseModel):
 class AcaoDetailResponse(BaseModel):
     id: UUID4
     ativista_id: str
-    ativista_nome: Optional[str] = None
-    ativista_email: Optional[str] = None
-    ativista_telefone: Optional[str] = None
+    ativista_nome: str | None = None
+    ativista_email: str | None = None
+    ativista_telefone: str | None = None
     anonimo: bool = False
     campanha_id: UUID4
     alvo_id: UUID4
     canal: str
-    template_id: Optional[UUID4]
+    template_id: UUID4 | None
     status: StatusAcaoEnum
-    metrica_qualidade: Optional[MetricaQualidadeEnum]
-    tempo_resposta_seg: Optional[int]
-    confirmado_em: Optional[datetime]
+    metrica_qualidade: MetricaQualidadeEnum | None
+    tempo_resposta_seg: int | None
+    confirmado_em: datetime | None
     criado_em: datetime
     atualizado_em: datetime
     
@@ -114,5 +117,5 @@ class AcaoDetailResponse(BaseModel):
 class AcaoStatusResponse(BaseModel):
     id: UUID4
     status: StatusAcaoEnum
-    metrica_qualidade: Optional[MetricaQualidadeEnum]
-    confirmado_em: Optional[datetime]
+    metrica_qualidade: MetricaQualidadeEnum | None
+    confirmado_em: datetime | None

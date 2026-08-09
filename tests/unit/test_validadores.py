@@ -1,5 +1,10 @@
-import pytest
-from pressao_api.utils.validadores import validar_email, validar_telefone, validar_compatibilidade_canal_alvo, obter_mensagem_erro_compatibilidade
+from pressao_api.utils.validadores import (
+    obter_mensagem_erro_compatibilidade,
+    validar_compatibilidade_canal_alvo,
+    validar_email,
+    validar_telefone,
+)
+
 
 class TestFormatoEmailTelefone:
     

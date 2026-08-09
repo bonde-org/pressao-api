@@ -1,5 +1,5 @@
 import re
-from typing import Optional
+
 
 def validar_email(email: str) -> bool:
     """

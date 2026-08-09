@@ -1,15 +1,15 @@
 from contextlib import asynccontextmanager
+
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import make_asgi_app, REGISTRY
-import structlog
+from prometheus_client import REGISTRY, make_asgi_app
 
+from pressao_api.api.v1.router import api_router
 from pressao_api.core.config import settings
 from pressao_api.core.database import engine
-from pressao_api.api.v1.router import api_router
+from pressao_api.core.metrics import APP_NAMESPACE, MetricsMiddleware, setup_db_metrics
 from pressao_api.utils.logger import setup_logging
-from pressao_api.core.metrics import MetricsMiddleware, setup_db_metrics, APP_NAMESPACE
-
 
 setup_logging()
 logger = structlog.get_logger()
@@ -19,7 +19,7 @@ def register_collector(collector_class, name):
     try:
         REGISTRY.register(collector_class())
         logger.info(f"✅ {name} registrado")
-    except Exception as e:
+    except Exception as e: # noqa
         if "Duplicated" in str(e) or "already" in str(e).lower():
             logger.info(f"⏭️ {name} já registrado")
         else:
@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting application", env=settings.APP_ENV)
     
     # Inicializa a conexão com o banco
-    async with engine.begin() as conn:
+    async with engine.begin() as _:
         # Em produção, usar migrations, não criar tabelas automaticamente
         pass
     

@@ -1,10 +1,13 @@
-import pytest
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
-from datetime import datetime, timedelta
+
+import pytest
+
 from pressao_api.models.acao import Acao
-from pressao_api.schemas.acao import StatusAcaoEnum, ProximoPassoTipoEnum, CanalEnum
+from pressao_api.schemas.acao import CanalEnum, ProximoPassoTipoEnum, StatusAcaoEnum
 from pressao_api.services.metricas import CalculadoraMetricas
 from pressao_api.services.orquestrador import OrquestradorCanais
+
 
 class TestMetricas:
     """Testes para calculadora de métricas."""
@@ -31,7 +34,7 @@ class TestMetricas:
     
     def test_calcular_tempo_resposta(self):
         """Calcula tempo em segundos corretamente."""
-        criado = datetime.utcnow()
+        criado = datetime.now(UTC)
         confirmado = criado + timedelta(seconds=45)
         tempo = CalculadoraMetricas.calcular_tempo_resposta(criado, confirmado)
         assert tempo == 45

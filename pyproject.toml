@@ -74,6 +74,11 @@ target-version = ['py311']
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+ignore = [
+    "B008",  # Do not perform function call in argument defaults (FastAPI Depends)
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

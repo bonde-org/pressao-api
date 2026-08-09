@@ -1,28 +1,35 @@
-from typing import List, Optional
 from uuid import UUID
+
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pressao_api.core.database import get_db
-from pressao_api.core.security import get_current_user
-from pressao_api.schemas.acao import (
-    CriarAcaoRequest,
-    RespostaAcaoResponse,
-    AcaoDetailResponse,
-    AcaoStatusResponse,
-    StatusAcaoEnum,
-    ProximoPassoResponse,
-    ProximoPassoTipoEnum,
+from pressao_api.core.metrics import (
+    acoes_aguardando_confirmacao,
+    acoes_criadas_total,
+    acoes_por_campanha_total,
+    acoes_tempo_confirmacao_seconds,
 )
+from pressao_api.core.security import get_current_user
 from pressao_api.repositories.acao_repository import AcaoRepository
 from pressao_api.repositories.alvo_repository import AlvoRepository
 from pressao_api.repositories.campanha_repository import CampanhaRepository
-from pressao_api.services.orquestrador import orquestrador
-from pressao_api.core.metrics import acoes_criadas_total, acoes_por_campanha_total, acoes_aguardando_confirmacao, acoes_tempo_confirmacao_seconds
+from pressao_api.schemas.acao import (
+    AcaoDetailResponse,
+    AcaoStatusResponse,
+    CriarAcaoRequest,
+    ProximoPassoResponse,
+    ProximoPassoTipoEnum,
+    RespostaAcaoResponse,
+    StatusAcaoEnum,
+)
 from pressao_api.services.metricas import calculadora
-from pressao_api.utils.validadores import validar_compatibilidade_canal_alvo, obter_mensagem_erro_compatibilidade
-
-import structlog
+from pressao_api.services.orquestrador import orquestrador
+from pressao_api.utils.validadores import (
+    obter_mensagem_erro_compatibilidade,
+    validar_compatibilidade_canal_alvo,
+)
 
 logger = structlog.get_logger()
 
@@ -154,12 +161,12 @@ async def criar_acao(
         try:
             acao = await orquestrador.executar(acao)
             await repo.salvar(acao)
-        except Exception as e:
+        except Exception as e: # noqa
             logger.error("Falha ao executar ação", error=str(e))
             await repo.salvar(acao)
             raise HTTPException(
                 status_code=500,
-                detail=f"Erro ao executar ação: {str(e)}"
+                detail=f"Erro ao executar ação: {e!s}"
             )
         
         # ============================================
@@ -209,7 +216,7 @@ async def criar_acao(
                 status='error'
             ).inc()
         raise
-    except Exception as e:
+    except Exception as e: # noqa
         if canal:
             # Métrica: Erro na criação
             acoes_criadas_total.labels(
@@ -316,7 +323,8 @@ async def confirmar_acao(
     
     # Confirma a ação
     from datetime import datetime
-    agora = datetime.utcnow()
+    # Usar utcnow() para compatibilidade com o banco
+    agora = datetime.utcnow() # noqa: DTZ003
     
     acao.confirmado_em = agora
     acao.status = StatusAcaoEnum.CONCLUIDA

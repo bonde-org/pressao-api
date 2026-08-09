@@ -1,7 +1,10 @@
-import pytest
 from uuid import uuid4
-from pressao_api.main import app
+
+import pytest
+
 from pressao_api.core.security import get_current_user
+from pressao_api.main import app
+
 
 class TestAPIAlvo:
     

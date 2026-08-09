@@ -1,8 +1,10 @@
-from typing import Optional, List
 from uuid import UUID
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+
 from pressao_api.models.alvo import Alvo
+
 
 class AlvoRepository:
     def __init__(self, session: AsyncSession):
@@ -14,24 +16,24 @@ class AlvoRepository:
         await self.session.flush()
         return alvo
     
-    async def buscar_por_id(self, alvo_id: UUID) -> Optional[Alvo]:
+    async def buscar_por_id(self, alvo_id: UUID) -> Alvo | None:
         query = select(Alvo).where(Alvo.id == alvo_id)
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
     
-    async def listar_por_campanha(self, campanha_id: UUID, ativo: Optional[bool] = None) -> List[Alvo]:
+    async def listar_por_campanha(self, campanha_id: UUID, ativo: bool | None = None) -> list[Alvo]:
         query = select(Alvo).where(Alvo.campanha_id == campanha_id)
         if ativo is not None:
             query = query.where(Alvo.ativo == ativo)
         result = await self.session.execute(query)
         return result.scalars().all()
     
-    async def buscar_por_contato(self, contato: str) -> List[Alvo]:
+    async def buscar_por_contato(self, contato: str) -> list[Alvo]:
         query = select(Alvo).where(Alvo.contato == contato)
         result = await self.session.execute(query)
         return result.scalars().all()
     
-    async def atualizar(self, alvo_id: UUID, dados: dict) -> Optional[Alvo]:
+    async def atualizar(self, alvo_id: UUID, dados: dict) -> Alvo | None:
         alvo = await self.buscar_por_id(alvo_id)
         if not alvo:
             return None

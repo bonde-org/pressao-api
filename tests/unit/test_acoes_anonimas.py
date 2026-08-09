@@ -1,16 +1,13 @@
-import pytest
 from uuid import uuid4
+
+import pytest
 from pydantic import ValidationError
-from pressao_api.schemas.acao import (
-    CriarAcaoRequest,
-    AtivistaInfo,
-    CanalEnum
-)
+
+from pressao_api.schemas.acao import AtivistaInfo, CanalEnum, CriarAcaoRequest
+
 
 class TestAcaoAnonimaSchema:
     """Testes de validação do schema para ações anônimas"""
-
-class TestAcaoAnonimaSchema:
     
     def test_criar_acao_nao_anonima_com_email(self):
         """Ação não anônima com email deve passar"""

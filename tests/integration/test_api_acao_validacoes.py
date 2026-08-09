@@ -1,7 +1,9 @@
+
 import pytest
-from uuid import uuid4
-from pressao_api.main import app
+
 from pressao_api.core.security import get_current_user
+from pressao_api.main import app
+
 
 class TestAPIValidacoesAcao:
     
@@ -40,7 +42,7 @@ class TestAPIValidacoesAcao:
             )
             # Verifica se a resposta é válida
             if resp.status_code != 201:
-                raise Exception(f"Falha ao criar alvo {tipo}: {resp.text}")
+                raise ValueError(f"Falha ao criar alvo {tipo}: {resp.text}")
             alvos[tipo] = resp.json()
             # Verifica se tem ID
             assert "id" in alvos[tipo], f"Alvo {tipo} sem ID: {alvos[tipo]}"

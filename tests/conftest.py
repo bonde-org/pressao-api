@@ -3,15 +3,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from collections.abc import AsyncGenerator
+
 import pytest
 import pytest_asyncio
-from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from fastapi.testclient import TestClient
-from pressao_api.main import app  # ← Mudou de app.main para pressao_api.main
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from pressao_api.core.database import Base, get_db  # ← Mudou
 from pressao_api.core.security import get_current_user  # ← Mudou
-import os
+from pressao_api.main import app  # ← Mudou de app.main para pressao_api.main
 
 # Configuração para testes
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"

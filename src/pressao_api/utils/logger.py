@@ -1,7 +1,10 @@
 import logging
-import structlog
 import sys
+
+import structlog
+
 from pressao_api.core.config import settings
+
 
 def setup_logging():
     """Configura logging estruturado."""

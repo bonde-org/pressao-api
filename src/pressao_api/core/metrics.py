@@ -1,9 +1,8 @@
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, REGISTRY, Info
 import time
-from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import Request
-import psutil
 
+from fastapi import Request
+from prometheus_client import Counter, Gauge, Histogram, Info
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Configuraçõe de Métricas
 APP_NAMESPACE = "pressao_api"
@@ -71,7 +70,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             http_request_duration_seconds.labels(method=method, endpoint=endpoint, status=status).observe(duration)
             
             return response
-        except Exception as e:
+        except Exception:
             # Em caso de erro, ainda registra a métrica
             http_requests_total.labels(method=method, endpoint=endpoint, status=500).inc()
             raise

@@ -1,10 +1,12 @@
-from typing import Optional, Dict, Any
+from typing import Any
+
 import jwt
-from jwt import PyJWKClient
-from fastapi import HTTPException, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pressao_api.core.config import settings
 import structlog
+from fastapi import HTTPException, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient
+
+from pressao_api.core.config import settings
 
 logger = structlog.get_logger()
 
@@ -18,7 +20,7 @@ class KeycloakAuth:
         self.audience = settings.KEYCLOAK_CLIENT_ID
         self.issuer = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
     
-    async def validate_token(self, token: str) -> Dict[str, Any]:
+    async def validate_token(self, token: str) -> dict[str, Any]:
         """Valida token JWT do Keycloak."""
         try:
             # Obtém a chave pública
@@ -54,15 +56,15 @@ class KeycloakAuth:
         except jwt.InvalidTokenError as e:
             logger.error("Invalid token", error=str(e))
             raise HTTPException(status_code=401, detail="Invalid token")
-        except Exception as e:
+        except Exception as e: # noqa
             logger.error("Token validation error", error=str(e))
             raise HTTPException(status_code=401, detail="Authentication failed")
     
-    def extract_user_id(self, payload: Dict[str, Any]) -> str:
+    def extract_user_id(self, payload: dict[str, Any]) -> str:
         """Extrai ID do usuário do payload."""
         return payload.get("sub", "")
     
-    def is_admin(self, payload: Dict[str, Any]) -> bool:
+    def is_admin(self, payload: dict[str, Any]) -> bool:
         """Verifica se usuário é admin."""
         roles = payload.get("realm_access", {}).get("roles", [])
         return "admin" in roles
@@ -102,16 +104,14 @@ async def get_current_user(
             "is_service": is_service,
             "payload": payload
         }
-    except HTTPException:
-        raise
-    except Exception as e:
+    except Exception: # noqa
         raise HTTPException(
             status_code=401,
             detail="Authentication failed"
         )
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
+    credentials: HTTPAuthorizationCredentials | None = Security(security)
 ):
     """Dependência para obter usuário opcional."""
     if not credentials:
@@ -135,5 +135,5 @@ async def get_current_user_optional(
             "is_service": "service-account" in auth.get_username(payload),
             "payload": payload
         }
-    except:
+    except: # noqa
         return None

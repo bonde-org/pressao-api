@@ -1,5 +1,6 @@
-from typing import List, Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     # App
@@ -8,7 +9,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DEBUG: bool = False
     SECRET_KEY: str
-    ALLOWED_ORIGINS: List[str] = ["*"]
+    ALLOWED_ORIGINS: list[str] = ["*"]
     
     # Database
     DATABASE_URL: str
@@ -20,7 +21,7 @@ class Settings(BaseSettings):
     KEYCLOAK_REALM: str
     KEYCLOAK_CLIENT_ID: str
     KEYCLOAK_CLIENT_SECRET: str
-    KEYCLOAK_ADMIN_URL: Optional[str] = None
+    KEYCLOAK_ADMIN_URL: str | None = None
     
     # Providers
     SENDGRID_API_KEY: str
