@@ -1,13 +1,23 @@
 name: Build and Push Docker Image
 
 on:
-  push:
-    branches: [main, develop, feature/*]
-    tags:
-      - "v*"
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      branch:
+        description: 'Branch name'
+        required: true
+        type: string
+      sha:
+        description: 'Commit SHA'
+        required: true
+        type: string
+    secrets:
+      DOCKER_HUB_USERNAME:
+        required: true
+      DOCKER_HUB_TOKEN:
+        required: true
+      DOCKER_HUB_REPO:
+        required: false
 
 env:
   REGISTRY: docker.io
@@ -15,9 +25,8 @@ env:
   IMAGE_OWNER: ${{ secrets.DOCKER_HUB_REPO }}
 
 jobs:
-  build-and-push:
+  docker-build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,20 +43,28 @@ jobs:
       - name: Generate Docker tags
         id: tags
         run: |
-          # Converte o nome da branch para um formato de tag válido
-          BRANCH_NAME=$(echo "${GITHUB_REF_NAME}" | sed 's/\//-/g')
+          if [ -n "${{ secrets.DOCKER_HUB_REPO }}" ]; then
+            REPO="${{ secrets.DOCKER_HUB_REPO }}"
+          else
+            REPO="igrsantos/pressao-api"
+          fi
+          echo "repo=${REPO}" >> $GITHUB_OUTPUT
+          
+          BRANCH_NAME=$(echo "${{ inputs.branch }}" | sed 's/\//-/g')
           echo "branch_tag=${BRANCH_NAME}" >> $GITHUB_OUTPUT
-          echo "sha_short=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          
+          SHA_SHORT=$(echo "${{ inputs.sha }}" | cut -c1-8)
+          echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
 
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           file: docker/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.branch_tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.sha_short }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:latest
+            docker.io/${{ steps.tags.outputs.repo }}:${{ steps.tags.outputs.branch_tag }}
+            docker.io/${{ steps.tags.outputs.repo }}:${{ steps.tags.outputs.sha_short }}
+            docker.io/${{ steps.tags.outputs.repo }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
