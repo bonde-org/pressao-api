@@ -44,15 +44,17 @@ Cada ação é registrada de forma imutável e rastreável, garantindo auditoria
 └─────────────────────┬───────────────────────────────────────┘
                       │ HTTPS + JWT
                       ▼
-┌────────────────────────────────────────────────────────────┐
-│                    FastAPI (Backend)                       │
-│  ┌──────────────┬──────────────┬───────────────────────┐   │
-│  │  Endpoints   │  Services    │    Repositories       │   │
-│  │  - /acoes    │  - Orquestrador │  - AcaoRepository  │   │
-│  │  - /status   │  - Canais    │    - Campanha         │   │
-│  │  - /confirmar│  - Metricas  │    - Alvo             │   │
-│  └──────────────┴──────────────┴───────────────────────┘   │
-└─────────┬────────────────┬─────────────────┬───────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    FastAPI (Backend)                            │
+│  ┌────────────────┬─────────────────┬───────────────────────┐   │
+│  │  Endpoints     │  Services       │    Repositories       │   │
+│  │  - /acoes      │  - Orquestrador │  - AcaoRepository     │   │
+│  │  - /alvos      │  - Orquestrador │  - AlvoRepository     │   │
+│  │  - /campanhas  │  - Orquestrador │  - CampanhaRepository │   │
+│  │  - /status     │  - Canais       │  - Campanha           │   │
+│  │  - /confirmar  │  - Metricas     │  - ...                │   │
+│  └────────────────┴─────────────────┴───────────────────────┘   │
+└─────────┬────────────────┬─────────────────┬────────────────────┘
           │                │                 │
           ▼                ▼                 ▼
 ┌─────────────────┐ ┌──────────────┐ ┌──────────────────┐
@@ -76,15 +78,72 @@ Cada ação é registrada de forma imutável e rastreável, garantindo auditoria
 
 - ✅ Registro Imutável: Cada ação é registrada com timestamp e não pode ser alterada
 - ✅ Multi-canal: Suporte a e-mail, telefone, WhatsApp e Instagram
+- ✅ **Gestão de Campanhas**: Criação e organização de ações por campanha
+- ✅ **Gestão de Alvos**: Cadastro de contatos com validação de tipo (email, telefone, whatsapp, instagram)
+- ✅ **Validação de Compatibilidade**: Garantia que o canal da ação é compatível com o tipo de contato do alvo
 - ✅ Dual Mode: Execução síncrona (API) e assíncrona (manual)
 - ✅ Métricas de Qualidade: Classificação automática da qualidade da ação
 - ✅ Rastreabilidade Completa: Histórico completo de cada ação
+- ✅ **Suporte a Ações Anônimas**: Permite ações sem identificação do ativista
 
 ### Segurança
 
 - 🔐 SSO com Keycloak: Autenticação via JWT com Keycloak
 - 🔐 RBAC: Controle de acesso baseado em papéis (admin/ativista)
-- 🔐 Validação de Permissões: Ativistas só veem suas próprias ações
+- 🔐 **Service Account Automática**: Toda service account é automaticamente administradora
+- 🔐 **Validação de Permissões**: Ativistas só veem suas próprias ações
+- 🔐 **Ações Anônimas**: Suporte a ações sem identificação do ativista (via service account)
+
+#### Tipos de Usuário e Permissões
+
+| Tipo | Autenticação | Permissões |
+|------|--------------|------------|
+| **Usuário Comum** | Keycloak User | Criar ações, ver suas próprias ações |
+| **Administrador** | Keycloak User + role admin | Criar/editar/deletar campanhas, todas as ações |
+| **Service Account** | Client Credentials | **Automaticamente admin**, pode criar ações anônimas ou com dados |
+
+#### Service Account (M2M)
+
+Service accounts são ideais para:
+- Integrações com sistemas externos
+- Scripts de automação
+- Testes de carga
+- Ações anônimas
+
+**Exemplo de uso:**
+
+```bash
+# 1. Obter token da Service Account
+TOKEN=$(curl -s -X POST http://localhost:8080/realms/pressao/protocol/openid-connect/token \
+  -d "client_id=pressao-api" \
+  -d "client_secret=SEU_SECRET" \
+  -d "grant_type=client_credentials" | jq -r '.access_token')
+
+# 2. Criar ação anônima
+curl -X POST http://localhost:8000/api/v1/acoes/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campanha_id": "...",
+    "alvo_id": "...",
+    "canal": "whatsapp",
+    "anonimo": true
+  }'
+
+# 3. Criar ação com dados do ativista
+curl -X POST http://localhost:8000/api/v1/acoes/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campanha_id": "550e8400-e29b-41d4-a716-446655440000",
+    "alvo_id": "550e8400-e29b-41d4-a716-446655440001",
+    "canal": "email",
+    "ativista": {
+      "nome": "João Silva",
+      "email": "joao@email.com"
+    }
+  }'
+```
 
 ### Monitoramento
 
@@ -227,14 +286,17 @@ make docker-down
 
 ### Configuração do Keycloak
 
+**Importante:** Service accounts são automaticamente administradoras na API, dispensando configuração de roles específicas.
+
 1. Acesse o Keycloak em http://localhost:8080
 2. Faça login com admin/admin123
 3. Crie um Realm chamado pressao
 4. Crie um Client chamado pressao-api
 5. Configure:
-    - Access Type: bearer-only
-    - Service Accounts Enabled: On
-6. Crie usuários e atribua roles (admin, ativista)
+    - Client authentication: ON
+    - Service accounts roles: ON
+    - Standard flow: OFF (para M2M)
+6. Copie o Client Secret para o .env
 
 ## 📡 Endpoints da API
 
@@ -256,7 +318,12 @@ Content-Type: application/json
     "campanha_id": "550e8400-e29b-41d4-a716-446655440000",
     "alvo_id": "550e8400-e29b-41d4-a716-446655440001",
     "canal": "whatsapp",
-    "template_id": "550e8400-e29b-41d4-a716-446655440002"  // Opcional
+    "template_id": "550e8400-e29b-41d4-a716-446655440002",
+    "anonimo": false,  // Opcional: true para ações anônimas
+    "ativista": {      // Opcional: dados do ativista (se não for anônimo)
+        "nome": "Maria Silva",
+        "email": "maria@email.com"
+    }
 }
 ```
 
@@ -313,6 +380,51 @@ Authorization: Bearer {token_jwt}
 Content-Type: application/json
 
 {}  // Corpo vazio
+```
+
+**Criar Campanha** (Apenas Admin/Service Account)
+
+```http
+POST /api/v1/campanhas/
+Authorization: Bearer {token_jwt}
+Content-Type: application/json
+
+{
+    "nome": "Campanha de Pressão",
+    "descricao": "Descrição da campanha",
+    "dominios_permitidos": ["gmail.com", "yahoo.com"],
+    "ativa": true
+}
+```
+
+**Listar Campanhas**
+
+```http
+GET /api/v1/campanhas/
+Authorization: Bearer {token_jwt}
+```
+
+**Criar Alvo**
+
+```http
+POST /api/v1/alvos/
+Authorization: Bearer {token_jwt}
+Content-Type: application/json
+
+{
+    "nome": "João Silva",
+    "contato": "joao@email.com",
+    "tipo_contato": "email",
+    "campanha_id": "550e8400-e29b-41d4-a716-446655440000",
+    "metadados": {"cargo": "Diretor"}
+}
+```
+
+**Listar Alvos por Campanha**
+
+```http
+GET /api/v1/alvos/campanha/{campanha_id}
+Authorization: Bearer {token_jwt}
 ```
 
 ### Health Check
