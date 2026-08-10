@@ -104,7 +104,7 @@ class RespostaAcaoResponse(BaseModel):
 
 class AcaoDetailResponse(BaseModel):
     id: UUID4
-    ativista_id: str
+    ativista_id: str | None = None
     ativista_nome: str | None = None
     ativista_email: str | None = None
     ativista_telefone: str | None = None
