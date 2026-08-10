@@ -93,6 +93,7 @@ def setup_db_metrics(engine):
     """Configura métricas do banco de dados"""
     from sqlalchemy import event
 
+    # Usa a engine recebida como parâmetro
     @event.listens_for(engine.sync_engine, "checkout")
     def on_checkout(dbapi_conn, connection_record, connection_proxy):
         db_connections_active.inc()
