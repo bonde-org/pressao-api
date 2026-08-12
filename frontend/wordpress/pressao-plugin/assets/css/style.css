@@ -1,0 +1,66 @@
+/**
+ * Pressão Plugin - CSS Mínimo
+ * Com suporte ao nome da campanha
+ */
+
+/* Container base */
+.pressao-widget-container,
+.pressao-form-container,
+.pressao-list-container {
+    display: block;
+    width: 100%;
+}
+
+/* Header do widget com nome + campanha */
+.pressao-widget-header {
+    display: inline;
+}
+
+/* Nome do widget */
+.pressao-widget-name {
+    display: inline;
+}
+
+/* Nome da campanha */
+.pressao-widget-campaign {
+    display: inline;
+}
+
+.pressao-campaign-separator {
+    display: inline;
+    margin: 0 5px;
+    color: #999;
+}
+
+.pressao-campaign-name {
+    display: inline;
+    font-weight: 500;
+}
+
+/* Conteúdo dinâmico */
+.pressao-widget-content,
+.pressao-form-content,
+.pressao-list-content {
+    display: none;
+}
+
+.pressao-widget-content.active,
+.pressao-form-content.active,
+.pressao-list-content.active {
+    display: block;
+}
+
+/* Quando a campanha está carregando */
+.pressao-campaign-loading {
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 12px;
+    color: #999;
+}
+
+/* Erro ao carregar campanha */
+.pressao-campaign-error {
+    color: #dc3545;
+    font-size: 12px;
+    margin-left: 5px;
+}
