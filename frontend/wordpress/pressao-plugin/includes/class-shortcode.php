@@ -23,6 +23,7 @@ class PressaoPlugin_Shortcode {
         add_shortcode('pressao_widget', [$this, 'render_widget']);
         add_shortcode('pressao_form', [$this, 'render_form']);
         add_shortcode('pressao_list', [$this, 'render_list']);
+        add_shortcode('pressao_alvos', [$this, 'render_alvos']);
     }
     
     /**
@@ -155,6 +156,103 @@ class PressaoPlugin_Shortcode {
             </div>
         </div>
         <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Renderiza a lista de alvos da campanha
+     * Uso: [pressao_alvos campaign="123" limit="10"]
+     */
+    public function render_alvos($atts) {
+        $atts = shortcode_atts([
+            'campaign' => get_option('pressao_campaign_id', ''),
+            'limit' => 10,
+            'show_contact' => 'yes',
+            'class' => '',
+            'id' => 'pressao-alvos-' . uniqid()
+        ], $atts, 'pressao_alvos');
+        
+        $campanha_id = sanitize_text_field($atts['campaign']);
+        $limit = intval($atts['limit']);
+        $show_contact = sanitize_text_field($atts['show_contact']);
+        $class = sanitize_text_field($atts['class']);
+        $alvos_id = sanitize_text_field($atts['id']);
+        
+        if (empty($campanha_id)) {
+            return '<p class="pressao-error">' . esc_html__('ID da campanha não informado', 'pressao-plugin') . '</p>';
+        }
+        
+        // Busca alvos
+        $api = new PressaoPlugin_API();
+        $result = $api->get_alvos_cached($campanha_id, [], 300);
+        
+        if (is_wp_error($result)) {
+            return sprintf(
+                '<p class="pressao-error">%s</p>',
+                esc_html($result->get_error_message())
+            );
+        }
+        
+        if (!$result['success'] || empty($result['data'])) {
+            return '<p class="pressao-empty">' . esc_html__('Nenhum alvo encontrado para esta campanha.', 'pressao-plugin') . '</p>';
+        }
+        
+        $alvos = $result['data'];
+        
+        // Aplica limite
+        if ($limit > 0) {
+            $alvos = array_slice($alvos, 0, $limit);
+        }
+        
+        // Renderiza
+        ob_start();
+        ?>
+        <div id="<?php echo esc_attr($alvos_id); ?>" class="pressao-alvos <?php echo esc_attr($class); ?>">
+            <div class="pressao-alvos-header">
+                <h3><?php esc_html_e('Alvos da Campanha', 'pressao-plugin'); ?></h3>
+                <span class="pressao-alvos-count"><?php echo count($alvos); ?></span>
+            </div>
+            
+            <ul class="pressao-alvos-list">
+                <?php foreach ($alvos as $alvo) : ?>
+                    <li class="pressao-alvo-item">
+                        <div class="pressao-alvo-info">
+                            <strong class="pressao-alvo-nome"><?php echo esc_html($alvo['nome']); ?></strong>
+                            
+                            <?php if ($show_contact === 'yes' && !empty($alvo['contato'])) : ?>
+                                <span class="pressao-alvo-contato">
+                                    <?php echo esc_html($alvo['contato']); ?>
+                                    <?php if (!empty($alvo['tipo_contato'])) : ?>
+                                        <span class="pressao-alvo-tipo">(<?php echo esc_html($alvo['tipo_contato']); ?>)</span>
+                                    <?php endif; ?>
+                                </span>
+                            <?php endif; ?>
+                            
+                            <?php if (isset($alvo['ativo'])) : ?>
+                                <span class="pressao-alvo-status <?php echo $alvo['ativo'] ? 'ativo' : 'inativo'; ?>">
+                                    <?php echo $alvo['ativo'] ? '✅' : '⛔'; ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <?php if (!empty($alvo['metadados'])) : ?>
+                            <div class="pressao-alvo-metadados">
+                                <small><?php esc_html_e('Metadados:', 'pressao-plugin'); ?></small>
+                                <pre><?php echo esc_html(json_encode($alvo['metadados'], JSON_PRETTY_PRINT)); ?></pre>
+                            </div>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+            
+            <?php if ($result['cached']) : ?>
+                <div class="pressao-cache-info">
+                    <small><?php esc_html_e('Dados em cache', 'pressao-plugin'); ?></small>
+                </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        
         return ob_get_clean();
     }
 }

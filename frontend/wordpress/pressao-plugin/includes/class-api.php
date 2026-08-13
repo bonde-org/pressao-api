@@ -213,4 +213,77 @@ class PressaoPlugin_API {
             'cached' => false
         ];
     }
+
+    /**
+     * Obtém a lista de alvos de uma campanha específica
+     * 
+     * @param string $campanha_id ID da campanha
+     * @param array $params Parâmetros adicionais (filtros, paginação)
+     * @return array|WP_Error Lista de alvos ou erro
+     */
+    public function get_alvos($campanha_id, $params = []) {
+        if (empty($campanha_id)) {
+            return new WP_Error(
+                'invalid_campaign',
+                __('ID da campanha não informado', 'pressao-plugin')
+            );
+        }
+        
+        $endpoint = sprintf('/api/v1/alvos/campanha/%s', $campanha_id);
+        
+        // Adiciona parâmetros de consulta se existirem
+        if (!empty($params)) {
+            $endpoint .= '?' . http_build_query($params);
+        }
+        
+        $response = $this->api_request($endpoint, 'GET');
+        
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        
+        // A resposta já é um array de alvos
+        return $response;
+    }
+    
+    /**
+     * Obtém alvos do cache ou da API
+     * 
+     * @param string $campanha_id ID da campanha
+     * @param array $params Parâmetros adicionais
+     * @param int $cache_time Tempo de cache em segundos
+     * @return array|WP_Error Lista de alvos ou erro
+     */
+    public function get_alvos_cached($campanha_id, $params = [], $cache_time = 300) {
+        // Cria uma chave de cache baseada nos parâmetros
+        $cache_key = 'pressao_alvos_' . md5($campanha_id . serialize($params));
+        $cached = get_transient($cache_key);
+        
+        if ($cached !== false) {
+            return [
+                'success' => true,
+                'data' => $cached,
+                'cached' => true,
+                'count' => count($cached)
+            ];
+        }
+        
+        $result = $this->get_alvos($campanha_id, $params);
+        
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        
+        // Cache apenas se tiver dados
+        if (!empty($result)) {
+            set_transient($cache_key, $result, $cache_time);
+        }
+        
+        return [
+            'success' => true,
+            'data' => $result,
+            'cached' => false,
+            'count' => is_array($result) ? count($result) : 0
+        ];
+    }
 }

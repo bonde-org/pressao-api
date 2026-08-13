@@ -64,3 +64,108 @@
     font-size: 12px;
     margin-left: 5px;
 }
+
+/* CSS para Alvos */
+.pressao-alvos {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+.pressao-alvos-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.pressao-alvos-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.pressao-alvos-count {
+    background: #0073aa;
+    color: #fff;
+    padding: 2px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.pressao-alvos-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.pressao-alvo-item {
+    padding: 12px 15px;
+    background: #fff;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    border-left: 3px solid #0073aa;
+    transition: all 0.2s ease;
+}
+
+.pressao-alvo-item:hover {
+    background: #f5f5f5;
+    transform: translateX(2px);
+}
+
+.pressao-alvo-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.pressao-alvo-nome {
+    font-weight: 500;
+    color: #212529;
+}
+
+.pressao-alvo-contato {
+    font-size: 13px;
+    color: #6c757d;
+}
+
+.pressao-alvo-tipo {
+    font-size: 11px;
+    color: #999;
+    background: #f0f0f0;
+    padding: 1px 8px;
+    border-radius: 10px;
+}
+
+.pressao-alvo-status {
+    font-size: 14px;
+}
+
+.pressao-alvo-metadados {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #e0e0e0;
+}
+
+.pressao-alvo-metadados pre {
+    margin: 5px 0 0 0;
+    font-size: 11px;
+    color: #666;
+    background: #f5f5f5;
+    padding: 8px;
+    border-radius: 4px;
+    max-height: 100px;
+    overflow: auto;
+}
+
+.pressao-alvo-metadados small {
+    font-size: 11px;
+    color: #999;
+}
