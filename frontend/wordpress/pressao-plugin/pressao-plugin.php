@@ -119,7 +119,8 @@ final class PressaoPlugin {
         
         $has_shortcode = has_shortcode($post->post_content, 'pressao_widget') ||
                          has_shortcode($post->post_content, 'pressao_form') ||
-                         has_shortcode($post->post_content, 'pressao_list');
+                         has_shortcode($post->post_content, 'pressao_list') ||
+                         has_shortcode($post->post_content, 'pressao_alvos');
         
         if ($has_shortcode) {
             wp_enqueue_style(
@@ -140,8 +141,9 @@ final class PressaoPlugin {
             wp_localize_script('pressao-plugin', 'pressaoData', [
                 'apiUrl' => get_option('pressao_api_url', ''),
                 'campaignId' => get_option('pressao_campaign_id', ''),
-                'nonce' => wp_create_nonce('pressao_widget_nonce'),
-                'ajaxUrl' => admin_url('admin-ajax.php')
+                'nonce' => wp_create_nonce('pressao_acao_nonce'),
+                'ajaxUrl' => admin_url('admin-ajax.php'),
+                'localStorageKey' => 'pressao_acoes_realizadas'
             ]);
         }
     }

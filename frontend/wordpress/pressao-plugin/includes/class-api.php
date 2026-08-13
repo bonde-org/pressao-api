@@ -286,4 +286,171 @@ class PressaoPlugin_API {
             'count' => is_array($result) ? count($result) : 0
         ];
     }
+
+    /**
+     * Cria uma nova ação para um alvo
+     * 
+     * @param array $dados Dados da ação
+     * @return array|WP_Error Resultado da criação ou erro
+     */
+    public function criar_acao($dados) {
+        // Valida dados obrigatórios
+        if (empty($dados['campanha_id'])) {
+            return new WP_Error(
+                'invalid_data',
+                __('campanha_id é obrigatório', 'pressao-plugin')
+            );
+        }
+        
+        if (empty($dados['alvo_id'])) {
+            return new WP_Error(
+                'invalid_data',
+                __('alvo_id é obrigatório', 'pressao-plugin')
+            );
+        }
+        
+        if (empty($dados['canal'])) {
+            return new WP_Error(
+                'invalid_data',
+                __('canal é obrigatório', 'pressao-plugin')
+            );
+        }
+        
+        // Valida canal permitido
+        $canais_permitidos = ['email', 'telefone', 'instagram', 'whatsapp'];
+        if (!in_array($dados['canal'], $canais_permitidos)) {
+            return new WP_Error(
+                'invalid_data',
+                sprintf(
+                    __('canal deve ser um dos seguintes: %s', 'pressao-plugin'),
+                    implode(', ', $canais_permitidos)
+                )
+            );
+        }
+        
+        // Se não for anônimo, valida dados do ativista
+        if (empty($dados['anonimo']) || $dados['anonimo'] === false) {
+            if (empty($dados['ativista']) || !is_array($dados['ativista'])) {
+                return new WP_Error(
+                    'invalid_data',
+                    __('ativista é obrigatório para ações não anônimas', 'pressao-plugin')
+                );
+            }
+            
+            if (empty($dados['ativista']['nome'])) {
+                return new WP_Error(
+                    'invalid_data',
+                    __('nome do ativista é obrigatório', 'pressao-plugin')
+                );
+            }
+            
+            if (empty($dados['ativista']['email']) && empty($dados['ativista']['telefone'])) {
+                return new WP_Error(
+                    'invalid_data',
+                    __('email ou telefone do ativista é obrigatório', 'pressao-plugin')
+                );
+            }
+        }
+        
+        // Prepara dados para a API
+        $payload = [
+            'campanha_id' => $dados['campanha_id'],
+            'alvo_id' => $dados['alvo_id'],
+            'canal' => $dados['canal'],
+            'anonimo' => isset($dados['anonimo']) ? (bool) $dados['anonimo'] : true
+        ];
+        
+        // Adiciona template_id se fornecido
+        if (!empty($dados['template_id'])) {
+            $payload['template_id'] = $dados['template_id'];
+        }
+        
+        // Adiciona dados do ativista se não for anônimo
+        if (!empty($dados['ativista']) && is_array($dados['ativista']) && empty($dados['anonimo'])) {
+            $payload['ativista'] = [
+                'nome' => sanitize_text_field($dados['ativista']['nome'])
+            ];
+            
+            if (!empty($dados['ativista']['email'])) {
+                $payload['ativista']['email'] = sanitize_email($dados['ativista']['email']);
+            }
+            
+            if (!empty($dados['ativista']['telefone'])) {
+                $payload['ativista']['telefone'] = sanitize_text_field($dados['ativista']['telefone']);
+            }
+        }
+        
+        // Log para debug
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('Pressão Plugin - Criando ação: ' . json_encode($payload));
+        }
+        
+        // Faz a requisição
+        $response = $this->api_request('/api/v1/acoes/', 'POST', $payload);
+        
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        
+        // Retorna a resposta da API
+        return [
+            'success' => true,
+            'data' => $response,
+            'message' => __('Ação criada com sucesso!', 'pressao-plugin')
+        ];
+    }
+
+    /**
+     * Cria uma ação anônima (sem dados do ativista)
+     * 
+     * @param string $campanha_id ID da campanha
+     * @param string $alvo_id ID do alvo
+     * @param string $canal Canal da ação (email, whatsapp, etc)
+     * @param string|null $template_id ID do template (opcional)
+     * @return array|WP_Error Resultado da criação
+     */
+    public function criar_acao_anonima($campanha_id, $alvo_id, $canal = 'email', $template_id = null) {
+        $dados = [
+            'campanha_id' => $campanha_id,
+            'alvo_id' => $alvo_id,
+            'canal' => $canal,
+            'anonimo' => true
+        ];
+        
+        if ($template_id) {
+            $dados['template_id'] = $template_id;
+        }
+        
+        return $this->criar_acao($dados);
+    }
+    
+    /**
+     * Cria uma ação com dados do ativista
+     * 
+     * @param string $campanha_id ID da campanha
+     * @param string $alvo_id ID do alvo
+     * @param string $canal Canal da ação
+     * @param array $ativista Dados do ativista (nome, email, telefone)
+     * @param string|null $template_id ID do template (opcional)
+     * @return array|WP_Error Resultado da criação
+     */
+    public function criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id = null) {
+        $dados = [
+            'campanha_id' => $campanha_id,
+            'alvo_id' => $alvo_id,
+            'canal' => $canal,
+            'anonimo' => false,
+            'ativista' => [
+                'nome' => $ativista['nome'] ?? '',
+                'email' => $ativista['email'] ?? '',
+                'telefone' => $ativista['telefone'] ?? ''
+            ]
+        ];
+        
+        if ($template_id) {
+            $dados['template_id'] = $template_id;
+        }
+        
+        return $this->criar_acao($dados);
+    }
 }
