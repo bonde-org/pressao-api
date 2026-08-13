@@ -9,11 +9,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-$keycloak_url = get_option('pressao_keycloak_url', '');
-$client_id = get_option('pressao_client_id', '');
-$client_secret = get_option('pressao_client_secret', '');
-$api_url = get_option('pressao_api_url', '');
-
 class PressaoPlugin_Shortcode {
     
     private $api;
@@ -30,7 +25,6 @@ class PressaoPlugin_Shortcode {
      * Renderiza o widget principal com nome da campanha
      */
     public function render_widget($atts) {
-        // Atributos padrão
         $atts = shortcode_atts([
             'title' => get_option('pressao_widget_title', 'Pressão Widget'),
             'campaign' => get_option('pressao_campaign_id', ''),
@@ -39,14 +33,12 @@ class PressaoPlugin_Shortcode {
             'cache' => '3600'
         ], $atts, 'pressao_widget');
         
-        // Sanitização
         $title = sanitize_text_field($atts['title']);
         $campaign_id = sanitize_text_field($atts['campaign']);
         $widget_id = sanitize_text_field($atts['id']);
         $show_campaign_name = sanitize_text_field($atts['show_campaign_name']);
         $cache_time = intval($atts['cache']);
         
-        // Busca nome da campanha
         $campaign_name = '';
         $campaign_data = null;
         
@@ -59,7 +51,6 @@ class PressaoPlugin_Shortcode {
             }
         }
         
-        // Inicia buffer de saída
         ob_start();
         ?>
         <div id="<?php echo esc_attr($widget_id); ?>" 
@@ -68,7 +59,6 @@ class PressaoPlugin_Shortcode {
              data-widget-id="<?php echo esc_attr($widget_id); ?>"
              data-campaign-data='<?php echo json_encode($campaign_data); ?>'>
             
-            <!-- Nome do widget + Nome da campanha -->
             <div class="pressao-widget-header">
                 <span class="pressao-widget-name">
                     <?php echo esc_html($title); ?>
@@ -84,9 +74,7 @@ class PressaoPlugin_Shortcode {
                 <?php endif; ?>
             </div>
             
-            <!-- Container para conteúdo dinâmico -->
             <div class="pressao-widget-content" style="display: none;">
-                <!-- Conteúdo será carregado via JavaScript -->
             </div>
         </div>
         <?php
@@ -119,7 +107,6 @@ class PressaoPlugin_Shortcode {
             </div>
             
             <div class="pressao-form-content" style="display: none;">
-                <!-- Conteúdo será carregado via JavaScript -->
             </div>
         </div>
         <?php
@@ -152,7 +139,6 @@ class PressaoPlugin_Shortcode {
             </div>
             
             <div class="pressao-list-content" style="display: none;">
-                <!-- Conteúdo será carregado via JavaScript -->
             </div>
         </div>
         <?php
@@ -174,7 +160,11 @@ class PressaoPlugin_Shortcode {
             'canal' => 'email',
             'template_id' => '',
             'class' => '',
-            'id' => 'pressao-alvos-' . uniqid()
+            'id' => 'pressao-alvos-' . uniqid(),
+            'ativista_confirm_interval' => 10,
+            'ativista_confirm_message' => __('Confirmar identidade', 'pressao-plugin'),
+            'ativista_confirm_yes' => __('Sou eu', 'pressao-plugin'),
+            'ativista_confirm_no' => __('Não sou eu', 'pressao-plugin')
         ], $atts, 'pressao_alvos');
         
         $campanha_id = sanitize_text_field($atts['campaign']);
@@ -193,7 +183,6 @@ class PressaoPlugin_Shortcode {
             return '<p class="pressao-error">' . esc_html__('ID da campanha não informado', 'pressao-plugin') . '</p>';
         }
         
-        // Busca alvos
         $api = new PressaoPlugin_API();
         $result = $api->get_alvos_cached($campanha_id, [], 300);
         
@@ -210,15 +199,12 @@ class PressaoPlugin_Shortcode {
         
         $alvos = $result['data'];
         
-        // Aplica limite
         if ($limit > 0) {
             $alvos = array_slice($alvos, 0, $limit);
         }
         
-        // Gera nonce para ações
         $nonce = wp_create_nonce('pressao_acao_nonce');
         
-        // Renderiza
         ob_start();
         ?>
         <div id="<?php echo esc_attr($alvos_id); ?>" 
@@ -226,7 +212,11 @@ class PressaoPlugin_Shortcode {
             data-campaign="<?php echo esc_attr($campanha_id); ?>"
             data-nonce="<?php echo esc_attr($nonce); ?>"
             data-canal="<?php echo esc_attr($canal); ?>"
-            data-template-id="<?php echo esc_attr($template_id); ?>">
+            data-template-id="<?php echo esc_attr($template_id); ?>"
+            data-confirm-interval="<?php echo intval($atts['ativista_confirm_interval']); ?>"
+            data-confirm-message="<?php echo esc_attr($atts['ativista_confirm_message']); ?>"
+            data-confirm-yes="<?php echo esc_attr($atts['ativista_confirm_yes']); ?>"
+            data-confirm-no="<?php echo esc_attr($atts['ativista_confirm_no']); ?>">
             
             <div class="pressao-alvos-header">
                 <h3><?php esc_html_e('Alvos da Campanha', 'pressao-plugin'); ?></h3>
@@ -275,19 +265,19 @@ class PressaoPlugin_Shortcode {
                                             <div class="pressao-ativista-form" style="display: none;">
                                                 <div class="pressao-form-group">
                                                     <input type="text" 
-                                                        class="pressao-ativista-nome" 
-                                                        placeholder="<?php esc_attr_e('Seu nome', 'pressao-plugin'); ?>"
-                                                        required />
+                                                           class="pressao-ativista-nome" 
+                                                           placeholder="<?php esc_attr_e('Seu nome', 'pressao-plugin'); ?>"
+                                                           required />
                                                 </div>
                                                 <div class="pressao-form-group">
                                                     <input type="email" 
-                                                        class="pressao-ativista-email" 
-                                                        placeholder="<?php esc_attr_e('Seu email', 'pressao-plugin'); ?>" />
+                                                           class="pressao-ativista-email" 
+                                                           placeholder="<?php esc_attr_e('Seu email', 'pressao-plugin'); ?>" />
                                                 </div>
                                                 <div class="pressao-form-group">
                                                     <input type="tel" 
-                                                        class="pressao-ativista-telefone" 
-                                                        placeholder="<?php esc_attr_e('Seu telefone', 'pressao-plugin'); ?>" />
+                                                           class="pressao-ativista-telefone" 
+                                                           placeholder="<?php esc_attr_e('Seu telefone', 'pressao-plugin'); ?>" />
                                                 </div>
                                                 <button type="button" 
                                                         class="pressao-action-submit"
@@ -334,8 +324,6 @@ class PressaoPlugin_Shortcode {
      * Verifica se o usuário já fez ação para um alvo
      */
     private function get_alvo_action_state($alvo_id) {
-        // Tenta recuperar do localStorage via JavaScript
-        // No PHP, usamos session ou cookie como fallback
         $actions = isset($_COOKIE['pressao_acoes_realizadas']) 
             ? json_decode(stripslashes($_COOKIE['pressao_acoes_realizadas']), true) 
             : [];

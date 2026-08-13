@@ -143,7 +143,15 @@ final class PressaoPlugin {
                 'campaignId' => get_option('pressao_campaign_id', ''),
                 'nonce' => wp_create_nonce('pressao_acao_nonce'),
                 'ajaxUrl' => admin_url('admin-ajax.php'),
-                'localStorageKey' => 'pressao_acoes_realizadas'
+                'localStorageKey' => 'pressao_acoes_realizadas',
+                // Ativista Config
+                'ativistaFormTitle' => get_option('pressao_ativista_form_title', __('Identifique-se', 'pressao-plugin')),
+                'ativistaFormMessage' => get_option('pressao_ativista_form_message', __('Preencha seus dados para continuar:', 'pressao-plugin')),
+                'ativistaNomeLabel' => get_option('pressao_ativista_nome_label', __('Nome', 'pressao-plugin')),
+                'ativistaEmailLabel' => get_option('pressao_ativista_email_label', __('Email', 'pressao-plugin')),
+                'ativistaTelefoneLabel' => get_option('pressao_ativista_telefone_label', __('Telefone', 'pressao-plugin')),
+                'ativistaSaveButton' => get_option('pressao_ativista_save_button', __('Salvar e continuar', 'pressao-plugin')),
+                'confirmInterval' => get_option('pressao_ativista_confirm_interval', 10),
             ]);
         }
     }
