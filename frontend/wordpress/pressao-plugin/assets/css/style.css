@@ -562,3 +562,143 @@
 .pressao-theme-dark .pressao-ativista-info p {
     color: #cccccc;
 }
+
+/* Botão de confirmação (ação manual) */
+.pressao-action-confirm {
+    padding: 6px 16px;
+    background: #ffc107;
+    color: #212529;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    width: 100%;
+}
+
+.pressao-action-confirm:hover {
+    background: #e0a800;
+}
+
+.pressao-action-confirm:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Texto de pendência */
+.pressao-action-pending {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #856404;
+    text-align: center;
+}
+
+/* Estado da ação - Pendente */
+.pressao-alvo-item.action-pending {
+    border-left-color: #ffc107;
+    background: #fff8e1;
+}
+
+.pressao-alvo-item.action-pending .pressao-alvo-nome {
+    color: #856404;
+}
+
+/* Tema escuro para pendente */
+.pressao-theme-dark .pressao-alvo-item.action-pending {
+    background: #2c2c2c;
+    border-left-color: #ffc107;
+}
+
+.pressao-theme-dark .pressao-alvo-item.action-pending .pressao-alvo-nome {
+    color: #ffd54f;
+}
+
+.pressao-theme-dark .pressao-action-confirm {
+    background: #ffc107;
+    color: #212529;
+}
+
+.pressao-theme-dark .pressao-action-confirm:hover {
+    background: #ffd54f;
+}
+
+.pressao-theme-dark .pressao-action-pending {
+    color: #ffd54f;
+}
+
+/* Notificação info */
+.pressao-notification-info {
+    background: #cce5ff;
+    border: 1px solid #b8daff;
+    color: #004085;
+}
+
+.pressao-theme-dark .pressao-notification-info {
+    background: #1a2a3a;
+    border-color: #2a4a6a;
+    color: #8ab4f8;
+}
+
+.pressao-alvo-canal {
+    display: inline-block;
+    margin-left: 8px;
+}
+
+.pressao-alvo-canal-badge {
+    display: inline-block;
+    padding: 1px 10px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: #e9ecef;
+    color: #495057;
+}
+
+/* Cores por canal */
+.pressao-alvo-canal-badge[data-canal="email"] {
+    background: #d4edda;
+    color: #155724;
+}
+
+.pressao-alvo-canal-badge[data-canal="whatsapp"] {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.pressao-alvo-canal-badge[data-canal="sms"] {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.pressao-alvo-canal-badge[data-canal="telefone"] {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Tema escuro */
+.pressao-theme-dark .pressao-alvo-canal-badge {
+    background: #2c2c2c;
+    color: #ddd;
+}
+
+.pressao-theme-dark .pressao-alvo-canal-badge[data-canal="email"] {
+    background: #1e3a2a;
+    color: #8fdfb2;
+}
+
+.pressao-theme-dark .pressao-alvo-canal-badge[data-canal="whatsapp"] {
+    background: #1a2a3a;
+    color: #8ab4f8;
+}
+
+.pressao-theme-dark .pressao-alvo-canal-badge[data-canal="instagram"] {
+    background: #cb51cf;
+    color: #f3f3f3;
+}
+
+.pressao-theme-dark .pressao-alvo-canal-badge[data-canal="telefone"] {
+    background: #3a1a1a;
+    color: #df8f8f;
+}

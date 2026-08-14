@@ -226,6 +226,24 @@ function initAlvos(container) {
                            parseInt(pressaoData?.confirmInterval) || 10;
     
     console.log('📋 Config:', { campaignId, nonce, confirmInterval });
+
+    const confirmButtons = container.querySelectorAll('.pressao-action-confirm');
+
+    confirmButtons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const alvoId = this.dataset.alvoId;
+            const acaoId = this.dataset.acaoId;
+            const campaignId = this.dataset.campaign || container.dataset.campaign;
+            // Canal vem do item ou do dataset do botão
+            const canal = this.dataset.canal || this.closest('.pressao-alvo-item')?.dataset.canal || 'email';
+            
+            console.log(`🖱️ .pressao-action-confirm clicado para alvo: ${alvoId}, canal: ${canal}`);
+            
+            confirmarAcao(alvoId, acaoId, campaignId, container, this);
+        });
+    });
     
     // Verifica o estado das ações ao carregar
     checkActionsStatus(container);
@@ -242,6 +260,7 @@ function initAlvos(container) {
             
             const alvoId = this.dataset.alvoId;
             const campaignId = this.dataset.campaign || container.dataset.campaign;
+            const canal = this.dataset.canal || 'email';
             
             console.log(`🖱️ .pressao-action-toggle clicado para alvo: ${alvoId}`);
             
@@ -255,6 +274,7 @@ function initAlvos(container) {
                 const form = this.closest('.pressao-alvo-actions').querySelector('.pressao-ativista-form');
                 if (form) {
                     form.style.display = 'block';
+                    form.dataset.canal = canal;
                 }
             } else if (precisaConfirmarAtivista(confirmInterval)) {
                 // Precisa confirmar → mostra modal de confirmação
@@ -277,7 +297,7 @@ function initAlvos(container) {
                     submit.click();
                 } else {
                     // Fallback: executa ação diretamente
-                    realizarAcao(alvoId, campaignId, container, this, ativista);
+                    realizarAcao(alvoId, campaignId, container, this, ativista, canal);
                 }
             }
         });
@@ -297,6 +317,10 @@ function initAlvos(container) {
             
             const alvoId = this.dataset.alvoId;
             const campaignId = this.dataset.campaign || container.dataset.campaign;
+            const canal = this.dataset.canal || 
+            this.closest('.pressao-ativista-form')?.dataset.canal || 
+            this.closest('.pressao-alvo-item')?.dataset.canal || 
+            'email';
             const form = this.closest('.pressao-ativista-form');
             const actionsDiv = this.closest('.pressao-alvo-actions');
             
@@ -309,7 +333,7 @@ function initAlvos(container) {
             if (ativistaExistente && !precisaConfirmarAtivista(10)) {
                 // Já tem ativista e está confirmado → executa ação diretamente
                 console.log('✅ Ativista já existe, executando ação diretamente');
-                realizarAcao(alvoId, campaignId, container, this, ativistaExistente);
+                realizarAcao(alvoId, campaignId, container, this, ativistaExistente, canal);
                 return;
             }
             
@@ -365,7 +389,7 @@ function initAlvos(container) {
             }
             
             // Executa a ação
-            realizarAcao(alvoId, campaignId, container, this, ativista);
+            realizarAcao(alvoId, campaignId, container, this, ativista, canal);
         });
     });
 }
@@ -448,8 +472,8 @@ function mostrarConfirmacaoAtivista(container, ativista, callback) {
 // AÇÃO PRINCIPAL
 // ============================================
 
-function realizarAcao(alvoId, campaignId, container, button, ativista) {
-    console.log('🚀 realizarAcao:', { alvoId, campaignId });
+function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
+    console.log('🚀 realizarAcao:', { alvoId, campaignId, canal });
     
     if (!ativista) {
         ativista = getAtivistaData();
@@ -466,10 +490,17 @@ function realizarAcao(alvoId, campaignId, container, button, ativista) {
     }
     
     console.log('✅ Ativista encontrado:', ativista);
+
+    // Se não tem canal, tenta buscar do item
+    if (!canal) {
+        const item = button.closest('.pressao-alvo-item');
+        canal = item?.dataset?.canal || 'email';
+    }
+    
+    console.log('📡 Canal sendo usado:', canal);
     
     const nonce = container.dataset.nonce;
     const originalText = button.textContent;
-    const canal = container.dataset.canal || 'email';
     const templateId = container.dataset.templateId || '';
     
     button.disabled = true;
@@ -494,25 +525,50 @@ function realizarAcao(alvoId, campaignId, container, button, ativista) {
         },
         body: new URLSearchParams(data)
     })
-    .then(response => response.json())
-    .then(response => {
+    .then(function(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            return response.text().then(function(text) {
+                throw new Error('Resposta inválida do servidor (esperado JSON).');
+            });
+        }
+        return response.json();
+    })
+    .then(function(response) {
+        console.log('response', response);
         if (response.success) {
             const acoes = getAcoesFromLocalStorage();
-            acoes[alvoId] = {
+            const apiData = response.data?.data || {};
+            const acaoData = {
                 timestamp: response.data?.timestamp || Math.floor(Date.now() / 1000),
                 user_id: response.data?.user_id || null,
-                ativista: ativista || null
+                ativista: ativista || null,
+                acao_id: response.data?.acao_id || apiData.acao_id || null,
+                status: response.data?.status || apiData.status_atual || 'CONCLUIDA',
             };
+            acoes[alvoId] = acaoData;
             saveActionsToLocalStorage(acoes);
             
-            const item = button.closest('.pressao-alvo-item');
-            marcarAcaoRealizada(item, acoes[alvoId]);
-            showNotification(container, 'success', response.data?.message || 'Ação realizada!');
-            
-            const form = button.closest('.pressao-alvo-actions')?.querySelector('.pressao-ativista-form');
-            if (form) {
-                form.style.display = 'none';
+            if (acaoData.status === 'AGUARDANDO_ACAO_HUMANA') {
+                console.log('🔄 Ação aguardando confirmação manual');
+                
+                const actionsDiv = button.closest('.pressao-alvo-actions');
+                mostrarBotaoConfirmacao(actionsDiv, alvoId, acaoData.acao_id, campaignId, container);
+                showNotification(container, 'info', 'Ação iniciada! Confirme quando concluir.');
+                
+            } else {
+                console.log('✅ Ação concluída automaticamente');
+                
+                const item = button.closest('.pressao-alvo-item');
+                marcarAcaoRealizada(item, acoes[alvoId]);
+                showNotification(container, 'success', response.data?.message || 'Ação realizada!');
+                
+                const form = button.closest('.pressao-alvo-actions')?.querySelector('.pressao-ativista-form');
+                if (form) {
+                    form.style.display = 'none';
+                }
             }
+            
         } else {
             button.disabled = false;
             button.textContent = originalText;
@@ -528,6 +584,110 @@ function realizarAcao(alvoId, campaignId, container, button, ativista) {
 }
 
 // ============================================
+// CONFIRMAÇÃO DE AÇÃO MANUAL
+// ============================================
+
+function confirmarAcao(alvoId, acaoId, campaignId, container, button) {
+    console.log('✅ confirmarAcao:', { alvoId, acaoId, campaignId });
+
+    if (!acaoId) {
+        showNotification(container, 'error', 'ID da ação não encontrado. Tente agir novamente.');
+        return;
+    }
+
+    const nonce = container.dataset.nonce;
+    const originalText = button.textContent;
+
+    button.disabled = true;
+    button.textContent = 'Confirmando...';
+
+    const data = {
+        action: 'pressao_confirmar_acao',
+        acao_id: acaoId,
+        alvo_id: alvoId,
+        campanha_id: campaignId || '',
+        nonce: nonce
+    };
+
+    fetch(pressaoData.ajaxUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(data)
+    })
+    .then(function(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            return response.text().then(function() {
+                throw new Error('Resposta inválida do servidor (esperado JSON).');
+            });
+        }
+        return response.json();
+    })
+    .then(function(response) {
+        console.log('confirmarAcao response', response);
+        if (response.success) {
+            const acoes = getAcoesFromLocalStorage();
+            acoes[alvoId] = {
+                ...(acoes[alvoId] || {}),
+                timestamp: response.data?.timestamp || Math.floor(Date.now() / 1000),
+                acao_id: acaoId,
+                status: response.data?.status || 'CONCLUIDA'
+            };
+            saveActionsToLocalStorage(acoes);
+
+            const item = button.closest('.pressao-alvo-item');
+            marcarAcaoRealizada(item, acoes[alvoId]);
+            showNotification(container, 'success', response.data?.message || 'Ação confirmada!');
+        } else {
+            button.disabled = false;
+            button.textContent = originalText;
+            showNotification(container, 'error', response.data?.message || 'Erro ao confirmar ação');
+        }
+    })
+    .catch(function(error) {
+        console.error('Erro ao confirmar ação:', error);
+        button.disabled = false;
+        button.textContent = originalText;
+        showNotification(container, 'error', 'Erro ao confirmar ação. Tente novamente.');
+    });
+}
+
+function mostrarBotaoConfirmacao(actionsDiv, alvoId, acaoId, campaignId, container) {
+    if (!actionsDiv) {
+        return;
+    }
+
+    actionsDiv.innerHTML = `
+        <button type="button"
+                class="pressao-action-confirm"
+                data-alvo-id="${alvoId}"
+                data-acao-id="${acaoId || ''}"
+                data-campaign="${campaignId || ''}">
+            Confirmar ação ✓
+        </button>
+        <span class="pressao-action-pending" style="font-size:12px;color:#856404;display:block;">
+            Aguardando confirmação manual
+        </span>
+    `;
+
+    const confirmBtn = actionsDiv.querySelector('.pressao-action-confirm');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            confirmarAcao(
+                this.dataset.alvoId,
+                this.dataset.acaoId,
+                this.dataset.campaign || container.dataset.campaign,
+                container,
+                this
+            );
+        });
+    }
+}
+
+// ============================================
 // FUNÇÕES AUXILIARES
 // ============================================
 
@@ -536,9 +696,23 @@ function checkActionsStatus(container) {
     const acoes = getAcoesFromLocalStorage();
     alvoItems.forEach(function(item) {
         const alvoId = item.dataset.alvoId;
-        if (acoes[alvoId]) {
-            marcarAcaoRealizada(item, acoes[alvoId]);
+        const acao = acoes[alvoId];
+        if (!acao) {
+            return;
         }
+
+        if (acao.status === 'AGUARDANDO_ACAO_HUMANA' && acao.acao_id) {
+            mostrarBotaoConfirmacao(
+                item.querySelector('.pressao-alvo-actions'),
+                alvoId,
+                acao.acao_id,
+                container.dataset.campaign,
+                container
+            );
+            return;
+        }
+
+        marcarAcaoRealizada(item, acao);
     });
 }
 

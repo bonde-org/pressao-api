@@ -157,7 +157,7 @@ class PressaoPlugin_Shortcode {
             'show_ativista_form' => 'no',
             'action_label' => __('Agir', 'pressao-plugin'),
             'action_done_label' => __('Ação realizada ✓', 'pressao-plugin'),
-            'canal' => 'email',
+            'canal' => '', // Filtro (opcional)
             'template_id' => '',
             'class' => '',
             'id' => 'pressao-alvos-' . uniqid(),
@@ -174,7 +174,7 @@ class PressaoPlugin_Shortcode {
         $show_ativista_form = sanitize_text_field($atts['show_ativista_form']);
         $action_label = sanitize_text_field($atts['action_label']);
         $action_done_label = sanitize_text_field($atts['action_done_label']);
-        $canal = sanitize_text_field($atts['canal']);
+        $canal_filter = sanitize_text_field($atts['canal']); // Filtro
         $template_id = sanitize_text_field($atts['template_id']);
         $class = sanitize_text_field($atts['class']);
         $alvos_id = sanitize_text_field($atts['id']);
@@ -183,8 +183,14 @@ class PressaoPlugin_Shortcode {
             return '<p class="pressao-error">' . esc_html__('ID da campanha não informado', 'pressao-plugin') . '</p>';
         }
         
+        // Busca alvos com filtro de canal (se fornecido)
+        $params = [];
+        if (!empty($canal_filter)) {
+            $params['canal'] = $canal_filter;
+        }
+        
         $api = new PressaoPlugin_API();
-        $result = $api->get_alvos_cached($campanha_id, [], 300);
+        $result = $api->get_alvos_cached($campanha_id, $params, 300);
         
         if (is_wp_error($result)) {
             return sprintf(
@@ -211,7 +217,6 @@ class PressaoPlugin_Shortcode {
             class="pressao-alvos <?php echo esc_attr($class); ?>"
             data-campaign="<?php echo esc_attr($campanha_id); ?>"
             data-nonce="<?php echo esc_attr($nonce); ?>"
-            data-canal="<?php echo esc_attr($canal); ?>"
             data-template-id="<?php echo esc_attr($template_id); ?>"
             data-confirm-interval="<?php echo intval($atts['ativista_confirm_interval']); ?>"
             data-confirm-message="<?php echo esc_attr($atts['ativista_confirm_message']); ?>"
@@ -227,9 +232,12 @@ class PressaoPlugin_Shortcode {
                 <?php foreach ($alvos as $alvo) : 
                     $alvo_id = $alvo['id'];
                     $action_state = $this->get_alvo_action_state($alvo_id);
+                    // Pega o canal do alvo (prioriza o que vem da API)
+                    $canal_alvo = isset($alvo['tipo_contato']) ? $alvo['tipo_contato'] : $canal_filter;
                 ?>
                     <li class="pressao-alvo-item <?php echo $action_state ? 'action-done' : ''; ?>" 
-                        data-alvo-id="<?php echo esc_attr($alvo_id); ?>">
+                        data-alvo-id="<?php echo esc_attr($alvo_id); ?>"
+                        data-canal="<?php echo esc_attr($canal_alvo); ?>">
                         
                         <div class="pressao-alvo-info">
                             <div class="pressao-alvo-detalhes">
@@ -241,6 +249,12 @@ class PressaoPlugin_Shortcode {
                                         <?php if (!empty($alvo['tipo_contato'])) : ?>
                                             <span class="pressao-alvo-tipo">(<?php echo esc_html($alvo['tipo_contato']); ?>)</span>
                                         <?php endif; ?>
+                                    </span>
+                                <?php endif; ?>
+                                
+                                <?php if (!empty($canal_alvo)) : ?>
+                                    <span class="pressao-alvo-canal">
+                                        <span class="pressao-alvo-canal-badge"><?php echo esc_html($canal_alvo); ?></span>
                                     </span>
                                 <?php endif; ?>
                             </div>
@@ -258,7 +272,8 @@ class PressaoPlugin_Shortcode {
                                         <?php if ($show_ativista_form === 'yes') : ?>
                                             <button type="button" 
                                                     class="pressao-action-toggle"
-                                                    data-alvo-id="<?php echo esc_attr($alvo_id); ?>">
+                                                    data-alvo-id="<?php echo esc_attr($alvo_id); ?>"
+                                                    data-canal="<?php echo esc_attr($canal_alvo); ?>">
                                                 <?php echo esc_html($action_label); ?>
                                             </button>
                                             
@@ -282,7 +297,8 @@ class PressaoPlugin_Shortcode {
                                                 <button type="button" 
                                                         class="pressao-action-submit"
                                                         data-alvo-id="<?php echo esc_attr($alvo_id); ?>"
-                                                        data-campaign="<?php echo esc_attr($campanha_id); ?>">
+                                                        data-campaign="<?php echo esc_attr($campanha_id); ?>"
+                                                        data-canal="<?php echo esc_attr($canal_alvo); ?>">
                                                     <?php esc_html_e('Confirmar', 'pressao-plugin'); ?>
                                                 </button>
                                             </div>
@@ -290,7 +306,8 @@ class PressaoPlugin_Shortcode {
                                             <button type="button" 
                                                     class="pressao-action-button"
                                                     data-alvo-id="<?php echo esc_attr($alvo_id); ?>"
-                                                    data-campaign="<?php echo esc_attr($campanha_id); ?>">
+                                                    data-campaign="<?php echo esc_attr($campanha_id); ?>"
+                                                    data-canal="<?php echo esc_attr($canal_alvo); ?>">
                                                 <?php echo esc_html($action_label); ?>
                                             </button>
                                         <?php endif; ?>

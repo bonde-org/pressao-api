@@ -21,6 +21,9 @@ class PressaoPlugin_Ajax {
 
         add_action('wp_ajax_pressao_realizar_acao', [$this, 'ajax_realizar_acao']);
         add_action('wp_ajax_nopriv_pressao_realizar_acao', [$this, 'ajax_realizar_acao']);
+
+        add_action('wp_ajax_pressao_confirmar_acao', [$this, 'ajax_confirmar_acao']);
+        add_action('wp_ajax_nopriv_pressao_confirmar_acao', [$this, 'ajax_confirmar_acao']);
         
         add_action('wp_ajax_pressao_get_acoes_status', [$this, 'ajax_get_acoes_status']);
         add_action('wp_ajax_nopriv_pressao_get_acoes_status', [$this, 'ajax_get_acoes_status']);
@@ -70,7 +73,7 @@ class PressaoPlugin_Ajax {
         $canal = isset($_POST['canal']) ? sanitize_text_field($_POST['canal']) : 'email';
         $template_id = isset($_POST['template_id']) ? sanitize_text_field($_POST['template_id']) : null;
         
-        // Dados do ativista (opcional - se veio do formulário)
+        // Dados do ativista
         $ativista_nome = isset($_POST['ativista_nome']) ? sanitize_text_field($_POST['ativista_nome']) : '';
         $ativista_email = isset($_POST['ativista_email']) ? sanitize_email($_POST['ativista_email']) : '';
         $ativista_telefone = isset($_POST['ativista_telefone']) ? sanitize_text_field($_POST['ativista_telefone']) : '';
@@ -84,10 +87,8 @@ class PressaoPlugin_Ajax {
         
         // Prepara dados para a API
         if ($is_anonimo) {
-            // Ação anônima
             $result = $this->api->criar_acao_anonima($campanha_id, $alvo_id, $canal, $template_id);
         } else {
-            // Ação com ativista
             $ativista = [
                 'nome' => $ativista_nome,
                 'email' => $ativista_email,
@@ -106,12 +107,52 @@ class PressaoPlugin_Ajax {
         // Gera ID de usuário anônimo se necessário
         $user_id = $this->get_or_create_anonymous_user_id();
         
+        // ============================================
+        // RETORNA O STATUS DA AÇÃO PARA O FRONTEND
+        // ============================================
+        $api_data = $result['data'] ?? [];
+
         wp_send_json_success([
             'message' => $result['message'] ?? __('Ação realizada com sucesso!', 'pressao-plugin'),
             'alvo_id' => $alvo_id,
             'timestamp' => time(),
             'user_id' => $user_id,
-            'data' => $result['data'] ?? null
+            'data' => $api_data,
+            'acao_id' => $api_data['acao_id'] ?? null,
+            'status' => $api_data['status_atual'] ?? 'CONCLUIDA',
+        ]);
+    }
+
+    /**
+     * AJAX: Confirma uma ação manual
+     */
+    public function ajax_confirmar_acao() {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'pressao_acao_nonce')) {
+            wp_send_json_error(['message' => __('Nonce inválido', 'pressao-plugin')], 403);
+        }
+
+        $acao_id = isset($_POST['acao_id']) ? sanitize_text_field($_POST['acao_id']) : '';
+        $alvo_id = isset($_POST['alvo_id']) ? sanitize_text_field($_POST['alvo_id']) : '';
+
+        if (empty($acao_id)) {
+            wp_send_json_error(['message' => __('ID da ação não informado', 'pressao-plugin')], 400);
+        }
+
+        $result = $this->api->confirmar_acao($acao_id);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error([
+                'message' => $result->get_error_message(),
+                'code' => $result->get_error_code()
+            ], 500);
+        }
+
+        wp_send_json_success([
+            'message' => $result['message'] ?? __('Ação confirmada com sucesso!', 'pressao-plugin'),
+            'acao_id' => $acao_id,
+            'alvo_id' => $alvo_id,
+            'status' => 'CONCLUIDA',
+            'timestamp' => time(),
         ]);
     }
 

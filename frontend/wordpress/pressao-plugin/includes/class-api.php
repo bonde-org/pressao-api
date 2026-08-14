@@ -145,9 +145,13 @@ class PressaoPlugin_API {
         $decoded_body = json_decode($body, true);
 
         if ($status >= 400) {
-            $error_message = isset($decoded_body['message']) 
-                ? $decoded_body['message'] 
-                : sprintf(__('Erro %d na requisição', 'pressao-plugin'), $status);
+            $error_message = $decoded_body['detail']
+                ?? $decoded_body['message']
+                ?? sprintf(__('Erro %d na requisição', 'pressao-plugin'), $status);
+
+            if (is_array($error_message)) {
+                $error_message = wp_json_encode($error_message);
+            }
             
             return new WP_Error(
                 'api_error_' . $status,
@@ -387,7 +391,6 @@ class PressaoPlugin_API {
         
         // Faz a requisição
         $response = $this->api_request('/api/v1/acoes/', 'POST', $payload);
-        
         if (is_wp_error($response)) {
             return $response;
         }
@@ -452,5 +455,32 @@ class PressaoPlugin_API {
         }
         
         return $this->criar_acao($dados);
+    }
+
+    /**
+     * Confirma uma ação manual aguardando ação humana.
+     *
+     * @param string $acao_id ID da ação
+     * @return array|WP_Error Resultado da confirmação ou erro
+     */
+    public function confirmar_acao($acao_id) {
+        if (empty($acao_id)) {
+            return new WP_Error(
+                'invalid_data',
+                __('acao_id é obrigatório', 'pressao-plugin')
+            );
+        }
+
+        $endpoint = sprintf('/api/v1/acoes/%s/confirmar', sanitize_text_field($acao_id));
+        $response = $this->api_request($endpoint, 'PATCH');
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        return [
+            'success' => true,
+            'message' => __('Ação confirmada com sucesso!', 'pressao-plugin'),
+        ];
     }
 }

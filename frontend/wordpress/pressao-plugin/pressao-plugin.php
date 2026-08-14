@@ -21,13 +21,6 @@ define('PRESSAO_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PRESSAO_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('PRESSAO_PLUGIN_BASENAME', plugin_basename(__FILE__));
 
-function dd($data) {
-    echo '<pre style="background: #f4f4f4; padding: 15px; border: 2px solid red; margin: 20px;">';
-    print_r($data);
-    echo '</pre>';
-    die(); // Para a execução aqui
-}
-
 // Classe principal
 final class PressaoPlugin {
     
