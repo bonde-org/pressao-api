@@ -61,7 +61,7 @@ class TestAPIValidacoesAcao:
                 "campanha_id": campanha["id"],
                 "alvo_id": alvo["id"],
                 "canal": "email",
-                "anonimo": True,
+                "anonimo": False,
             },
         )
         assert response.status_code == 201

@@ -14,6 +14,9 @@ services:
       - KEYCLOAK_CLIENT_ID=pressao-api
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-mock-secret}
       - SENDGRID_API_KEY=${SENDGRID_API_KEY:-mock-key}
+      - SENDGRID_SANDBOX_MODE=${SENDGRID_SANDBOX_MODE:-true}
+      - SENDGRID_WEBHOOK_VERIFICATION_KEY=${SENDGRID_WEBHOOK_VERIFICATION_KEY:-}
+      - SENDGRID_WEBHOOK_URL=${SENDGRID_WEBHOOK_URL:-http://localhost:8000/api/v1/webhooks/sendgrid}
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-mock-sid}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-mock-token}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}

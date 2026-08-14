@@ -24,12 +24,24 @@ TestingSessionLocal = async_sessionmaker(test_engine, class_=AsyncSession, expir
 
 @pytest.fixture
 def mock_user():
-    return {"id": "test-user-123", "is_admin": False, "payload": {}}
+    return {
+        "id": "test-user-123",
+        "is_admin": False,
+        "nome": "Usuário Teste",
+        "email": "teste@email.com",
+        "payload": {},
+    }
 
 
 @pytest.fixture
 def mock_admin():
-    return {"id": "admin-123", "is_admin": True, "payload": {}}
+    return {
+        "id": "admin-123",
+        "is_admin": True,
+        "nome": "Admin Teste",
+        "email": "admin@email.com",
+        "payload": {},
+    }
 
 
 @pytest.fixture
@@ -67,7 +79,12 @@ def client(db_session):
         yield db_session
 
     def override_get_current_user():
-        return {"id": "test-user-123", "is_admin": False}
+        return {
+            "id": "test-user-123",
+            "is_admin": False,
+            "nome": "Usuário Teste",
+            "email": "teste@email.com",
+        }
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user

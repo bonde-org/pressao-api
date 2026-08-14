@@ -1,7 +1,11 @@
 import structlog
 
+from pressao_api.core.config import settings
 from pressao_api.models.acao import Acao
+from pressao_api.models.alvo import Alvo
+from pressao_api.models.campanha import Campanha
 from pressao_api.schemas.acao import CanalEnum, ProximoPassoTipoEnum, StatusAcaoEnum
+from pressao_api.services.email_service import email_service
 
 logger = structlog.get_logger()
 
@@ -18,7 +22,12 @@ class OrquestradorCanais:
             CanalEnum.INSTAGRAM: self._estrategia_instagram,
         }
 
-    async def executar(self, acao: Acao) -> Acao:
+    async def executar(
+        self,
+        acao: Acao,
+        alvo: Alvo | None = None,
+        campanha: Campanha | None = None,
+    ) -> Acao:
         """Executa a estratégia do canal."""
         try:
             canal = CanalEnum(acao.canal)
@@ -29,8 +38,7 @@ class OrquestradorCanais:
 
             logger.info("Executando ação", acao_id=str(acao.id), canal=acao.canal)
 
-            # Executa a estratégia
-            await estrategia(acao)
+            await estrategia(acao, alvo=alvo, campanha=campanha)
 
             return acao
 
@@ -39,21 +47,63 @@ class OrquestradorCanais:
             acao.status = StatusAcaoEnum.FALHA
             raise
 
-    async def _estrategia_email(self, acao: Acao):
-        """Estratégia para Email (SendGrid)."""
-        # Mock: simula envio de email
+    async def _estrategia_email(
+        self,
+        acao: Acao,
+        alvo: Alvo | None = None,
+        campanha: Campanha | None = None,
+    ):
+        """Estratégia para Email (SendGrid). Remetente = ativista; destinatário = alvo."""
+        if alvo is None or not alvo.contato:
+            raise ValueError("Alvo com e-mail é obrigatório para o canal email")
+
+        remetente_email = acao.ativista_email
+        remetente_nome = acao.ativista_nome
+        if not remetente_email:
+            raise ValueError("Canal email exige e-mail do ativista como remetente")
+
+        html = email_service.montar_template_pressao(acao=acao, alvo=alvo, campanha=campanha)
+        assunto = f"Pressão: {campanha.nome}" if campanha else "Mensagem de pressão"
+        resultado = email_service.enviar_pressao(
+            destinatario=alvo.contato,
+            remetente_email=remetente_email,
+            remetente_nome=remetente_nome,
+            assunto=assunto,
+            conteudo_html=html,
+            acao_id=str(acao.id),
+            campanha_id=str(acao.campanha_id),
+            nome_destinatario=alvo.nome,
+        )
+
+        if not resultado.sucesso:
+            raise RuntimeError(resultado.erro or "Falha ao enviar e-mail via SendGrid")
+
         acao.status = StatusAcaoEnum.PROCESSANDO
         acao.proximo_passo_tipo = ProximoPassoTipoEnum.WEBHOOK_AGUARDAR
         acao.proximo_passo_instrucao = "Aguardando confirmação de entrega via webhook"
         acao.proximo_passo_dados = {
-            "webhook_url": "https://api.sendgrid.com/v3/webhook",
-            "evento": "email_delivered",
+            "provider": "sendgrid",
+            "message_id": resultado.message_id,
+            "sandbox": resultado.sandbox,
+            "destinatario": alvo.contato,
+            "remetente": remetente_email,
+            "evento": "delivered",
+            "webhook_url": settings.SENDGRID_WEBHOOK_URL,
         }
-        logger.info("Email enviado", acao_id=str(acao.id))
+        logger.info(
+            "Email enviado",
+            acao_id=str(acao.id),
+            message_id=resultado.message_id,
+            sandbox=resultado.sandbox,
+        )
 
-    async def _estrategia_telefone(self, acao: Acao):
+    async def _estrategia_telefone(
+        self,
+        acao: Acao,
+        alvo: Alvo | None = None,
+        campanha: Campanha | None = None,
+    ):
         """Estratégia para Telefone (Twilio)."""
-        # Mock: simula chamada telefônica
         acao.status = StatusAcaoEnum.PROCESSANDO
         acao.proximo_passo_tipo = ProximoPassoTipoEnum.WEBHOOK_AGUARDAR
         acao.proximo_passo_instrucao = "Aguardando confirmação de chamada via webhook"
@@ -63,9 +113,13 @@ class OrquestradorCanais:
         }
         logger.info("Chamada telefônica iniciada", acao_id=str(acao.id))
 
-    async def _estrategia_whatsapp(self, acao: Acao):
+    async def _estrategia_whatsapp(
+        self,
+        acao: Acao,
+        alvo: Alvo | None = None,
+        campanha: Campanha | None = None,
+    ):
         """Estratégia para WhatsApp (Manual)."""
-        # Mock: gera link para manual
         acao.status = StatusAcaoEnum.AGUARDANDO_ACAO_HUMANA
         acao.proximo_passo_tipo = ProximoPassoTipoEnum.REDIRECIONAR_LINK
         acao.proximo_passo_instrucao = "Clique no link para enviar a mensagem no WhatsApp"
@@ -75,9 +129,13 @@ class OrquestradorCanais:
         }
         logger.info("Link WhatsApp gerado", acao_id=str(acao.id))
 
-    async def _estrategia_instagram(self, acao: Acao):
+    async def _estrategia_instagram(
+        self,
+        acao: Acao,
+        alvo: Alvo | None = None,
+        campanha: Campanha | None = None,
+    ):
         """Estratégia para Instagram (Manual)."""
-        # Mock: gera texto para manual
         acao.status = StatusAcaoEnum.AGUARDANDO_ACAO_HUMANA
         acao.proximo_passo_tipo = ProximoPassoTipoEnum.EXIBIR_TEXTO_E_ABRIR_PERFIL
         acao.proximo_passo_instrucao = "Copie o texto e envie no perfil do Instagram"
