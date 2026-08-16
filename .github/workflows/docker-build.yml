@@ -19,11 +19,6 @@ on:
       DOCKER_HUB_REPO:
         required: false
 
-env:
-  REGISTRY: docker.io
-  IMAGE_NAME: pressao-api
-  IMAGE_OWNER: ${{ secrets.DOCKER_HUB_REPO }}
-
 jobs:
   docker-build:
     runs-on: ubuntu-latest
@@ -55,6 +50,12 @@ jobs:
           
           SHA_SHORT=$(echo "${{ inputs.sha }}" | cut -c1-8)
           echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
+
+      - name: Debug tags
+        run: |
+          echo "repo: ${{ steps.tags.outputs.repo }}"
+          echo "branch_tag: ${{ steps.tags.outputs.branch_tag }}"
+          echo "sha_short: ${{ steps.tags.outputs.sha_short }}"
 
       - name: Build and push
         uses: docker/build-push-action@v5
