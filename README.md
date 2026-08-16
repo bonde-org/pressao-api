@@ -729,6 +729,8 @@ helm upgrade --install pressao-api ./helm \
 helm upgrade --install pressao-api ./helm -f helm/values-dev.yaml
 ```
 
+GitOps: exemplo Argo CD em [`argocd/application.yaml`](argocd/application.yaml).
+
 ## 🤝 Contribuição
 
 ### Setup de Desenvolvimento

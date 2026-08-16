@@ -1,0 +1,81 @@
+# Exemplo de Application Argo CD para produção.
+# Aplique no namespace do Argo CD (em geral argocd):
+#   kubectl apply -n argocd -f argocd/application.yaml
+#
+# Pré-requisito: Secret pressao-db-secret no namespace de destino, com a chave DATABASE_URL.
+# Credenciais da API (SECRET_KEY, Keycloak, SendGrid, Twilio) devem estar em
+# pressao-api-app-prod — não commite senhas neste manifesto.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pressao-api
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/bonde-org/pressao-api.git
+    targetRevision: main
+    path: helm
+    helm:
+      releaseName: pressao-api
+      values: |
+        replicaCount: 3
+        image:
+          repository: igrsantos/pressao-api
+          tag: "0.1.0"
+          pullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        autoscaling:
+          enabled: true
+          minReplicas: 3
+          maxReplicas: 10
+          targetCPUUtilizationPercentage: 70
+        config:
+          APP_NAME: pressao-api
+          APP_ENV: production
+          DEBUG: "false"
+          LOG_LEVEL: INFO
+          METRICS_ENABLED: "true"
+          DATABASE_POOL_SIZE: "20"
+          DATABASE_MAX_OVERFLOW: "40"
+          KEYCLOAK_URL: https://keycloak.example.com
+          KEYCLOAK_REALM: pressao
+          KEYCLOAK_CLIENT_ID: pressao-api
+          SENDGRID_SANDBOX_MODE: "false"
+          SENDGRID_WEBHOOK_URL: /api/v1/webhooks/sendgrid
+        secrets:
+          existingSecret: pressao-api-app-prod
+        database:
+          enabled: false
+          existingSecret: pressao-db-secret
+          urlKey: DATABASE_URL
+        ingress:
+          enabled: true
+          className: nginx
+          hosts:
+            - host: pressao-api.example.com
+              paths:
+                - path: /
+                  pathType: Prefix
+          tls:
+            - secretName: pressao-api-tls
+              hosts:
+                - pressao-api.example.com
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pressao
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

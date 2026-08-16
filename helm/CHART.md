@@ -116,6 +116,21 @@ helm upgrade --install pressao-api ./helm -f helm/values.yaml -f helm/values-sta
 helm upgrade --install pressao-api ./helm -f helm/values.yaml -f helm/values-prod.yaml
 ```
 
+## Argo CD
+
+Exemplo de `Application` em [`argocd/application.yaml`](../argocd/application.yaml): chart em `path: helm`, produção com `database.enabled: false` e `DATABASE_URL` no Secret `pressao-db-secret`.
+
+```bash
+# No namespace da API
+kubectl create secret generic pressao-db-secret \
+  --from-literal=DATABASE_URL='postgresql://user:pass@host:5432/pressao' \
+  -n pressao
+
+kubectl apply -n argocd -f argocd/application.yaml
+```
+
+O sync está `automated` (`prune` + `selfHeal`). Ajuste `repoURL`, `targetRevision`, Ingress e `KEYCLOAK_URL` ao ambiente.
+
 ## Segurança
 
 - `database.superuser.password` no values é só para bootstrap. **Altere em produção**; o default é `CHANGE-ME-CNPG-SUPERUSER`.
