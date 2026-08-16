@@ -73,6 +73,9 @@ database:
     secretName: pressao-pg-superuser-prod
     username: postgres
 
+serviceMonitor:
+  enabled: true
+
 ingress:
   enabled: true
   className: nginx

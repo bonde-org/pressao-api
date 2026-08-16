@@ -718,7 +718,7 @@ docker exec -it pressao-api-1 alembic upgrade head
 
 ### Kubernetes (Helm)
 
-Chart em [`helm/`](helm/) (`Chart.yaml`, `values.yaml`, `templates/`). PostgreSQL via CloudNativePG é **opcional e desligado por padrão**. Guia completo: [CHART.md](helm/CHART.md).
+Chart em [`helm/`](helm/) (`Chart.yaml`, `values.yaml`, `templates/`). PostgreSQL via CloudNativePG e ServiceMonitor (kube-prometheus-stack) são **opcionais e desligados por padrão**. Guia completo: [CHART.md](helm/CHART.md).
 
 ```bash
 # Banco externo (padrão)
@@ -727,9 +727,12 @@ helm upgrade --install pressao-api ./helm \
 
 # Banco gerenciado pelo CNPG
 helm upgrade --install pressao-api ./helm -f helm/values-dev.yaml
+
+# Métricas no Prometheus Operator (path /api/metrics)
+helm upgrade --install pressao-api ./helm --set serviceMonitor.enabled=true
 ```
 
-GitOps: exemplo Argo CD em [`argocd/application.yaml`](argocd/application.yaml).
+GitOps: exemplo Argo CD em [`argocd/application.yaml`](argocd/application.yaml) (produção com ServiceMonitor e banco externo).
 
 ## 🤝 Contribuição
 

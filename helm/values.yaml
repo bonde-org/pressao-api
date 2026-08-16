@@ -75,6 +75,16 @@ probes:
     initialDelaySeconds: 5
     periodSeconds: 10
 
+# ServiceMonitor para kube-prometheus-stack (desligado por padrão)
+serviceMonitor:
+  enabled: false
+  labels:
+    release: kube-prometheus-stack
+    monitoring: prometheus
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /api/metrics
+
 # Configuração não sensível (ConfigMap)
 config:
   APP_NAME: pressao-api

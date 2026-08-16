@@ -11,6 +11,7 @@ Chart em `pressao-api/helm/`. Instala a API no Kubernetes e, **opcionalmente**, 
 - Imagem da API publicada (`image.repository` / `image.tag`)
 - Se `database.enabled: true`: operador **CloudNativePG** instalado no cluster
 - Se backup Barman Cloud: plugin `barman-cloud.cloudnative-pg.io` e um `ObjectStore` referenciado em `database.backup.clusterPlugin.parameters.barmanObjectName`
+- Se `serviceMonitor.enabled: true`: CRDs do [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) (Prometheus Operator)
 
 ## Instalação rápida (banco externo)
 
@@ -105,10 +106,10 @@ Crie o `ObjectStore` do Barman **antes** do Cluster, no mesmo namespace.
 
 | Arquivo | Perfil |
 |---------|--------|
-| `values.yaml` | Padrão: CNPG **off**, banco externo |
+| `values.yaml` | Padrão: CNPG **off**, ServiceMonitor **off**, banco externo |
 | `values-dev.yaml` | CNPG 1 instância, sem backup |
-| `values-staging.yaml` | 2 instâncias, WAL extra, PodMonitor, backup |
-| `values-prod.yaml` | 3 instâncias, HPA, Ingress TLS, `secrets.existingSecret` |
+| `values-staging.yaml` | 2 instâncias, WAL extra, PodMonitor, ServiceMonitor, backup |
+| `values-prod.yaml` | 3 instâncias, HPA, Ingress TLS, ServiceMonitor, `secrets.existingSecret` |
 
 ```bash
 helm upgrade --install pressao-api ./helm -f helm/values.yaml -f helm/values-dev.yaml
@@ -130,6 +131,35 @@ kubectl apply -n argocd -f argocd/application.yaml
 ```
 
 O sync está `automated` (`prune` + `selfHeal`). Ajuste `repoURL`, `targetRevision`, Ingress e `KEYCLOAK_URL` ao ambiente.
+
+## Prometheus (ServiceMonitor)
+
+Com **kube-prometheus-stack**, habilite o `ServiceMonitor` para o Prometheus Operator fazer scrape da API.
+
+- Endpoint da aplicação: **`/api/metrics`** (não `/metrics`)
+- Porta do Service: `http` (8000)
+- Desligado por padrão (`serviceMonitor.enabled: false`)
+- Ativo em `values-staging.yaml`, `values-prod.yaml` e no exemplo Argo CD
+
+```bash
+helm upgrade --install pressao-api ./helm \
+  --set serviceMonitor.enabled=true
+```
+
+Labels padrão para o seletor do Prometheus do chart community:
+
+```yaml
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack
+    monitoring: prometheus
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /api/metrics
+```
+
+O label `release` deve coincidir com o release Helm do kube-prometheus-stack no cluster. Sem CRDs do Prometheus Operator, deixe `enabled: false`.
 
 ## Segurança
 
@@ -172,5 +202,5 @@ Depois, em `values-prod.yaml`: `database.superuser.createSecret: false` e `datab
 ## Templates
 
 - `templates/deployment.yaml`, `service.yaml`, `configmap.yaml`, `secret.yaml`, `serviceaccount.yaml`
-- `templates/ingress.yaml`, `hpa.yaml` (condicionais)
+- `templates/ingress.yaml`, `hpa.yaml`, `servicemonitor.yaml` (condicionais)
 - `templates/cnpg-cluster.yaml`, `cnpg-scheduledbackup.yaml`, `cnpg-superuser-secret.yaml` (se `database.enabled`)

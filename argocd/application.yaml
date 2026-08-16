@@ -57,6 +57,14 @@ spec:
           enabled: false
           existingSecret: pressao-db-secret
           urlKey: DATABASE_URL
+        serviceMonitor:
+          enabled: true
+          labels:
+            release: kube-prometheus-stack
+            monitoring: prometheus
+          interval: 30s
+          scrapeTimeout: 10s
+          path: /api/metrics
         ingress:
           enabled: true
           className: nginx
