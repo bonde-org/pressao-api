@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 RUN pip install uv
 
 # Copia arquivos de configuração
-COPY pyproject.toml setup.py README.md ./
+COPY pyproject.toml setup.py README.md alembic.ini ./
 
 # Copia o código fonte
 COPY src/ src/
@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/pyproject.toml /app/
 COPY --from=builder /app/setup.py /app/
+COPY --from=builder /app/alembic.ini /app/
 
 # Copia código fonte
 COPY src/ src/
