@@ -1,0 +1,36 @@
+# Overlay de desenvolvimento: CNPG de instância única, sem backup.
+# helm upgrade --install pressao-api ./helm -f helm/values.yaml -f helm/values-dev.yaml
+
+replicaCount: 1
+
+config:
+  APP_ENV: development
+  DEBUG: "true"
+  LOG_LEVEL: DEBUG
+  SENDGRID_SANDBOX_MODE: "true"
+
+database:
+  enabled: true
+  instances: 1
+  storage:
+    size: 8Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  postgresql:
+    parameters:
+      max_connections: "50"
+      shared_buffers: "64MB"
+  monitoring:
+    enablePodMonitor: false
+  backup:
+    enabled: false
+  superuser:
+    password: "dev-only-change-me"
+
+ingress:
+  enabled: false

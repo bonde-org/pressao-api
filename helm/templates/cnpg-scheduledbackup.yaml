@@ -1,0 +1,20 @@
+{{- if and .Values.database.enabled .Values.database.backup.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ include "pressao-api.cnpg.clusterName" . }}-backup
+  labels:
+    {{- include "pressao-api.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.database.backup.schedule | quote }}
+  backupOwnerReference: self
+  immediate: {{ .Values.database.backup.immediate }}
+  method: {{ .Values.database.backup.method | quote }}
+  target: {{ .Values.database.backup.target | quote }}
+  cluster:
+    name: {{ include "pressao-api.cnpg.clusterName" . }}
+  {{- if eq .Values.database.backup.method "plugin" }}
+  pluginConfiguration:
+    name: {{ .Values.database.backup.plugin.name | quote }}
+  {{- end }}
+{{- end }}

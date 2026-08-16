@@ -716,6 +716,19 @@ docker exec -it pressao-api-1 alembic upgrade head
 - Certificados SSL/HTTPS configurados
 - Variáveis de banco de dados de produção
 
+### Kubernetes (Helm)
+
+Chart em [`helm/`](helm/) (`Chart.yaml`, `values.yaml`, `templates/`). PostgreSQL via CloudNativePG é **opcional e desligado por padrão**. Guia completo: [CHART.md](helm/CHART.md).
+
+```bash
+# Banco externo (padrão)
+helm upgrade --install pressao-api ./helm \
+  --set secrets.DATABASE_URL='postgresql://user:pass@host:5432/pressao'
+
+# Banco gerenciado pelo CNPG
+helm upgrade --install pressao-api ./helm -f helm/values-dev.yaml
+```
+
 ## 🤝 Contribuição
 
 ### Setup de Desenvolvimento

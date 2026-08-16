@@ -1,0 +1,164 @@
+# Default values for pressao-api.
+# Banco CNPG desligado por padrão: a API usa DATABASE_URL de um Secret externo.
+
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+image:
+  repository: igrsantos/pressao-api
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: pressao-api.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+probes:
+  liveness:
+    path: /api/health
+    initialDelaySeconds: 15
+    periodSeconds: 20
+  readiness:
+    path: /api/health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+# Configuração não sensível (ConfigMap)
+config:
+  APP_NAME: pressao-api
+  APP_ENV: production
+  DEBUG: "false"
+  LOG_LEVEL: INFO
+  METRICS_ENABLED: "true"
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_OVERFLOW: "40"
+  KEYCLOAK_URL: http://keycloak:8080
+  KEYCLOAK_REALM: pressao
+  KEYCLOAK_CLIENT_ID: pressao-api
+  SENDGRID_SANDBOX_MODE: "true"
+  SENDGRID_WEBHOOK_URL: /api/v1/webhooks/sendgrid
+
+# Credenciais da aplicação.
+# Em produção: secrets.existingSecret + SealedSecrets / ExternalSecrets.
+secrets:
+  existingSecret: ""
+  SECRET_KEY: "change-me-in-production"
+  KEYCLOAK_CLIENT_SECRET: "change-me"
+  SENDGRID_API_KEY: "mock-key"
+  SENDGRID_WEBHOOK_VERIFICATION_KEY: ""
+  TWILIO_ACCOUNT_SID: "mock-sid"
+  TWILIO_AUTH_TOKEN: "mock-token"
+  # Usado somente quando database.enabled=false e database.existingSecret está vazio
+  DATABASE_URL: "postgresql://pressao:pressao123@postgres:5432/pressao"
+
+# PostgreSQL via CloudNativePG (opcional)
+database:
+  # false = usa banco externo (DATABASE_URL no Secret)
+  enabled: false
+  existingSecret: ""
+  urlKey: DATABASE_URL
+  # Chave do Secret gerado pelo CNPG ({cluster}-app)
+  cnpgUriKey: uri
+  clusterName: ""
+  database: pressao
+  owner: pressao
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  enableSuperuserAccess: true
+  storage:
+    size: 10Gi
+    storageClass: ""
+  walStorage:
+    enabled: false
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: "128MB"
+  monitoring:
+    enablePodMonitor: false
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  superuser:
+    # false = Secret criado fora do Helm (ExternalSecrets / SealedSecrets)
+    createSecret: true
+    secretName: ""
+    username: postgres
+    # ALTERE em produção. Prefira SealedSecrets / ExternalSecrets.
+    password: "CHANGE-ME-CNPG-SUPERUSER"
+  backup:
+    enabled: false
+    schedule: "0 0 2 * * *"
+    method: plugin
+    immediate: false
+    target: prefer-standby
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+    # Plugin no Cluster (WAL archive). Ex.: barmanObjectName do ObjectStore
+    clusterPlugin:
+      enabled: false
+      name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters: {}
+        # barmanObjectName: pressao-pg-backup
