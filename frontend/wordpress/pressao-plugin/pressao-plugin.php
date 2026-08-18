@@ -137,6 +137,8 @@ final class PressaoPlugin {
                 'nonce' => wp_create_nonce('pressao_acao_nonce'),
                 'ajaxUrl' => admin_url('admin-ajax.php'),
                 'localStorageKey' => 'pressao_acoes_realizadas',
+                'cookieUserIdKey' => 'pressao_usuario_id',
+                'cookieActionsKey' => 'pressao_acoes_realizadas',
                 // Ativista Config
                 'ativistaFormTitle' => get_option('pressao_ativista_form_title', __('Identifique-se', 'pressao-plugin')),
                 'ativistaFormMessage' => get_option('pressao_ativista_form_message', __('Preencha seus dados para continuar:', 'pressao-plugin')),

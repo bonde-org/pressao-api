@@ -6,6 +6,9 @@
 // Constantes
 const ACTIVIST_STORAGE_KEY = 'pressao_ativista_data';
 const ACTIVIST_LAST_CONFIRM_KEY = 'pressao_ativista_last_confirm';
+const ACTIONS_STORAGE_KEY = pressaoData?.localStorageKey || 'pressao_acoes_realizadas';
+const COOKIE_USER_ID = pressaoData?.cookieUserIdKey || 'pressao_usuario_id';
+const COOKIE_ACTIONS = pressaoData?.cookieActionsKey || 'pressao_acoes_realizadas';
 
 // ============================================
 // FUNÇÕES DO ATIVISTA
@@ -36,10 +39,17 @@ function saveAtivistaData(ativista) {
     }
 }
 
-function clearAtivistaData() {
-    console.log('🧹 clearAtivistaData: limpando...');
+function deleteCookie(name) {
+    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+}
+
+function clearPressaoUserData() {
+    console.log('🧹 clearPressaoUserData: limpando storage e cookies...');
     localStorage.removeItem(ACTIVIST_STORAGE_KEY);
     localStorage.removeItem(ACTIVIST_LAST_CONFIRM_KEY);
+    localStorage.removeItem(ACTIONS_STORAGE_KEY);
+    deleteCookie(COOKIE_USER_ID);
+    deleteCookie(COOKIE_ACTIONS);
 }
 
 function precisaConfirmarAtivista(intervaloMinutos) {
@@ -58,7 +68,7 @@ function precisaConfirmarAtivista(intervaloMinutos) {
 
 function getAcoesFromLocalStorage() {
     try {
-        const data = localStorage.getItem('pressao_acoes_realizadas');
+        const data = localStorage.getItem(ACTIONS_STORAGE_KEY);
         return data ? JSON.parse(data) : {};
     } catch (e) {
         return {};
@@ -67,7 +77,7 @@ function getAcoesFromLocalStorage() {
 
 function saveActionsToLocalStorage(acoes) {
     try {
-        localStorage.setItem('pressao_acoes_realizadas', JSON.stringify(acoes));
+        localStorage.setItem(ACTIONS_STORAGE_KEY, JSON.stringify(acoes));
     } catch (e) {
         console.warn('Não foi possível salvar no localStorage:', e);
     }
@@ -227,49 +237,75 @@ function initAlvos(container) {
     
     console.log('📋 Config:', { campaignId, nonce, confirmInterval });
 
-    const confirmButtons = container.querySelectorAll('.pressao-action-confirm');
+    snapshotAlvosActionsUI(container);
+    checkActionsStatus(container);
+    bindAlvoActionListeners(container);
+}
 
-    confirmButtons.forEach(function(button) {
+function snapshotAlvosActionsUI(container) {
+    container.querySelectorAll('.pressao-alvo-item').forEach(function(item) {
+        const actionsDiv = item.querySelector('.pressao-alvo-actions');
+        if (actionsDiv && !actionsDiv.dataset.originalHtml) {
+            actionsDiv.dataset.originalHtml = actionsDiv.innerHTML;
+        }
+    });
+}
+
+function resetAlvosActionsUI(container) {
+    container.querySelectorAll('.pressao-alvo-item').forEach(function(item) {
+        item.classList.remove('action-done');
+        const actionsDiv = item.querySelector('.pressao-alvo-actions');
+        if (actionsDiv && actionsDiv.dataset.originalHtml) {
+            actionsDiv.innerHTML = actionsDiv.dataset.originalHtml;
+        }
+    });
+    bindAlvoActionListeners(container);
+}
+
+function bindAlvoActionListeners(container) {
+    const confirmInterval = parseInt(container.dataset.confirmInterval) ||
+                           parseInt(pressaoData?.confirmInterval) || 10;
+
+    container.querySelectorAll('.pressao-action-confirm').forEach(function(button) {
+        if (button.dataset.bound === 'true') {
+            return;
+        }
+        button.dataset.bound = 'true';
         button.addEventListener('click', function(e) {
             e.preventDefault();
-            
+
             const alvoId = this.dataset.alvoId;
             const acaoId = this.dataset.acaoId;
             const campaignId = this.dataset.campaign || container.dataset.campaign;
-            // Canal vem do item ou do dataset do botão
             const canal = this.dataset.canal || this.closest('.pressao-alvo-item')?.dataset.canal || 'email';
-            
+
             console.log(`🖱️ .pressao-action-confirm clicado para alvo: ${alvoId}, canal: ${canal}`);
-            
+
             confirmarAcao(alvoId, acaoId, campaignId, container, this);
         });
     });
-    
-    // Verifica o estado das ações ao carregar
-    checkActionsStatus(container);
-    
-    // ============================================
-    // BOTÃO DE AÇÃO (AGORA É O TOGGLE)
-    // ============================================
+
     const toggles = container.querySelectorAll('.pressao-action-toggle');
     console.log(`🔘 Encontrados ${toggles.length} botões .pressao-action-toggle`);
-    
+
     toggles.forEach(function(toggle) {
+        if (toggle.dataset.bound === 'true') {
+            return;
+        }
+        toggle.dataset.bound = 'true';
         toggle.addEventListener('click', function(e) {
             e.preventDefault();
-            
+
             const alvoId = this.dataset.alvoId;
             const campaignId = this.dataset.campaign || container.dataset.campaign;
             const canal = this.dataset.canal || 'email';
-            
+
             console.log(`🖱️ .pressao-action-toggle clicado para alvo: ${alvoId}`);
-            
-            // Verifica se tem ativista
+
             const ativista = getAtivistaData();
             console.log('👤 Ativista atual:', ativista);
-            
+
             if (!ativista) {
-                // Não tem dados → mostra formulário inline
                 console.log('⚠️ Sem ativista, mostrando formulário inline...');
                 const form = this.closest('.pressao-alvo-actions').querySelector('.pressao-ativista-form');
                 if (form) {
@@ -277,118 +313,107 @@ function initAlvos(container) {
                     form.dataset.canal = canal;
                 }
             } else if (precisaConfirmarAtivista(confirmInterval)) {
-                // Precisa confirmar → mostra modal de confirmação
                 console.log('🔄 Precisa confirmar identidade');
                 const toggleRef = this;
                 mostrarConfirmacaoAtivista(container, ativista, function() {
                     console.log('✅ Confirmado! Executando ação...');
-                    // Busca o submit para executar a ação
                     const submit = toggleRef.closest('.pressao-alvo-actions').querySelector('.pressao-action-submit');
                     if (submit) {
                         submit.click();
                     }
-                });
+                }, toggleRef);
             } else {
-                // Tudo certo → executa ação diretamente
                 console.log('✅ Tudo certo, executando ação...');
-                // Busca o submit para executar a ação
                 const submit = this.closest('.pressao-alvo-actions').querySelector('.pressao-action-submit');
                 if (submit) {
                     submit.click();
                 } else {
-                    // Fallback: executa ação diretamente
                     realizarAcao(alvoId, campaignId, container, this, ativista, canal);
                 }
             }
         });
     });
-    
-    // ============================================
-    // SUBMIT DO FORMULÁRIO INLINE
-    // ============================================
+
     const submits = container.querySelectorAll('.pressao-action-submit');
     console.log(`🔘 Encontrados ${submits.length} botões .pressao-action-submit`);
-    
+
     submits.forEach(function(submit) {
+        if (submit.dataset.bound === 'true') {
+            return;
+        }
+        submit.dataset.bound = 'true';
         submit.addEventListener('click', function(e) {
             e.preventDefault();
-            
+
             console.log('🖱️ ===== .pressao-action-submit CLICADO! =====');
-            
+
             const alvoId = this.dataset.alvoId;
             const campaignId = this.dataset.campaign || container.dataset.campaign;
-            const canal = this.dataset.canal || 
-            this.closest('.pressao-ativista-form')?.dataset.canal || 
-            this.closest('.pressao-alvo-item')?.dataset.canal || 
+            const canal = this.dataset.canal ||
+            this.closest('.pressao-ativista-form')?.dataset.canal ||
+            this.closest('.pressao-alvo-item')?.dataset.canal ||
             'email';
             const form = this.closest('.pressao-ativista-form');
-            const actionsDiv = this.closest('.pressao-alvo-actions');
-            
+
             console.log('🎯 Alvo ID:', alvoId);
             console.log('📢 Campaign ID:', campaignId);
-            
-            // Verifica se já tem ativista
+
             const ativistaExistente = getAtivistaData();
-            
+
             if (ativistaExistente && !precisaConfirmarAtivista(10)) {
-                // Já tem ativista e está confirmado → executa ação diretamente
                 console.log('✅ Ativista já existe, executando ação diretamente');
                 realizarAcao(alvoId, campaignId, container, this, ativistaExistente, canal);
                 return;
             }
-            
+
             if (!form) {
                 console.error('❌ Formulário não encontrado!');
                 return;
             }
-            
-            // Coleta dados do ativista
+
             const nome = form.querySelector('.pressao-ativista-nome');
             const email = form.querySelector('.pressao-ativista-email');
             const telefone = form.querySelector('.pressao-ativista-telefone');
-            
+
             console.log('📝 Campos encontrados:');
             console.log('  Nome:', nome ? '✅' : '❌', nome ? nome.value : 'não encontrado');
             console.log('  Email:', email ? '✅' : '❌', email ? email.value : 'não encontrado');
             console.log('  Telefone:', telefone ? '✅' : '❌', telefone ? telefone.value : 'não encontrado');
-            
+
             if (!nome || !nome.value.trim()) {
                 console.log('⚠️ Nome vazio');
                 showNotification(container, 'error', 'Por favor, informe seu nome.');
                 return;
             }
-            
-            // PREPARA E SALVA O ATIVISTA
+
             const ativista = {
                 nome: nome.value.trim(),
                 email: email ? email.value.trim() : '',
                 telefone: telefone ? telefone.value.trim() : ''
             };
-            
+
             console.log('📦 Ativista preparado:', ativista);
             console.log('💾 Chamando saveAtivistaData...');
-            
+
             const saved = saveAtivistaData(ativista);
             console.log('✅ Resultado do save:', saved);
-            
-            const verificar = localStorage.getItem('pressao_ativista_data');
+
+            const verificar = localStorage.getItem(ACTIVIST_STORAGE_KEY);
             console.log('🔍 Verificando localStorage:', verificar);
-            
+
             if (!verificar) {
                 console.error('❌ Dados NÃO foram salvos!');
                 showNotification(container, 'error', 'Erro ao salvar seus dados. Tente novamente.');
                 return;
             }
-            
+
             console.log('✅ Dados confirmados no localStorage!');
-            
-            // Fecha o formulário inline
+
             if (form) {
                 form.style.display = 'none';
                 console.log('🗑️ Formulário inline fechado');
             }
-            
-            // Executa a ação
+
             realizarAcao(alvoId, campaignId, container, this, ativista, canal);
         });
     });
@@ -398,7 +423,7 @@ function initAlvos(container) {
 // MODAL DE CONFIRMAÇÃO (APENAS NOME - LGPD)
 // ============================================
 
-function mostrarConfirmacaoAtivista(container, ativista, callback) {
+function mostrarConfirmacaoAtivista(container, ativista, callback, contextElement) {
     console.log('🔄 Mostrando confirmação para:', ativista.nome);
     
     const message = container.dataset.confirmMessage || 
@@ -446,12 +471,14 @@ function mostrarConfirmacaoAtivista(container, ativista, callback) {
     
     overlay.querySelector('#pressao-confirm-no').addEventListener('click', function() {
         console.log('👤 "Não sou eu" clicado');
-        clearAtivistaData();
+        const alvoId = contextElement?.dataset.alvoId ||
+                       contextElement?.closest('.pressao-alvo-item')?.dataset.alvoId;
+        clearPressaoUserData();
+        resetAlvosActionsUI(container);
         overlay.remove();
-        // Mostra formulário inline novamente
-        const alvoId = container.querySelector('.pressao-action-toggle')?.dataset.alvoId;
         if (alvoId) {
-            const form = container.querySelector(`.pressao-ativista-form[data-alvo-id="${alvoId}"]`);
+            const item = container.querySelector(`.pressao-alvo-item[data-alvo-id="${alvoId}"]`);
+            const form = item?.querySelector('.pressao-ativista-form');
             if (form) {
                 form.style.display = 'block';
             }
