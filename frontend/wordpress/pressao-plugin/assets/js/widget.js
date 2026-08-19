@@ -4,11 +4,71 @@
  */
 
 // Constantes
-const ACTIVIST_STORAGE_KEY = 'pressao_ativista_data';
-const ACTIVIST_LAST_CONFIRM_KEY = 'pressao_ativista_last_confirm';
 const ACTIONS_STORAGE_KEY = pressaoData?.localStorageKey || 'pressao_acoes_realizadas';
 const COOKIE_USER_ID = pressaoData?.cookieUserIdKey || 'pressao_usuario_id';
 const COOKIE_ACTIONS = pressaoData?.cookieActionsKey || 'pressao_acoes_realizadas';
+const SESSAO_COOKIE = 'pressao_sessao_id';
+const ATIVISTA_COOKIE = 'pressao_ativista_data';
+const ATIVISTA_CONFIRM_COOKIE = 'pressao_ativista_last_confirm';
+
+// ============================================
+// COOKIE HELPERS
+// ============================================
+
+function setCookie(name, value, seconds) {
+    let expires = '';
+    if (seconds && seconds > 0) {
+        const date = new Date();
+        date.setTime(date.getTime() + (seconds * 1000));
+        expires = '; expires=' + date.toUTCString();
+    }
+    document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/; SameSite=Lax';
+}
+
+function getCookie(name) {
+    const nameEQ = name + '=';
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i].trim();
+        if (c.indexOf(nameEQ) === 0) {
+            return decodeURIComponent(c.substring(nameEQ.length));
+        }
+    }
+    return null;
+}
+
+function getSessionDuration() {
+    return parseInt(pressaoData?.sessionDuration) || 86400;
+}
+
+// ============================================
+// SESSÃO
+// ============================================
+
+function getOrCreateSessaoId() {
+    let sessaoId = getCookie(SESSAO_COOKIE);
+    if (!sessaoId) {
+        sessaoId = crypto.randomUUID();
+        setCookie(SESSAO_COOKIE, sessaoId, getSessionDuration());
+    }
+    return sessaoId;
+}
+
+// ============================================
+// CANAIS E REQUISITOS DE DADOS
+// ============================================
+
+const CANAIS_QUE_REQUEREM_ATIVISTA = {
+    email: ['email'],
+    telefone: ['telefone'],
+    whatsapp: ['telefone'],
+    instagram: []
+};
+
+function canalRequerAtivista(canal) {
+    const campos = CANAIS_QUE_REQUEREM_ATIVISTA[canal];
+    return campos && campos.length > 0;
+}
 
 // ============================================
 // FUNÇÕES DO ATIVISTA
@@ -16,25 +76,19 @@ const COOKIE_ACTIONS = pressaoData?.cookieActionsKey || 'pressao_acoes_realizada
 
 function getAtivistaData() {
     try {
-        const data = localStorage.getItem(ACTIVIST_STORAGE_KEY);
-        console.log('🔍 getAtivistaData:', data);
+        const data = getCookie(ATIVISTA_COOKIE);
         return data ? JSON.parse(data) : null;
     } catch (e) {
-        console.error('❌ Erro no getAtivistaData:', e);
         return null;
     }
 }
 
 function saveAtivistaData(ativista) {
-    console.log('💾 saveAtivistaData chamado com:', ativista);
     try {
-        localStorage.setItem(ACTIVIST_STORAGE_KEY, JSON.stringify(ativista));
-        localStorage.setItem(ACTIVIST_LAST_CONFIRM_KEY, String(Date.now()));
-        console.log('✅ saveAtivistaData: dados salvos!');
-        console.log('🔍 Verificando:', localStorage.getItem(ACTIVIST_STORAGE_KEY));
+        setCookie(ATIVISTA_COOKIE, JSON.stringify(ativista), getSessionDuration());
+        setCookie(ATIVISTA_CONFIRM_COOKIE, String(Date.now()), getSessionDuration());
         return true;
     } catch (e) {
-        console.error('❌ Erro no saveAtivistaData:', e);
         return false;
     }
 }
@@ -44,16 +98,16 @@ function deleteCookie(name) {
 }
 
 function clearPressaoUserData() {
-    console.log('🧹 clearPressaoUserData: limpando storage e cookies...');
-    localStorage.removeItem(ACTIVIST_STORAGE_KEY);
-    localStorage.removeItem(ACTIVIST_LAST_CONFIRM_KEY);
-    localStorage.removeItem(ACTIONS_STORAGE_KEY);
+    deleteCookie(ATIVISTA_COOKIE);
+    deleteCookie(ATIVISTA_CONFIRM_COOKIE);
+    deleteCookie(SESSAO_COOKIE);
     deleteCookie(COOKIE_USER_ID);
     deleteCookie(COOKIE_ACTIONS);
+    localStorage.removeItem(ACTIONS_STORAGE_KEY);
 }
 
 function precisaConfirmarAtivista(intervaloMinutos) {
-    const ultimaConfirmacao = localStorage.getItem(ACTIVIST_LAST_CONFIRM_KEY);
+    const ultimaConfirmacao = getCookie(ATIVISTA_CONFIRM_COOKIE);
     if (!ultimaConfirmacao) {
         return true;
     }
@@ -300,30 +354,28 @@ function bindAlvoActionListeners(container) {
             const campaignId = this.dataset.campaign || container.dataset.campaign;
             const canal = this.dataset.canal || 'email';
 
-            console.log(`🖱️ .pressao-action-toggle clicado para alvo: ${alvoId}`);
-
             const ativista = getAtivistaData();
-            console.log('👤 Ativista atual:', ativista);
+
+            if (!canalRequerAtivista(canal)) {
+                realizarAcao(alvoId, campaignId, container, this, null, canal);
+                return;
+            }
 
             if (!ativista) {
-                console.log('⚠️ Sem ativista, mostrando formulário inline...');
                 const form = this.closest('.pressao-alvo-actions').querySelector('.pressao-ativista-form');
                 if (form) {
                     form.style.display = 'block';
                     form.dataset.canal = canal;
                 }
             } else if (precisaConfirmarAtivista(confirmInterval)) {
-                console.log('🔄 Precisa confirmar identidade');
                 const toggleRef = this;
                 mostrarConfirmacaoAtivista(container, ativista, function() {
-                    console.log('✅ Confirmado! Executando ação...');
                     const submit = toggleRef.closest('.pressao-alvo-actions').querySelector('.pressao-action-submit');
                     if (submit) {
                         submit.click();
                     }
                 }, toggleRef);
             } else {
-                console.log('✅ Tudo certo, executando ação...');
                 const submit = this.closest('.pressao-alvo-actions').querySelector('.pressao-action-submit');
                 if (submit) {
                     submit.click();
@@ -398,16 +450,12 @@ function bindAlvoActionListeners(container) {
             const saved = saveAtivistaData(ativista);
             console.log('✅ Resultado do save:', saved);
 
-            const verificar = localStorage.getItem(ACTIVIST_STORAGE_KEY);
-            console.log('🔍 Verificando localStorage:', verificar);
+            const verificar = getCookie(ATIVISTA_COOKIE);
 
             if (!verificar) {
-                console.error('❌ Dados NÃO foram salvos!');
                 showNotification(container, 'error', 'Erro ao salvar seus dados. Tente novamente.');
                 return;
             }
-
-            console.log('✅ Dados confirmados no localStorage!');
 
             if (form) {
                 form.style.display = 'none';
@@ -487,7 +535,7 @@ function mostrarConfirmacaoAtivista(container, ativista, callback, contextElemen
     
     overlay.querySelector('#pressao-confirm-yes').addEventListener('click', function() {
         console.log('✅ "Sou eu" clicado');
-        localStorage.setItem(ACTIVIST_LAST_CONFIRM_KEY, String(Date.now()));
+        setCookie(ATIVISTA_CONFIRM_COOKIE, String(Date.now()), getSessionDuration());
         overlay.remove();
         if (callback && typeof callback === 'function') {
             callback();
@@ -504,19 +552,7 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
     
     if (!ativista) {
         ativista = getAtivistaData();
-        console.log('📦 Ativista do localStorage:', ativista);
     }
-    
-    if (!ativista) {
-        console.log('❌ Nenhum ativista encontrado');
-        const form = container.querySelector(`.pressao-ativista-form[data-alvo-id="${alvoId}"]`);
-        if (form) {
-            form.style.display = 'block';
-        }
-        return;
-    }
-    
-    console.log('✅ Ativista encontrado:', ativista);
 
     // Se não tem canal, tenta buscar do item
     if (!canal) {
@@ -540,9 +576,10 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
         canal: canal,
         template_id: templateId,
         nonce: nonce,
-        ativista_nome: ativista.nome || '',
-        ativista_email: ativista.email || '',
-        ativista_telefone: ativista.telefone || ''
+        sessao_id: getOrCreateSessaoId(),
+        ativista_nome: ativista?.nome || '',
+        ativista_email: ativista?.email || '',
+        ativista_telefone: ativista?.telefone || ''
     };
     
     fetch(pressaoData.ajaxUrl, {

@@ -332,15 +332,8 @@ class PressaoPlugin_API {
             );
         }
         
-        // Se não for anônimo, valida dados do ativista
-        if (empty($dados['anonimo']) || $dados['anonimo'] === false) {
-            if (empty($dados['ativista']) || !is_array($dados['ativista'])) {
-                return new WP_Error(
-                    'invalid_data',
-                    __('ativista é obrigatório para ações não anônimas', 'pressao-plugin')
-                );
-            }
-            
+        // Valida dados do ativista quando fornecidos
+        if (!empty($dados['ativista']) && is_array($dados['ativista'])) {
             if (empty($dados['ativista']['nome'])) {
                 return new WP_Error(
                     'invalid_data',
@@ -361,12 +354,16 @@ class PressaoPlugin_API {
             'campanha_id' => $dados['campanha_id'],
             'alvo_id' => $dados['alvo_id'],
             'canal' => $dados['canal'],
-            'anonimo' => isset($dados['anonimo']) ? (bool) $dados['anonimo'] : true
+            'anonimo' => isset($dados['anonimo']) ? (bool) $dados['anonimo'] : false
         ];
         
         // Adiciona template_id se fornecido
         if (!empty($dados['template_id'])) {
             $payload['template_id'] = $dados['template_id'];
+        }
+        
+        if (!empty($dados['sessao_id'])) {
+            $payload['sessao_id'] = $dados['sessao_id'];
         }
         
         // Adiciona dados do ativista se não for anônimo
@@ -412,7 +409,7 @@ class PressaoPlugin_API {
      * @param string|null $template_id ID do template (opcional)
      * @return array|WP_Error Resultado da criação
      */
-    public function criar_acao_anonima($campanha_id, $alvo_id, $canal = 'email', $template_id = null) {
+    public function criar_acao_anonima($campanha_id, $alvo_id, $canal = 'email', $template_id = null, $sessao_id = null) {
         $dados = [
             'campanha_id' => $campanha_id,
             'alvo_id' => $alvo_id,
@@ -424,9 +421,35 @@ class PressaoPlugin_API {
             $dados['template_id'] = $template_id;
         }
         
+        if ($sessao_id) {
+            $dados['sessao_id'] = $sessao_id;
+        }
+        
         return $this->criar_acao($dados);
     }
     
+    /**
+     * Cria uma ação sem dados do ativista (não é anônima — sessão ainda não identificada)
+     */
+    public function criar_acao_sem_ativista($campanha_id, $alvo_id, $canal = 'email', $template_id = null, $sessao_id = null) {
+        $dados = [
+            'campanha_id' => $campanha_id,
+            'alvo_id' => $alvo_id,
+            'canal' => $canal,
+            'anonimo' => false
+        ];
+        
+        if ($template_id) {
+            $dados['template_id'] = $template_id;
+        }
+        
+        if ($sessao_id) {
+            $dados['sessao_id'] = $sessao_id;
+        }
+        
+        return $this->criar_acao($dados);
+    }
+
     /**
      * Cria uma ação com dados do ativista
      * 
@@ -437,7 +460,7 @@ class PressaoPlugin_API {
      * @param string|null $template_id ID do template (opcional)
      * @return array|WP_Error Resultado da criação
      */
-    public function criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id = null) {
+    public function criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id = null, $sessao_id = null) {
         $dados = [
             'campanha_id' => $campanha_id,
             'alvo_id' => $alvo_id,
@@ -452,6 +475,10 @@ class PressaoPlugin_API {
         
         if ($template_id) {
             $dados['template_id'] = $template_id;
+        }
+        
+        if ($sessao_id) {
+            $dados['sessao_id'] = $sessao_id;
         }
         
         return $this->criar_acao($dados);

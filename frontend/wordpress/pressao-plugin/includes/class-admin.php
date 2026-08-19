@@ -35,6 +35,7 @@ class PressaoPlugin_Admin {
         register_setting('pressao_settings_group', 'pressao_api_url');
         register_setting('pressao_settings_group', 'pressao_campaign_id');
         register_setting('pressao_settings_group', 'pressao_widget_title');
+        register_setting('pressao_settings_group', 'pressao_session_duration');
         
         // Seção: Autenticação
         add_settings_section(
@@ -148,6 +149,14 @@ class PressaoPlugin_Admin {
             'pressao_ativista_section',
             ['field' => 'pressao_ativista_form_title']
         );
+
+        add_settings_field(
+            'pressao_session_duration',
+            __('Duração da sessão do ativista', 'pressao-plugin'),
+            [$this, 'render_session_duration_field'],
+            'pressao-settings',
+            'pressao_ativista_section'
+        );
     }
     
     public function render_text_field($args) {
@@ -235,6 +244,30 @@ class PressaoPlugin_Admin {
                max="<?php echo esc_attr($max); ?>" 
                class="small-text" />
         <p class="description"><?php esc_html_e('Tempo em minutos para perguntar novamente se é o mesmo ativista.', 'pressao-plugin'); ?></p>
+        <?php
+    }
+    public function render_session_duration_field() {
+        $value = get_option('pressao_session_duration', '86400');
+        $options = [
+            '1800' => __('30 minutos', 'pressao-plugin'),
+            '3600' => __('1 hora', 'pressao-plugin'),
+            '7200' => __('2 horas', 'pressao-plugin'),
+            '21600' => __('6 horas', 'pressao-plugin'),
+            '43200' => __('12 horas', 'pressao-plugin'),
+            '86400' => __('24 horas', 'pressao-plugin'),
+            '604800' => __('7 dias', 'pressao-plugin'),
+            '2592000' => __('30 dias', 'pressao-plugin'),
+            '0' => __('Sessão do navegador (sem expiração)', 'pressao-plugin'),
+        ];
+        ?>
+        <select name="pressao_session_duration">
+            <?php foreach ($options as $val => $label) : ?>
+                <option value="<?php echo esc_attr($val); ?>" <?php selected($value, $val); ?>>
+                    <?php echo esc_html($label); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <p class="description"><?php esc_html_e('Tempo que a sessão do ativista permanece ativa no navegador.', 'pressao-plugin'); ?></p>
         <?php
     }
 }

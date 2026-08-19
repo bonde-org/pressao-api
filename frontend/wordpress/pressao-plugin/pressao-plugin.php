@@ -147,6 +147,7 @@ final class PressaoPlugin {
                 'ativistaTelefoneLabel' => get_option('pressao_ativista_telefone_label', __('Telefone', 'pressao-plugin')),
                 'ativistaSaveButton' => get_option('pressao_ativista_save_button', __('Salvar e continuar', 'pressao-plugin')),
                 'confirmInterval' => get_option('pressao_ativista_confirm_interval', 10),
+                'sessionDuration' => get_option('pressao_session_duration', '86400'),
             ]);
         }
     }
