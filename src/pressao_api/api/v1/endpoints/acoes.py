@@ -102,6 +102,7 @@ async def criar_acao(
             "canal": canal,
             "template_id": request.template_id,
             "status": StatusAcaoEnum.PROCESSANDO,
+            "sessao_id": request.sessao_id,
         }
 
         is_service = current_user.get("is_service", False)
@@ -116,6 +117,7 @@ async def criar_acao(
                         "ativista_nome": None,
                         "ativista_email": None,
                         "ativista_telefone": None,
+                        "ativista_preenchido": False,
                     }
                 )
                 logger.info("Ação anônima criada por usuário logado", user_id=current_user["id"])
@@ -127,6 +129,7 @@ async def criar_acao(
                         "ativista_email": current_user.get("email"),
                         "ativista_telefone": current_user.get("telefone"),
                         "anonimo": False,
+                        "ativista_preenchido": True,
                     }
                 )
                 logger.info("Ação criada por usuário logado", user_id=current_user["id"])
@@ -140,23 +143,32 @@ async def criar_acao(
                         "ativista_nome": None,
                         "ativista_email": None,
                         "ativista_telefone": None,
-                        # ativista_id fica None
+                        "ativista_preenchido": False,
                     }
                 )
                 logger.info("Ação anônima via service account")
+            elif request.ativista:
+                acao_data.update(
+                    {
+                        "anonimo": False,
+                        "ativista_nome": request.ativista.nome,
+                        "ativista_email": request.ativista.email,
+                        "ativista_telefone": request.ativista.telefone,
+                        "ativista_preenchido": True,
+                    }
+                )
+                logger.info("Ação via service account com dados do ativista")
             else:
                 acao_data.update(
                     {
                         "anonimo": False,
-                        "ativista_nome": request.ativista.nome if request.ativista else None,
-                        "ativista_email": request.ativista.email if request.ativista else None,
-                        "ativista_telefone": request.ativista.telefone
-                        if request.ativista
-                        else None,
-                        # ativista_id fica None (service account não é o ativista)
+                        "ativista_nome": None,
+                        "ativista_email": None,
+                        "ativista_telefone": None,
+                        "ativista_preenchido": False,
                     }
                 )
-                logger.info("Ação via service account para ativista")
+                logger.info("Ação via service account sem dados de ativista (sessão não identificada)")
 
         # Importante: se for anônimo, garantir que ativista_id seja None
         if acao_data.get("anonimo", False):
@@ -180,6 +192,21 @@ async def criar_acao(
             logger.error("Falha ao executar ação", error=str(e))
             await repo.salvar(acao)
             raise HTTPException(status_code=500, detail=f"Erro ao executar ação: {e!s}")
+
+        # Atualização retroativa de dados do ativista por sessão
+        if is_service and request.sessao_id and request.ativista and not request.anonimo:
+            atualizadas = await repo.atualizar_ativista_por_sessao(
+                sessao_id=request.sessao_id,
+                ativista_nome=request.ativista.nome,
+                ativista_email=request.ativista.email,
+                ativista_telefone=request.ativista.telefone,
+            )
+            if atualizadas > 0:
+                logger.info(
+                    "Ações anteriores atualizadas com dados do ativista",
+                    sessao_id=request.sessao_id,
+                    acoes_atualizadas=atualizadas,
+                )
 
         # ============================================
         # MÉTRICAS DE NEGÓCIO

@@ -66,10 +66,21 @@ class CriarAcaoRequest(BaseModel):
 
     ativista: AtivistaInfo | None = None
     anonimo: bool = False
+    sessao_id: str | None = Field(None, max_length=36, description="Identificador único da sessão do navegador (UUID v4)")
+
+    @field_validator("sessao_id")
+    @classmethod
+    def validate_sessao_id(cls, v: str | None) -> str | None:
+        if v:
+            import re
+            uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', re.IGNORECASE)
+            if not uuid_pattern.match(v):
+                raise ValueError("sessao_id deve ser um UUID v4 válido")
+        return v
 
     @model_validator(mode="after")
     def validate_identificacao(self) -> "CriarAcaoRequest":
-        """Valida que pelo menos um identificador foi fornecido"""
+        """Valida identificação do ativista quando fornecida."""
         if self.anonimo:
             return self
 
