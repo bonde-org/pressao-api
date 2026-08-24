@@ -485,6 +485,37 @@ class PressaoPlugin_API {
     }
 
     /**
+     * Obtém contagem de ações confirmadas da campanha (cache curto).
+     *
+     * @param string $campanha_id ID da campanha
+     * @param int $cache_time TTL do transient em segundos
+     * @return array|WP_Error
+     */
+    public function get_acoes_confirmadas_count($campanha_id, $cache_time = 60) {
+        $cache_key = 'pressao_acoes_count_' . md5($campanha_id);
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return ['success' => true, 'count' => (int) $cached, 'cached' => true];
+        }
+        $campanha = $this->get_campanha($campanha_id);
+        if (is_wp_error($campanha)) {
+            return $campanha;
+        }
+        $count = isset($campanha['acoes_confirmadas']) ? (int) $campanha['acoes_confirmadas'] : 0;
+        set_transient($cache_key, $count, $cache_time);
+        return ['success' => true, 'count' => $count, 'cached' => false];
+    }
+
+    /**
+     * Invalida o cache do contador de ações confirmadas.
+     *
+     * @param string $campanha_id ID da campanha
+     */
+    public function invalidar_cache_contador($campanha_id) {
+        delete_transient('pressao_acoes_count_' . md5($campanha_id));
+    }
+
+    /**
      * Confirma uma ação manual aguardando ação humana.
      *
      * @param string $acao_id ID da ação
@@ -508,6 +539,9 @@ class PressaoPlugin_API {
         return [
             'success' => true,
             'message' => __('Ação confirmada com sucesso!', 'pressao-plugin'),
+            'acoes_confirmadas' => isset($response['acoes_confirmadas'])
+                ? (int) $response['acoes_confirmadas']
+                : null,
         ];
     }
 }

@@ -19,6 +19,7 @@ class PressaoPlugin_Shortcode {
         add_shortcode('pressao_form', [$this, 'render_form']);
         add_shortcode('pressao_list', [$this, 'render_list']);
         add_shortcode('pressao_alvos', [$this, 'render_alvos']);
+        add_shortcode('pressao_contador', [$this, 'render_contador']);
     }
     
     /**
@@ -366,6 +367,43 @@ class PressaoPlugin_Shortcode {
             $days = floor($diff / 86400);
             return sprintf(_n('%d dia', '%d dias', $days, 'pressao-plugin'), $days);
         }
+    }
+
+    /**
+     * Renderiza o contador de ações confirmadas da campanha.
+     */
+    public function render_contador($atts) {
+        $atts = shortcode_atts([
+            'campaign' => get_option('pressao_campaign_id', ''),
+            'label' => __('ações confirmadas', 'pressao-plugin'),
+            'class' => '',
+            'id' => 'pressao-contador-' . uniqid(),
+        ], $atts, 'pressao_contador');
+
+        $campanha_id = sanitize_text_field($atts['campaign']);
+        if (empty($campanha_id)) {
+            return '<p class="pressao-error">' . esc_html__('ID da campanha não informado', 'pressao-plugin') . '</p>';
+        }
+
+        $result = $this->api->get_acoes_confirmadas_count($campanha_id, 60);
+        if (is_wp_error($result)) {
+            return '<p class="pressao-error">' . esc_html($result->get_error_message()) . '</p>';
+        }
+        $count = $result['count'];
+        $formatted = number_format($count, 0, ',', '.');
+
+        ob_start();
+        ?>
+        <div id="<?php echo esc_attr($atts['id']); ?>"
+             class="pressao-acoes-counter <?php echo esc_attr($atts['class']); ?>"
+             data-campaign="<?php echo esc_attr($campanha_id); ?>">
+            <span class="pressao-acoes-count" data-count="<?php echo esc_attr($count); ?>">
+                <?php echo esc_html($formatted); ?>
+            </span>
+            <span class="pressao-acoes-label"><?php echo esc_html($atts['label']); ?></span>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 }
 

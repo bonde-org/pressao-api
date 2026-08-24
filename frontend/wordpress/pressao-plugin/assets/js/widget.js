@@ -42,6 +42,40 @@ function getSessionDuration() {
 }
 
 // ============================================
+// CONTADOR DE AÇÕES CONFIRMADAS
+// ============================================
+
+function formatCountDisplay(n) {
+    return n.toLocaleString('pt-BR');
+}
+
+function animateCountUp(el, from, to, durationMs) {
+    durationMs = durationMs || 800;
+    if (from === to) return;
+    const start = performance.now();
+    function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+    function frame(now) {
+        const progress = Math.min((now - start) / durationMs, 1);
+        const current = Math.round(from + (to - from) * easeOut(progress));
+        el.textContent = formatCountDisplay(current);
+        el.dataset.count = String(current);
+        if (progress < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+function incrementActionCounterByCampaign(campaignId, newValue) {
+    if (!campaignId) return;
+    document.querySelectorAll('.pressao-acoes-counter[data-campaign="' + campaignId + '"]').forEach(function(counter) {
+        const el = counter.querySelector('.pressao-acoes-count');
+        if (!el) return;
+        const from = parseInt(el.dataset.count || el.textContent.replace(/\D/g, ''), 10) || 0;
+        const to = (typeof newValue === 'number') ? newValue : from + 1;
+        animateCountUp(el, from, to);
+    });
+}
+
+// ============================================
 // SESSÃO
 // ============================================
 
@@ -626,6 +660,7 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
                 const item = button.closest('.pressao-alvo-item');
                 marcarAcaoRealizada(item, acoes[alvoId]);
                 showNotification(container, 'success', response.data?.message || 'Ação realizada!');
+                incrementActionCounterByCampaign(campaignId, null);
                 
                 const form = button.closest('.pressao-alvo-actions')?.querySelector('.pressao-ativista-form');
                 if (form) {
@@ -704,6 +739,13 @@ function confirmarAcao(alvoId, acaoId, campaignId, container, button) {
             const item = button.closest('.pressao-alvo-item');
             marcarAcaoRealizada(item, acoes[alvoId]);
             showNotification(container, 'success', response.data?.message || 'Ação confirmada!');
+
+            const campanhaAtual = campaignId || container.dataset.campaign;
+            if (response.data && response.data.acoes_confirmadas != null) {
+                incrementActionCounterByCampaign(campanhaAtual, response.data.acoes_confirmadas);
+            } else {
+                incrementActionCounterByCampaign(campanhaAtual, null);
+            }
         } else {
             button.disabled = false;
             button.textContent = originalText;

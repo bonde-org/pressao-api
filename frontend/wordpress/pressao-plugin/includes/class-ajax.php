@@ -112,6 +112,10 @@ class PressaoPlugin_Ajax {
         // ============================================
         $api_data = $result['data'] ?? [];
 
+        if (!empty($campanha_id)) {
+            $this->api->invalidar_cache_contador($campanha_id);
+        }
+
         wp_send_json_success([
             'message' => $result['message'] ?? __('Ação realizada com sucesso!', 'pressao-plugin'),
             'alvo_id' => $alvo_id,
@@ -133,6 +137,7 @@ class PressaoPlugin_Ajax {
 
         $acao_id = isset($_POST['acao_id']) ? sanitize_text_field($_POST['acao_id']) : '';
         $alvo_id = isset($_POST['alvo_id']) ? sanitize_text_field($_POST['alvo_id']) : '';
+        $campanha_id = isset($_POST['campanha_id']) ? sanitize_text_field($_POST['campanha_id']) : '';
 
         if (empty($acao_id)) {
             wp_send_json_error(['message' => __('ID da ação não informado', 'pressao-plugin')], 400);
@@ -147,12 +152,17 @@ class PressaoPlugin_Ajax {
             ], 500);
         }
 
+        if ($campanha_id) {
+            $this->api->invalidar_cache_contador($campanha_id);
+        }
+
         wp_send_json_success([
             'message' => $result['message'] ?? __('Ação confirmada com sucesso!', 'pressao-plugin'),
             'acao_id' => $acao_id,
             'alvo_id' => $alvo_id,
             'status' => 'CONCLUIDA',
             'timestamp' => time(),
+            'acoes_confirmadas' => $result['acoes_confirmadas'] ?? null,
         ]);
     }
 

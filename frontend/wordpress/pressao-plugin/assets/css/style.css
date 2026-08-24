@@ -702,3 +702,25 @@
     background: #3a1a1a;
     color: #df8f8f;
 }
+
+/* Contador de ações confirmadas */
+.pressao-acoes-counter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 1rem;
+}
+
+.pressao-acoes-count {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.pressao-acoes-label {
+    font-size: 0.875rem;
+    color: #666;
+    text-transform: lowercase;
+}
