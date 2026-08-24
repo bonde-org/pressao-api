@@ -7,6 +7,7 @@ from sendgrid.helpers.mail import Mail
 from pressao_api.models.acao import Acao
 from pressao_api.models.alvo import Alvo
 from pressao_api.models.campanha import Campanha
+from pressao_api.models.template import Template
 from pressao_api.services.email_service import CHAVES_PLACEHOLDER, EmailService
 
 
@@ -214,3 +215,78 @@ class TestEnvioReal:
         assert "Campanha Teste" in html
         assert "Maria Silva" in html
         assert str(acao.id) in html
+
+
+class TestTemplateDaCampanha:
+    def _template(self, campanha_id, conteudo, titulo="Assunto do template"):
+        return Template(
+            id=uuid4(),
+            campanha_id=campanha_id,
+            canal="email",
+            titulo=titulo,
+            conteudo=conteudo,
+            ativo=True,
+        )
+
+    def test_usa_conteudo_do_template_e_substitui_placeholders(self):
+        service = EmailService(client=MagicMock())
+        acao, alvo, campanha = _acao_alvo_campanha()
+        template = self._template(
+            campanha.id,
+            "<p>Prezado(a) {alvo_nome}, sobre {campanha_nome}."
+            " Assina: {ativista_nome} — ação {acao_id}</p>",
+        )
+
+        html = service.montar_template_pressao(acao, alvo, campanha, template=template)
+
+        assert "Deputado Exemplo" in html
+        assert "Campanha Teste" in html
+        assert "Maria Silva" in html
+        assert str(acao.id) in html
+        assert "{alvo_nome}" not in html
+        assert "{campanha_nome}" not in html
+
+    def test_ignora_template_html_padrao_quando_ha_template(self):
+        service = EmailService(client=MagicMock())
+        acao, alvo, campanha = _acao_alvo_campanha()
+        template = self._template(campanha.id, "<p>Somente o conteudo autoral</p>")
+
+        html = service.montar_template_pressao(acao, alvo, campanha, template=template)
+
+        assert html == "<p>Somente o conteudo autoral</p>"
+        assert "Enviado via Pressão API" not in html
+
+    def test_css_inline_com_chaves_nao_quebra_o_template(self):
+        service = EmailService(client=MagicMock())
+        acao, alvo, campanha = _acao_alvo_campanha()
+        template = self._template(
+            campanha.id,
+            "<style>.titulo { color: #333; font-size: 14px; }</style>"
+            "<p class='titulo'>Olá {alvo_nome}</p>",
+        )
+
+        html = service.montar_template_pressao(acao, alvo, campanha, template=template)
+
+        assert ".titulo { color: #333; font-size: 14px; }" in html
+        assert "Deputado Exemplo" in html
+
+    def test_placeholder_desconhecido_permanece_literal(self):
+        service = EmailService(client=MagicMock())
+        acao, alvo, campanha = _acao_alvo_campanha()
+        template = self._template(campanha.id, "<p>{alvo_nome} e {campo_inexistente}</p>")
+
+        html = service.montar_template_pressao(acao, alvo, campanha, template=template)
+
+        assert "Deputado Exemplo" in html
+        assert "{campo_inexistente}" in html
+
+    def test_acao_anonima_nao_expoe_nome_do_ativista(self):
+        service = EmailService(client=MagicMock())
+        acao, alvo, campanha = _acao_alvo_campanha()
+        acao.anonimo = True
+        template = self._template(campanha.id, "<p>Assina: {ativista_nome}</p>")
+
+        html = service.montar_template_pressao(acao, alvo, campanha, template=template)
+
+        assert "Maria Silva" not in html
+        assert "{ativista_nome}" not in html

@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import UUID4, BaseModel, Field, model_validator
 
+from pressao_api.schemas.template import TemplateSorteadoResponse
 from pressao_api.utils.validadores import validar_email, validar_telefone
 
 
@@ -49,6 +50,9 @@ class AlvoResponse(AlvoBase):
     campanha_id: UUID4
     criado_em: datetime
     atualizado_em: datetime
+    template: TemplateSorteadoResponse | None = Field(
+        None, description="Template sorteado para este alvo (apenas canal email)"
+    )
 
     class Config:
         from_attributes = True

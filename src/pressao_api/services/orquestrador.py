@@ -4,6 +4,7 @@ from pressao_api.core.config import settings
 from pressao_api.models.acao import Acao
 from pressao_api.models.alvo import Alvo
 from pressao_api.models.campanha import Campanha
+from pressao_api.models.template import Template
 from pressao_api.schemas.acao import CanalEnum, ProximoPassoTipoEnum, StatusAcaoEnum
 from pressao_api.services.email_service import email_service
 
@@ -27,6 +28,7 @@ class OrquestradorCanais:
         acao: Acao,
         alvo: Alvo | None = None,
         campanha: Campanha | None = None,
+        template: Template | None = None,
     ) -> Acao:
         """Executa a estratégia do canal."""
         try:
@@ -38,7 +40,7 @@ class OrquestradorCanais:
 
             logger.info("Executando ação", acao_id=str(acao.id), canal=acao.canal)
 
-            await estrategia(acao, alvo=alvo, campanha=campanha)
+            await estrategia(acao, alvo=alvo, campanha=campanha, template=template)
 
             return acao
 
@@ -52,6 +54,7 @@ class OrquestradorCanais:
         acao: Acao,
         alvo: Alvo | None = None,
         campanha: Campanha | None = None,
+        template: Template | None = None,
     ):
         """Estratégia para Email (SendGrid). Remetente = ativista; destinatário = alvo."""
         if alvo is None or not alvo.contato:
@@ -62,8 +65,13 @@ class OrquestradorCanais:
         if not remetente_email:
             raise ValueError("Canal email exige e-mail do ativista como remetente")
 
-        html = email_service.montar_template_pressao(acao=acao, alvo=alvo, campanha=campanha)
-        assunto = f"Pressão: {campanha.nome}" if campanha else "Mensagem de pressão"
+        html = email_service.montar_template_pressao(
+            acao=acao, alvo=alvo, campanha=campanha, template=template
+        )
+        if template:
+            assunto = template.titulo
+        else:
+            assunto = f"Pressão: {campanha.nome}" if campanha else "Mensagem de pressão"
         resultado = email_service.enviar_pressao(
             destinatario=alvo.contato,
             remetente_email=remetente_email,
@@ -89,12 +97,14 @@ class OrquestradorCanais:
             "remetente": remetente_email,
             "evento": "delivered",
             "webhook_url": settings.SENDGRID_WEBHOOK_URL,
+            "template_id": str(acao.template_id) if acao.template_id else None,
         }
         logger.info(
             "Email enviado",
             acao_id=str(acao.id),
             message_id=resultado.message_id,
             sandbox=resultado.sandbox,
+            template_id=str(acao.template_id) if acao.template_id else None,
         )
 
     async def _estrategia_telefone(
@@ -102,6 +112,7 @@ class OrquestradorCanais:
         acao: Acao,
         alvo: Alvo | None = None,
         campanha: Campanha | None = None,
+        template: Template | None = None,
     ):
         """Estratégia para Telefone (Twilio)."""
         acao.status = StatusAcaoEnum.PROCESSANDO
@@ -118,6 +129,7 @@ class OrquestradorCanais:
         acao: Acao,
         alvo: Alvo | None = None,
         campanha: Campanha | None = None,
+        template: Template | None = None,
     ):
         """Estratégia para WhatsApp (Manual)."""
         acao.status = StatusAcaoEnum.AGUARDANDO_ACAO_HUMANA
@@ -134,6 +146,7 @@ class OrquestradorCanais:
         acao: Acao,
         alvo: Alvo | None = None,
         campanha: Campanha | None = None,
+        template: Template | None = None,
     ):
         """Estratégia para Instagram (Manual)."""
         acao.status = StatusAcaoEnum.AGUARDANDO_ACAO_HUMANA

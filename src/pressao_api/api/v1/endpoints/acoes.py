@@ -15,6 +15,7 @@ from pressao_api.core.security import get_current_user
 from pressao_api.repositories.acao_repository import AcaoRepository
 from pressao_api.repositories.alvo_repository import AlvoRepository
 from pressao_api.repositories.campanha_repository import CampanhaRepository
+from pressao_api.repositories.template_repository import TemplateRepository
 from pressao_api.schemas.acao import (
     AcaoDetailResponse,
     AcaoStatusResponse,
@@ -93,6 +94,28 @@ async def criar_acao(
                 status_code=400,
                 detail=obter_mensagem_erro_compatibilidade(canal, alvo.tipo_contato.value),
             )
+
+        # Valida o template informado (quando houver)
+        template = None
+        if request.template_id:
+            template_repo = TemplateRepository(db)
+            template = await template_repo.buscar_por_id(request.template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="Template não encontrado")
+
+            if template.campanha_id != request.campanha_id:
+                raise HTTPException(
+                    status_code=400, detail="Template não pertence à campanha informada"
+                )
+
+            if template.canal != canal:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Template é do canal {template.canal}, incompatível com {canal}",
+                )
+
+            if not template.ativo:
+                raise HTTPException(status_code=400, detail="Template inativo")
 
         # ============================================
         # Preparando dados da Ação
@@ -184,7 +207,9 @@ async def criar_acao(
         acao = await repo.criar(acao_data)
 
         try:
-            acao = await orquestrador.executar(acao, alvo=alvo, campanha=campanha)
+            acao = await orquestrador.executar(
+                acao, alvo=alvo, campanha=campanha, template=template
+            )
             await repo.salvar(acao)
         except ValueError as e:
             logger.error("Falha ao executar ação", error=str(e))

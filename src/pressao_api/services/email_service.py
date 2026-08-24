@@ -19,6 +19,7 @@ from pressao_api.core.config import settings
 from pressao_api.models.acao import Acao
 from pressao_api.models.alvo import Alvo
 from pressao_api.models.campanha import Campanha
+from pressao_api.models.template import Template
 from pressao_api.schemas.email import ResultadoEnvioEmail
 from pressao_api.utils.validadores import validar_email
 
@@ -69,8 +70,13 @@ class EmailService:
         alvo: Alvo,
         campanha: Campanha | None = None,
         mensagem: str | None = None,
+        template: Template | None = None,
     ) -> str:
-        """Monta HTML padrão da pressão com dados dinâmicos."""
+        """
+        Monta o HTML da pressão com dados dinâmicos.
+
+        Com `template`, usa o conteúdo autoral da campanha; sem ele, usa o HTML padrão.
+        """
         descricao = ""
         if campanha and campanha.descricao:
             descricao = f"<p>{campanha.descricao}</p>"
@@ -83,6 +89,9 @@ class EmailService:
             "Solicitamos sua atenção e posicionamento público em relação a esta demanda."
         )
 
+        if template is not None:
+            return self._aplicar_placeholders(template.conteudo, acao, alvo, campanha)
+
         return TEMPLATE_HTML_PADRAO.format(
             alvo_nome=alvo.nome,
             campanha_nome=campanha.nome if campanha else "Campanha de pressão",
@@ -91,6 +100,32 @@ class EmailService:
             assinatura=assinatura,
             acao_id=str(acao.id),
         )
+
+    def _aplicar_placeholders(
+        self,
+        conteudo: str,
+        acao: Acao,
+        alvo: Alvo,
+        campanha: Campanha | None,
+    ) -> str:
+        """
+        Substitui os placeholders conhecidos no conteúdo do template.
+
+        Usa `replace` em vez de `str.format` porque templates autorais contêm CSS
+        inline com chaves, que o `format` interpretaria como campo de substituição.
+        """
+        ativista_nome = "" if acao.anonimo else (acao.ativista_nome or "")
+        valores = {
+            "alvo_nome": alvo.nome,
+            "campanha_nome": campanha.nome if campanha else "Campanha de pressão",
+            "ativista_nome": ativista_nome,
+            "acao_id": str(acao.id),
+        }
+
+        html = conteudo
+        for chave, valor in valores.items():
+            html = html.replace("{" + chave + "}", valor)
+        return html
 
     def enviar_pressao(
         self,
