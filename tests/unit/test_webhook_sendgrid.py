@@ -79,9 +79,16 @@ class TestProcessarEventos:
         repo.buscar_por_id = buscar
         repo.salvar = salvar
 
+        async def incrementar(campanha_id):
+            return 1
+
+        campanha_repo = MagicMock()
+        campanha_repo.incrementar_acoes_confirmadas = incrementar
+
         resumo = await processar_eventos_sendgrid(
             [{"event": "delivered", "acao_id": str(acao_id), "sg_message_id": "sg-1"}],
             repo,
+            campanha_repo,
         )
 
         assert resumo["entregues"] == 1

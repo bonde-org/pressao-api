@@ -24,6 +24,8 @@ from pressao_api.schemas.acao import (
     RespostaAcaoResponse,
     StatusAcaoEnum,
 )
+from pressao_api.schemas.campanha import ConfirmacaoContadorResponse
+from pressao_api.services.confirmacao import incrementar_contador_se_confirmada
 from pressao_api.services.metricas import calculadora
 from pressao_api.services.orquestrador import orquestrador
 from pressao_api.utils.validadores import (
@@ -297,7 +299,10 @@ async def obter_status_acao(
 
 
 @router.patch(
-    "/{acao_id}/confirmar", status_code=status.HTTP_204_NO_CONTENT, summary="Confirmar ação manual"
+    "/{acao_id}/confirmar",
+    response_model=ConfirmacaoContadorResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Confirmar ação manual",
 )
 async def confirmar_acao(
     acao_id: UUID,
@@ -311,6 +316,7 @@ async def confirmar_acao(
     - Calcula tempo de resposta
     - Calcula métrica de qualidade
     - Atualiza status para CONCLUIDA
+    - Incrementa contador de ações confirmadas da campanha
     """
     repo = AcaoRepository(db)
     acao = await repo.buscar_por_id(acao_id)
@@ -334,6 +340,7 @@ async def confirmar_acao(
     # Usar utcnow() para compatibilidade com o banco
     agora = datetime.utcnow()  # noqa: DTZ003
 
+    status_anterior = acao.status
     acao.confirmado_em = agora
     acao.status = StatusAcaoEnum.CONCLUIDA
 
@@ -351,6 +358,9 @@ async def confirmar_acao(
 
     await repo.salvar(acao)
 
+    campanha_repo = CampanhaRepository(db)
+    novo_total = await incrementar_contador_se_confirmada(acao, status_anterior, campanha_repo)
+
     acoes_tempo_confirmacao_seconds.labels(
         canal=acao.canal, campanha_id=str(acao.campanha_id)
     ).observe(tempo_resposta)
@@ -361,4 +371,7 @@ async def confirmar_acao(
         acao_id=str(acao.id),
         tempo_resposta=tempo_resposta,
         qualidade=acao.metrica_qualidade,
+        acoes_confirmadas=novo_total,
     )
+
+    return ConfirmacaoContadorResponse(acoes_confirmadas=novo_total or 0)

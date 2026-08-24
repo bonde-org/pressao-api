@@ -7,7 +7,9 @@ from sendgrid.helpers.eventwebhook import EventWebhook, EventWebhookHeader
 
 from pressao_api.core.config import settings
 from pressao_api.repositories.acao_repository import AcaoRepository
+from pressao_api.repositories.campanha_repository import CampanhaRepository
 from pressao_api.schemas.acao import ProximoPassoTipoEnum, StatusAcaoEnum
+from pressao_api.services.confirmacao import incrementar_contador_se_confirmada
 
 logger = structlog.get_logger()
 
@@ -58,10 +60,14 @@ def _extrair_acao_id(evento: dict[str, Any]) -> str | None:
 
 
 async def processar_eventos_sendgrid(
-    eventos: list[dict[str, Any]], repo: AcaoRepository
+    eventos: list[dict[str, Any]],
+    repo: AcaoRepository,
+    campanha_repo: CampanhaRepository | None = None,
 ) -> dict[str, int]:
     """Atualiza ações com base nos eventos do SendGrid."""
     resumo = {"processados": 0, "entregues": 0, "falhas": 0, "ignorados": 0}
+    if campanha_repo is None:
+        campanha_repo = CampanhaRepository(repo.session)
 
     for evento in eventos:
         tipo = str(evento.get("event") or "").lower()
@@ -94,12 +100,14 @@ async def processar_eventos_sendgrid(
             if acao.status != StatusAcaoEnum.PROCESSANDO:
                 resumo["ignorados"] += 1
                 continue
+            status_anterior = acao.status
             acao.proximo_passo_dados = dados
             acao.status = StatusAcaoEnum.CONCLUIDA
             acao.confirmado_em = datetime.utcnow()  # noqa: DTZ003
             acao.proximo_passo_tipo = ProximoPassoTipoEnum.FINALIZADO
             acao.proximo_passo_instrucao = "E-mail entregue com sucesso"
             await repo.salvar(acao)
+            await incrementar_contador_se_confirmada(acao, status_anterior, campanha_repo)
             resumo["entregues"] += 1
             resumo["processados"] += 1
             logger.info("E-mail entregue", acao_id=acao_id_raw, evento_tipo=tipo)
