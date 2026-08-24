@@ -34,7 +34,7 @@ class PressaoPlugin_Ajax {
      */
     public function ajax_get_campanha() {
         // Verifica nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'pressao_widget_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'pressao_acao_nonce')) {
             wp_send_json_error(['message' => __('Nonce inválido', 'pressao-plugin')], 403);
         }
         

@@ -137,7 +137,10 @@ function clearPressaoUserData() {
     deleteCookie(SESSAO_COOKIE);
     deleteCookie(COOKIE_USER_ID);
     deleteCookie(COOKIE_ACTIONS);
-    localStorage.removeItem(ACTIONS_STORAGE_KEY);
+    try {
+        localStorage.removeItem(ACTIONS_STORAGE_KEY);
+    } catch (e) { /* ignore */ }
+    resetAllProgressoBars();
 }
 
 function precisaConfirmarAtivista(intervaloMinutos) {
@@ -151,24 +154,159 @@ function precisaConfirmarAtivista(intervaloMinutos) {
 }
 
 // ============================================
-// FUNÇÕES DE AÇÕES (LOCALSTORAGE)
+// FUNÇÕES DE AÇÕES (COOKIE)
 // ============================================
 
-function getAcoesFromLocalStorage() {
+function getAcoesFromStorage() {
     try {
-        const data = localStorage.getItem(ACTIONS_STORAGE_KEY);
-        return data ? JSON.parse(data) : {};
+        const cookieData = getCookie(COOKIE_ACTIONS);
+        if (cookieData) {
+            const parsed = JSON.parse(cookieData);
+            if (parsed && typeof parsed === 'object') {
+                const slim = slimAcoesPayload(parsed);
+                // Regrava se o cookie antigo ainda carregava campos pesados (ex.: ativista)
+                if (JSON.stringify(slim) !== JSON.stringify(parsed)) {
+                    saveActionsToStorage(slim);
+                }
+                return slim;
+            }
+        }
     } catch (e) {
-        return {};
+        console.warn('Cookie de ações inválido:', e);
+    }
+
+    // Migração one-shot: localStorage legado → cookie (payload enxuto)
+    try {
+        const legacy = localStorage.getItem(ACTIONS_STORAGE_KEY);
+        if (legacy) {
+            const parsed = JSON.parse(legacy);
+            if (parsed && typeof parsed === 'object') {
+                const slim = slimAcoesPayload(parsed);
+                saveActionsToStorage(slim);
+                localStorage.removeItem(ACTIONS_STORAGE_KEY);
+                return slim;
+            }
+        }
+    } catch (e) {
+        console.warn('Falha na migração localStorage → cookie:', e);
+    }
+
+    return {};
+}
+
+/**
+ * Mantém só campos necessários no cookie (evita estourar limite ~4KB
+ * e derrubar cookies de sessão do WordPress — causa comum de "Nonce inválido").
+ */
+function slimAcoesPayload(acoes) {
+    const slim = {};
+    Object.keys(acoes || {}).forEach(function(alvoId) {
+        const a = acoes[alvoId];
+        if (!a || typeof a !== 'object') {
+            return;
+        }
+        slim[alvoId] = {
+            timestamp: a.timestamp || Math.floor(Date.now() / 1000),
+            acao_id: a.acao_id || null,
+            status: a.status || 'CONCLUIDA',
+            user_id: a.user_id || null
+        };
+    });
+    return slim;
+}
+
+function saveActionsToStorage(acoes) {
+    try {
+        const payload = slimAcoesPayload(acoes || {});
+        setCookie(COOKIE_ACTIONS, JSON.stringify(payload), getSessionDuration());
+        try {
+            localStorage.removeItem(ACTIONS_STORAGE_KEY);
+        } catch (e) { /* ignore */ }
+    } catch (e) {
+        console.warn('Não foi possível salvar ações no cookie:', e);
     }
 }
 
-function saveActionsToLocalStorage(acoes) {
-    try {
-        localStorage.setItem(ACTIONS_STORAGE_KEY, JSON.stringify(acoes));
-    } catch (e) {
-        console.warn('Não foi possível salvar no localStorage:', e);
+function getActionNonce(container) {
+    if (pressaoData && pressaoData.nonce) {
+        return pressaoData.nonce;
     }
+    if (container && container.dataset && container.dataset.nonce) {
+        return container.dataset.nonce;
+    }
+    return '';
+}
+
+// ============================================
+// PROGRESSO DO ATIVISTA
+// ============================================
+
+function isAcaoRealizada(acao) {
+    if (!acao || typeof acao !== 'object') {
+        return false;
+    }
+    // Pendente de confirmação humana ainda não conta como realizada
+    return acao.status !== 'AGUARDANDO_ACAO_HUMANA';
+}
+
+function countDoneForProgresso(el, acoes) {
+    const total = parseInt(el.dataset.total, 10) || 0;
+    const idsRaw = el.dataset.alvoIds || '';
+    const alvoIds = idsRaw ? idsRaw.split(',').map(function(id) { return id.trim(); }).filter(Boolean) : [];
+    let done = 0;
+    alvoIds.forEach(function(id) {
+        if (isAcaoRealizada(acoes[id])) {
+            done += 1;
+        }
+    });
+    return { done: done, total: total };
+}
+
+function applyProgressoToElement(el, done, total) {
+    const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const bar = el.querySelector('.pressao-progresso-bar');
+    const text = el.querySelector('.pressao-progresso-text');
+    const track = el.querySelector('.pressao-progresso-track');
+    if (bar) {
+        bar.style.width = pct + '%';
+    }
+    if (text) {
+        text.textContent = done + ' / ' + total;
+    }
+    if (track) {
+        track.setAttribute('aria-valuenow', String(done));
+        track.setAttribute('aria-valuemax', String(total));
+    }
+    el.dataset.done = String(done);
+}
+
+function updateProgressoElement(el, acoes) {
+    const counts = countDoneForProgresso(el, acoes || getAcoesFromStorage());
+    applyProgressoToElement(el, counts.done, counts.total);
+}
+
+function updateProgressoByCampaign(campaignId) {
+    const acoes = getAcoesFromStorage();
+    const selector = campaignId
+        ? '.pressao-progresso[data-campaign="' + campaignId + '"]'
+        : '.pressao-progresso';
+    document.querySelectorAll(selector).forEach(function(el) {
+        updateProgressoElement(el, acoes);
+    });
+}
+
+function resetAllProgressoBars() {
+    document.querySelectorAll('.pressao-progresso').forEach(function(el) {
+        const total = parseInt(el.dataset.total, 10) || 0;
+        applyProgressoToElement(el, 0, total);
+    });
+}
+
+function initProgressoBars() {
+    const acoes = getAcoesFromStorage();
+    document.querySelectorAll('.pressao-progresso').forEach(function(el) {
+        updateProgressoElement(el, acoes);
+    });
 }
 
 // ============================================
@@ -194,6 +332,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.pressao-alvos').forEach(function(container) {
         initAlvos(container);
     });
+
+    initProgressoBars();
 });
 
 // ============================================
@@ -596,7 +736,7 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
     
     console.log('📡 Canal sendo usado:', canal);
     
-    const nonce = container.dataset.nonce;
+    const nonce = getActionNonce(container);
     const originalText = button.textContent;
     const templateId = container.dataset.templateId || '';
     
@@ -635,7 +775,7 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
     .then(function(response) {
         console.log('response', response);
         if (response.success) {
-            const acoes = getAcoesFromLocalStorage();
+            const acoes = getAcoesFromStorage();
             const apiData = response.data?.data || {};
             const acaoData = {
                 timestamp: response.data?.timestamp || Math.floor(Date.now() / 1000),
@@ -645,7 +785,8 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
                 status: response.data?.status || apiData.status_atual || 'CONCLUIDA',
             };
             acoes[alvoId] = acaoData;
-            saveActionsToLocalStorage(acoes);
+            saveActionsToStorage(acoes);
+            updateProgressoByCampaign(campaignId);
             
             if (acaoData.status === 'AGUARDANDO_ACAO_HUMANA') {
                 console.log('🔄 Ação aguardando confirmação manual');
@@ -694,7 +835,7 @@ function confirmarAcao(alvoId, acaoId, campaignId, container, button) {
         return;
     }
 
-    const nonce = container.dataset.nonce;
+    const nonce = getActionNonce(container);
     const originalText = button.textContent;
 
     button.disabled = true;
@@ -727,14 +868,15 @@ function confirmarAcao(alvoId, acaoId, campaignId, container, button) {
     .then(function(response) {
         console.log('confirmarAcao response', response);
         if (response.success) {
-            const acoes = getAcoesFromLocalStorage();
+            const acoes = getAcoesFromStorage();
             acoes[alvoId] = {
                 ...(acoes[alvoId] || {}),
                 timestamp: response.data?.timestamp || Math.floor(Date.now() / 1000),
                 acao_id: acaoId,
                 status: response.data?.status || 'CONCLUIDA'
             };
-            saveActionsToLocalStorage(acoes);
+            saveActionsToStorage(acoes);
+            updateProgressoByCampaign(campaignId || container.dataset.campaign);
 
             const item = button.closest('.pressao-alvo-item');
             marcarAcaoRealizada(item, acoes[alvoId]);
@@ -799,7 +941,7 @@ function mostrarBotaoConfirmacao(actionsDiv, alvoId, acaoId, campaignId, contain
 
 function checkActionsStatus(container) {
     const alvoItems = container.querySelectorAll('.pressao-alvo-item');
-    const acoes = getAcoesFromLocalStorage();
+    const acoes = getAcoesFromStorage();
     alvoItems.forEach(function(item) {
         const alvoId = item.dataset.alvoId;
         const acao = acoes[alvoId];
