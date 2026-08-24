@@ -738,7 +738,9 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
     
     const nonce = getActionNonce(container);
     const originalText = button.textContent;
-    const templateId = container.dataset.templateId || '';
+    // Template sorteado pela API para este alvo; o do container é fallback
+    const alvoItem = button.closest('.pressao-alvo-item');
+    const templateId = alvoItem?.dataset?.templateId || container.dataset.templateId || '';
     
     button.disabled = true;
     button.textContent = 'Processando...';

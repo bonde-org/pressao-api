@@ -255,21 +255,27 @@ class PressaoPlugin_API {
      * 
      * @param string $campanha_id ID da campanha
      * @param array $params Parâmetros adicionais
-     * @param int $cache_time Tempo de cache em segundos
+     * @param int $cache_time Tempo de cache em segundos. Zero ou negativo ignora o cache,
+     *                        garantindo um novo sorteio de template por requisição.
      * @return array|WP_Error Lista de alvos ou erro
      */
     public function get_alvos_cached($campanha_id, $params = [], $cache_time = 300) {
+        $cache_time = intval($cache_time);
+
         // Cria uma chave de cache baseada nos parâmetros
         $cache_key = 'pressao_alvos_' . md5($campanha_id . serialize($params));
-        $cached = get_transient($cache_key);
-        
-        if ($cached !== false) {
-            return [
-                'success' => true,
-                'data' => $cached,
-                'cached' => true,
-                'count' => count($cached)
-            ];
+
+        if ($cache_time > 0) {
+            $cached = get_transient($cache_key);
+
+            if ($cached !== false) {
+                return [
+                    'success' => true,
+                    'data' => $cached,
+                    'cached' => true,
+                    'count' => count($cached)
+                ];
+            }
         }
         
         $result = $this->get_alvos($campanha_id, $params);
@@ -279,7 +285,7 @@ class PressaoPlugin_API {
         }
         
         // Cache apenas se tiver dados
-        if (!empty($result)) {
+        if ($cache_time > 0 && !empty($result)) {
             set_transient($cache_key, $result, $cache_time);
         }
         

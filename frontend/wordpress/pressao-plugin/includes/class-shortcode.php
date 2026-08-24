@@ -161,6 +161,8 @@ class PressaoPlugin_Shortcode {
             'action_done_label' => __('Ação realizada ✓', 'pressao-plugin'),
             'canal' => '', // Filtro (opcional)
             'template_id' => '',
+            'show_template' => 'no',
+            'cache' => 300,
             'class' => '',
             'id' => 'pressao-alvos-' . uniqid(),
             'ativista_confirm_interval' => 10,
@@ -178,6 +180,9 @@ class PressaoPlugin_Shortcode {
         $action_done_label = sanitize_text_field($atts['action_done_label']);
         $canal_filter = sanitize_text_field($atts['canal']); // Filtro
         $template_id = sanitize_text_field($atts['template_id']);
+        $show_template = sanitize_text_field($atts['show_template']);
+        // cache=0 sorteia um template novo a cada pageview; > 0 congela o sorteio pelo período
+        $cache_time = intval($atts['cache']);
         $class = sanitize_text_field($atts['class']);
         $alvos_id = sanitize_text_field($atts['id']);
         
@@ -192,7 +197,7 @@ class PressaoPlugin_Shortcode {
         }
         
         $api = new PressaoPlugin_API();
-        $result = $api->get_alvos_cached($campanha_id, $params, 300);
+        $result = $api->get_alvos_cached($campanha_id, $params, $cache_time);
         
         if (is_wp_error($result)) {
             return sprintf(
@@ -237,10 +242,18 @@ class PressaoPlugin_Shortcode {
                     $action_realizada = $this->is_acao_realizada($action_state);
                     // Pega o canal do alvo (prioriza o que vem da API)
                     $canal_alvo = isset($alvo['tipo_contato']) ? $alvo['tipo_contato'] : $canal_filter;
+                    // Template sorteado pela API para este alvo; o att do shortcode é fallback
+                    $alvo_template = isset($alvo['template']) && is_array($alvo['template'])
+                        ? $alvo['template']
+                        : null;
+                    $alvo_template_id = $alvo_template && !empty($alvo_template['id'])
+                        ? $alvo_template['id']
+                        : $template_id;
                 ?>
                     <li class="pressao-alvo-item <?php echo $action_realizada ? 'action-done' : ''; ?>" 
                         data-alvo-id="<?php echo esc_attr($alvo_id); ?>"
-                        data-canal="<?php echo esc_attr($canal_alvo); ?>">
+                        data-canal="<?php echo esc_attr($canal_alvo); ?>"
+                        data-template-id="<?php echo esc_attr($alvo_template_id); ?>">
                         
                         <div class="pressao-alvo-info">
                             <div class="pressao-alvo-detalhes">
@@ -319,6 +332,15 @@ class PressaoPlugin_Shortcode {
                             <?php endif; ?>
                         </div>
                         
+                        <?php if ($show_template === 'yes' && $alvo_template) : ?>
+                            <details class="pressao-alvo-template">
+                                <summary><?php echo esc_html($alvo_template['titulo']); ?></summary>
+                                <div class="pressao-alvo-template-corpo">
+                                    <?php echo wp_kses_post($alvo_template['conteudo']); ?>
+                                </div>
+                            </details>
+                        <?php endif; ?>
+
                         <?php if (!empty($alvo['metadados'])) : ?>
                             <div class="pressao-alvo-metadados">
                                 <small><?php esc_html_e('Metadados:', 'pressao-plugin'); ?></small>
