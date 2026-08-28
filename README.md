@@ -20,6 +20,7 @@ API para orquestração de ações de pressão multicanal, suportando canais aut
 - [Configuração](#️⚙️-configuração)
 - [Endpoints da API](#📡-endpoints-da-api)
 - [Fluxo de Trabalho](#🔄-fluxo-de-trabalho)
+- [E-mail multi-alvo e alvo agregado](#📬-e-mail-multi-alvo-e-alvo-agregado)
 - [Contador de Ações Confirmadas](#contador-de-ações-confirmadas)
 - [Testes](#🧪-testes)
 - [Monitoramento](#📊-monitoramento)
@@ -81,6 +82,7 @@ Cada ação é registrada de forma imutável e rastreável, garantindo auditoria
 - ✅ Multi-canal: Suporte a e-mail, telefone, WhatsApp e Instagram
 - ✅ **Gestão de Campanhas**: Criação e organização de ações por campanha
 - ✅ **Gestão de Alvos**: Cadastro de contatos com validação de tipo (email, telefone, whatsapp, instagram)
+- ✅ **E-mail multi-alvo**: Contatos de e-mail agrupados em um alvo agregado na listagem; um clique dispara N envios SendGrid e conta **uma** ação na campanha
 - ✅ **Validação de Compatibilidade**: Garantia que o canal da ação é compatível com o tipo de contato do alvo
 - ✅ Dual Mode: Execução síncrona (API) e assíncrona (manual)
 - ✅ Métricas de Qualidade: Classificação automática da qualidade da ação
@@ -467,6 +469,8 @@ Authorization: Bearer {token_jwt}
 
 **Criar Alvo**
 
+Cadastro de um contato na campanha. Para **e-mail**, cada registro é um alvo **individual** (`modo=individual`); o sistema sincroniza automaticamente o agregado da campanha (ver [E-mail multi-alvo](#📬-e-mail-multi-alvo-e-alvo-agregado)).
+
 ```http
 POST /api/v1/alvos/
 Authorization: Bearer {token_jwt}
@@ -483,9 +487,38 @@ Content-Type: application/json
 
 **Listar Alvos por Campanha**
 
+Retorna os alvos **para exibição** na campanha:
+
+- **E-mail:** um único item **agregado** (`modo=agregado`, nome padrão "Pressionar por E-mail") com `total_membros`; os e-mails individuais **não** aparecem nesta lista.
+- **Outros canais** (WhatsApp, Instagram, telefone): um item por alvo (`modo=individual`).
+
 ```http
 GET /api/v1/alvos/campanha/{campanha_id}
 Authorization: Bearer {token_jwt}
+```
+
+Exemplo (campanha com 2 e-mails e 1 WhatsApp):
+
+```json
+[
+  {
+    "id": "uuid-agregado",
+    "nome": "Pressionar por E-mail",
+    "contato": "agregado.{campanha_id}@pressao.local",
+    "tipo_contato": "email",
+    "modo": "agregado",
+    "total_membros": 2,
+    "template": { "id": "...", "titulo": "Assunto sorteado", "canal": "email" }
+  },
+  {
+    "id": "uuid-whatsapp",
+    "nome": "Perfil Institucional",
+    "contato": "11999999999",
+    "tipo_contato": "whatsapp",
+    "modo": "individual",
+    "total_membros": null
+  }
+]
 ```
 
 ### Health Check
@@ -511,9 +544,25 @@ GET /api/metrics
 
 ### Fluxo Automático (E-mail/Telefone)
 
+**E-mail (padrão — `tipo_acao=multi_alvo`):**
+
+```text
+Cadastro de e-mails individuais → Listagem expõe 1 alvo agregado →
+POST /acoes no agregado → N disparos SendGrid → CONCLUIDA se ≥1 aceito → +1 acoes_confirmadas
+→ Webhooks atualizam disparos (métrica de entrega), não a ação pai
+```
+
+**E-mail legado (`tipo_acao=simples`, alvo individual via API direta):**
+
+```text
+POST /acoes → 1 envio SendGrid → PROCESSANDO → webhook delivered → CONCLUIDA → +1 acoes_confirmadas
+```
+
+**Telefone:**
+
 ```text
 Ativista → POST /api/acoes → Backend registra → Chama provider →
-→ Aguarda webhook delivered → Incrementa acoes_confirmadas → Concluído
+→ Aguarda webhook → Incrementa acoes_confirmadas → Concluído
 ```
 
 ### Fluxo Manual (WhatsApp/Instagram)
@@ -531,7 +580,8 @@ O total por campanha fica em `campanhas.acoes_confirmadas` (coluna desnormalizad
 | Quando incrementa | Quem dispara |
 |-------------------|--------------|
 | Confirmação manual | `PATCH /acoes/{id}/confirmar` |
-| E-mail entregue | Webhook SendGrid `delivered` |
+| E-mail entregue (ação `simples`) | Webhook SendGrid `delivered` com `acao_id` |
+| E-mail multi-alvo aceito pelo SendGrid | `POST /acoes` no alvo agregado (`tipo_acao=multi_alvo`) |
 
 - Só incrementa na **transição** para `CONCLUIDA` (idempotente em webhooks duplicados).
 - A tabela `acoes` continua sendo a fonte da verdade; use `POST /campanhas/{id}/reconciliar-contador` se houver suspeita de drift.
@@ -541,25 +591,79 @@ O total por campanha fica em `campanhas.acoes_confirmadas` (coluna desnormalizad
 
 | Canal | Modo | Resposta | Confirmação | Tempo Esperado |
 |-------|------|----------|-------------|----------------|
-| E-mail | API (SendGrid) | `WEBHOOK_AGUARDAR` | Automática (webhook) | ≤ 5s |
+| E-mail (agregado) | API multi-alvo | `FINALIZADO` | SendGrid aceita ≥1 disparo na criação | Imediato (API) |
+| E-mail (individual, legado) | API (SendGrid) | `WEBHOOK_AGUARDAR` | Automática (webhook `acao_id`) | ≤ 5s |
 | Telefone | API (Twilio) | `WEBHOOK_AGUARDAR` | Automática (webhook) | ≤ 5s |
 | WhatsApp | Manual (Link) | `REDIRECIONAR_LINK` | Manual (PATCH /confirmar) | 5s - 60s |
 | Instagram | Manual (Texto) | `EXIBIR_TEXTO_E_ABRIR_PERFIL` | Manual (PATCH /confirmar) | 5s - 60s |
 
+## 📬 E-mail multi-alvo e alvo agregado
+
+Modelo usado pelo plugin WordPress e pela listagem pública de alvos. **Não** é “cada e-mail vira um agregado”: é **um agregado por campanha** que representa **todos** os e-mails individuais cadastrados.
+
+### Duas camadas de alvo
+
+| Camada | `modo` | Visível na listagem? | Uso |
+|--------|--------|----------------------|-----|
+| Contato cadastrado (`POST /alvos/`, `tipo_contato=email`) | `individual` | Não | Destinatário real de cada disparo |
+| “Pressionar por E-mail” (criado automaticamente) | `agregado` | Sim (1 item por campanha) | Botão único na UI; alvo da ação `multi_alvo` |
+
+Vínculo: tabela `alvo_membros` (`agregado_id` → `membro_id`).
+
+```text
+Campanha
+├── Alvo agregado (1)              ← GET /alvos/campanha/{id}
+│     └── alvo_membros
+├── Alvo email: joao@...           ← POST /alvos/ (individual)
+├── Alvo email: maria@...          ← POST /alvos/ (individual)
+└── Alvo whatsapp: @perfil         ← listado individualmente
+```
+
+### Adicionar um novo e-mail
+
+1. `POST /api/v1/alvos/` com `tipo_contato: "email"` (alvo individual).
+2. A API chama `sincronizar_membros` e inclui o contato no agregado.
+3. `GET /alvos/campanha/{id}` passa a mostrar `total_membros` maior no item agregado.
+4. O próximo “Pressionar por E-mail” envia para **todos** os membros ativos.
+
+**Remover da pressão:** `PUT /alvos/{id}` com `{"ativo": false}` ou `DELETE /alvos/{id}` — a sincronização atualiza os membros do agregado.
+
+### Ação `tipo_acao=multi_alvo`
+
+Disparada ao criar ação com `canal=email` no alvo **agregado**:
+
+| Aspecto | Comportamento |
+|---------|---------------|
+| Registros | 1 `acao` pai + N `disparos` (1 por membro) |
+| SendGrid | N chamadas; `custom_args` incluem `disparo_id` e `acao_id` |
+| Conclusão para o ativista | `CONCLUIDA` se **≥1** disparo aceito pelo SendGrid (HTTP 202) |
+| Contador `acoes_confirmadas` | +1 na ação pai ao `CONCLUIDA` |
+| Webhook | Atualiza **disparo** (`ENTREGUE` / `FALHA`); **não** altera status do pai nem contador |
+
+Resposta inclui `tipo_acao: "multi_alvo"` e `disparos_resumo` (`total`, `enviados`, `entregues`, `falhas`).
+
+### Ação `tipo_acao=simples` (legado)
+
+Ainda suportada se a ação é criada contra um alvo **individual** de e-mail (não exposto na listagem pública). Um envio, um webhook por `acao_id`, confirmação via `delivered` como antes.
+
 ## 📧 Ação de Pressão por E-mail (SendGrid)
 
-O canal `email` dispara a mensagem via SendGrid quando a ação é criada (`POST /api/v1/acoes/` com `"canal": "email"`).
+O canal `email` dispara mensagens via SendGrid ao criar a ação (`POST /api/v1/acoes/` com `"canal": "email"`).
 
-**Papéis no e-mail**
+**Fluxo padrão (alvo agregado):** ver [E-mail multi-alvo](#📬-e-mail-multi-alvo-e-alvo-agregado). Um clique → N e-mails (um `To` por membro).
+
+**Fluxo legado (alvo individual):** um `To` = `alvo.contato`; aguarda webhook `delivered` na ação.
+
+**Papéis no e-mail (por disparo)**
 
 | Campo SMTP | Quem | Origem |
 |------------|------|--------|
 | Remetente (`From` / `Reply-To`) | Ativista | `ativista.email` e `ativista.nome` (ou claims do JWT) |
-| Destinatário (`To`) | Alvo | `alvo.contato` e `alvo.nome` |
+| Destinatário (`To`) | Membro individual | `alvo.contato` e `alvo.nome` de cada membro do agregado |
 
 Ação anônima **não** dispara e-mail: o canal exige e-mail do ativista como remetente.
 
-O orquestrador chama `EmailService.enviar_pressao`, grava `message_id` em `proximo_passo_dados` e aguarda o Event Webhook para marcar a ação como `CONCLUIDA` ou `FALHA`.
+O orquestrador usa `_estrategia_email_multi_alvo` (agregado) ou `_estrategia_email` (individual). Grava `message_id` nos disparos ou em `proximo_passo_dados` da ação.
 
 > O SendGrid só entrega se o domínio do e-mail do ativista estiver autorizado na conta (Single Sender ou Domain Authentication). Sem isso o envio real pode ser rejeitado mesmo com From correto.
 
@@ -586,9 +690,9 @@ SENDGRID_WEBHOOK_URL=https://seu-dominio/api/v1/webhooks/sendgrid
 
 Em desenvolvimento e no Docker o padrão é `SENDGRID_SANDBOX_MODE=true`.
 
-### Como usar
+### Como usar (multi-alvo — padrão)
 
-Não há endpoint separado de e-mail: o disparo ocorre ao criar a ação no canal email.
+Use o `alvo_id` do item **agregado** retornado por `GET /alvos/campanha/{campanha_id}`:
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8080/realms/pressao/protocol/openid-connect/token \
@@ -596,19 +700,25 @@ TOKEN=$(curl -s -X POST http://localhost:8080/realms/pressao/protocol/openid-con
   -d "client_secret=SEU_SECRET" \
   -d "grant_type=client_credentials" | jq -r '.access_token')
 
+# Listar e obter id do agregado
+curl -s http://localhost:8000/api/v1/alvos/campanha/{campanha_id} \
+  -H "Authorization: Bearer $TOKEN" | jq '.[0].id'
+
 curl -X POST http://localhost:8000/api/v1/acoes/ \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "campanha_id": "550e8400-e29b-41d4-a716-446655440000",
-    "alvo_id": "550e8400-e29b-41d4-a716-446655440001",
+    "alvo_id": "UUID-DO-ALVO-AGREGADO",
     "canal": "email",
     "anonimo": false,
     "ativista": {"nome": "Maria Silva", "email": "maria@email.com"}
   }'
 ```
 
-Resposta esperada: `status_atual: PROCESSANDO`, `proximo_passo.tipo: WEBHOOK_AGUARDAR`, com `message_id` e `sandbox` em `proximo_passo.dados`.
+Resposta esperada: `tipo_acao: multi_alvo`, `status_atual: CONCLUIDA`, `proximo_passo.tipo: FINALIZADO`, `disparos_resumo` com totais.
+
+### Como usar (ação simples — legado)
 
 Uso direto do serviço (testes ou scripts):
 
@@ -640,13 +750,15 @@ Endpoint: `POST /api/v1/webhooks/sendgrid` (público; **não** usa JWT).
 4. Ative **Signed Event Webhook** e copie a chave pública para `SENDGRID_WEBHOOK_VERIFICATION_KEY`.
 5. Em production a chave é **obrigatória**. Em development, webhook sem chave é aceito (com warning no log).
 
-O SendGrid devolve `acao_id` via `custom_args` gravados no envio.
+O SendGrid devolve `disparo_id` (ações multi-alvo) ou `acao_id` (ação simples) via `custom_args` gravados no envio.
 
-| Evento | Efeito na ação |
-|--------|----------------|
-| `delivered` | `CONCLUIDA` (somente se estava `PROCESSANDO`) |
-| `bounce`, `dropped`, `blocked`, `spamreport` | `FALHA` |
-| `processed`, `open`, `click`, … | apenas log / `ultimo_evento` |
+| Evento | Efeito (ação `simples`) | Efeito (disparo multi-alvo) |
+|--------|-------------------------|-----------------------------|
+| `delivered` | `CONCLUIDA` se `PROCESSANDO` | Disparo → `ENTREGUE` |
+| `bounce`, `dropped`, `blocked`, `spamreport` | Ação → `FALHA` | Disparo → `FALHA` |
+| `processed`, `open`, `click`, … | log / `ultimo_evento` na ação | log / `ultimo_evento` no disparo |
+
+Eventos com só `acao_id` em ações `multi_alvo` são **ignorados** (use `disparo_id`).
 
 **Teste local com ngrok**
 
@@ -654,7 +766,12 @@ O SendGrid devolve `acao_id` via `custom_args` gravados no envio.
 ngrok http 8000
 # No SendGrid, use: https://xxxx.ngrok.io/api/v1/webhooks/sendgrid
 
-# Simular delivered (development, sem assinatura):
+# Simular delivered em disparo multi-alvo (development):
+curl -X POST http://localhost:8000/api/v1/webhooks/sendgrid \
+  -H "Content-Type: application/json" \
+  -d '[{"event":"delivered","disparo_id":"UUID-DO-DISPARO"}]'
+
+# Simular delivered em ação simples:
 curl -X POST http://localhost:8000/api/v1/webhooks/sendgrid \
   -H "Content-Type: application/json" \
   -d '[{"event":"delivered","acao_id":"UUID-DA-ACAO"}]'

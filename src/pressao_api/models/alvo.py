@@ -15,6 +15,15 @@ class TipoContato(str, enum.Enum):
     INSTAGRAM = "instagram"
 
 
+class ModoAlvo(str, enum.Enum):
+    INDIVIDUAL = "individual"
+    AGREGADO = "agregado"
+
+
+def _enum_valores(enum_class: type[enum.Enum]) -> list[str]:
+    return [member.value for member in enum_class]
+
+
 class Alvo(Base):
     __tablename__ = "alvos"
 
@@ -22,6 +31,12 @@ class Alvo(Base):
     nome = Column(String(200), nullable=False)
     contato = Column(String(200), nullable=False, index=True)
     tipo_contato = Column(Enum(TipoContato), nullable=False)
+    modo = Column(
+        Enum(ModoAlvo, name="modoalvo", values_callable=_enum_valores),
+        nullable=False,
+        default=ModoAlvo.INDIVIDUAL,
+        server_default=ModoAlvo.INDIVIDUAL.value,
+    )
 
     campanha_id = Column(
         UUID(as_uuid=True), ForeignKey("campanhas.id", ondelete="CASCADE"), nullable=False

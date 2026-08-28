@@ -25,6 +25,12 @@ class Acao(Base):
     # Ação
     campanha_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     alvo_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    tipo_acao = Column(
+        Enum("simples", "multi_alvo", name="tipo_acao"),
+        default="simples",
+        nullable=False,
+        server_default="simples",
+    )
     canal = Column(String(20), nullable=False)
     template_id = Column(UUID(as_uuid=True), nullable=True)
 
