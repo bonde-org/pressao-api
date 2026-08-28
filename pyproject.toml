@@ -1,0 +1,91 @@
+[project]
+name = "pressao-api"
+version = "0.1.0"
+description = "API Orquestradora de Ações de Pressão Multicanal"
+authors = [
+    {name = "Igor Santos", email = "igor@aztrid.tech"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Framework
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+
+    # Database
+    "sqlalchemy>=2.0.23",
+    "alembic>=1.12.0",
+    "psycopg2-binary>=2.9.9",
+    "asyncpg>=0.29.0",
+    "greenlet",
+    
+    # Banco SQLite APENAS para testes
+    "aiosqlite>=0.22.1",
+
+    # Configuração
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+
+    # Autenticação
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.6",
+    "pyjwt",
+
+    # HTTP Client
+    "httpx>=0.25.0",
+
+    # Monitoramento
+    "prometheus-client>=0.19.0",
+    "structlog>=24.1.0",
+    "psutil",
+
+    # Utilitários
+    "tenacity>=8.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.11.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
+    "faker>=20.0.0",
+    
+    # Para debug local
+    "ipython>=8.12.0",
+]
+
+[tool.uv]
+dev-dependencies = ["pytest", "pytest-asyncio", "pytest-cov"]
+
+[tool.setuptools]
+packages = ["pressao_api"]
+package-dir = {"" = "src"}
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+ignore = [
+    "B008",  # Do not perform function call in argument defaults (FastAPI Depends)
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--cov=pressao_api --cov-report=html --cov-report=term"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
