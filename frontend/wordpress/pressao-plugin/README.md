@@ -127,8 +127,10 @@ Todos os shortcodes aceitam `campaign` e caem em `pressao_campaign_id` quando o 
 
 Principal shortcode do plugin: lista os alvos da campanha e permite agir por canal.
 
+**E-mail:** a API agrupa todos os contatos de e-mail da campanha em um único item (`modo=agregado`, nome padrão "Pressionar por E-mail"). Um clique dispara a ação `multi_alvo` para todos os destinatários. O campo `total_membros` indica quantos e-mails serão pressionados. Use `action_label="Pressionar por E-mail"` para o rótulo do botão.
+
 ```text
-[pressao_alvos campaign="uuid" show_ativista_form="yes" show_template="yes" cache="0"]
+[pressao_alvos campaign="uuid" show_ativista_form="yes" show_template="yes" cache="0" action_label="Pressionar por E-mail"]
 ```
 
 | Atributo | Padrão | Descrição |
