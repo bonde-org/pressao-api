@@ -20,6 +20,7 @@ API para orquestração de ações de pressão multicanal, suportando canais aut
 - [Configuração](#️⚙️-configuração)
 - [Endpoints da API](#📡-endpoints-da-api)
 - [Fluxo de Trabalho](#🔄-fluxo-de-trabalho)
+- [Contador de Ações Confirmadas](#contador-de-ações-confirmadas)
 - [Testes](#🧪-testes)
 - [Monitoramento](#📊-monitoramento)
 - [Deploy](#🐳-deploy)
@@ -85,6 +86,7 @@ Cada ação é registrada de forma imutável e rastreável, garantindo auditoria
 - ✅ Métricas de Qualidade: Classificação automática da qualidade da ação
 - ✅ Rastreabilidade Completa: Histórico completo de cada ação
 - ✅ **Suporte a Ações Anônimas**: Permite ações sem identificação do ativista
+- ✅ **Contador de Ações Confirmadas**: Total por campanha em leitura O(1) (`acoes_confirmadas`), incrementado na confirmação manual e no webhook SendGrid; reconciliação admin disponível
 
 ### Segurança
 
@@ -394,10 +396,17 @@ Authorization: Bearer {token_jwt}
 ```http
 PATCH /api/v1/acoes/{acao_id}/confirmar
 Authorization: Bearer {token_jwt}
-Content-Type: application/json
-
-{}  // Corpo vazio
 ```
+
+Resposta `200 OK`:
+
+```json
+{
+    "acoes_confirmadas": 47833
+}
+```
+
+O campo `acoes_confirmadas` é o total atualizado da campanha após o incremento.
 
 **Criar Campanha** (Apenas Admin/Service Account)
 
@@ -419,6 +428,41 @@ Content-Type: application/json
 ```http
 GET /api/v1/campanhas/
 Authorization: Bearer {token_jwt}
+```
+
+Cada campanha inclui `acoes_confirmadas` (total de ações com status `CONCLUIDA`).
+
+**Obter Campanha**
+
+```http
+GET /api/v1/campanhas/{campanha_id}
+Authorization: Bearer {token_jwt}
+```
+
+```json
+{
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "nome": "Campanha de Pressão",
+    "acoes_confirmadas": 47833,
+    "ativa": true
+}
+```
+
+**Reconciliar Contador** (Apenas Admin/Service Account)
+
+Recalcula o total a partir da tabela `acoes` e corrige drift no campo desnormalizado:
+
+```http
+POST /api/v1/campanhas/{campanha_id}/reconciliar-contador
+Authorization: Bearer {token_jwt}
+```
+
+```json
+{
+    "antes": 47830,
+    "depois": 47833,
+    "divergencia": 3
+}
 ```
 
 **Criar Alvo**
@@ -469,7 +513,7 @@ GET /api/metrics
 
 ```text
 Ativista → POST /api/acoes → Backend registra → Chama provider →
-→ Aguarda webhook → Atualiza status → Concluído
+→ Aguarda webhook delivered → Incrementa acoes_confirmadas → Concluído
 ```
 
 ### Fluxo Manual (WhatsApp/Instagram)
@@ -477,8 +521,21 @@ Ativista → POST /api/acoes → Backend registra → Chama provider →
 ```text
 Ativista → POST /api/acoes → Backend registra → Gera link/texto →
 → Retorna próximo passo → Ativista executa manualmente →
-→ PATCH /confirmar → Calcula métrica → Concluído
+→ PATCH /confirmar → Incrementa acoes_confirmadas → Calcula métrica → Concluído
 ```
+
+### Contador de Ações Confirmadas
+
+O total por campanha fica em `campanhas.acoes_confirmadas` (coluna desnormalizada) para leitura rápida — sem `COUNT(*)` em cada request.
+
+| Quando incrementa | Quem dispara |
+|-------------------|--------------|
+| Confirmação manual | `PATCH /acoes/{id}/confirmar` |
+| E-mail entregue | Webhook SendGrid `delivered` |
+
+- Só incrementa na **transição** para `CONCLUIDA` (idempotente em webhooks duplicados).
+- A tabela `acoes` continua sendo a fonte da verdade; use `POST /campanhas/{id}/reconciliar-contador` se houver suspeita de drift.
+- No plugin WordPress: shortcode `[pressao_contador campaign="uuid"]` (independente de `[pressao_alvos]`), com cache transient de 60s e animação countUp ao confirmar ação na mesma página.
 
 ### Matriz de Canais
 

@@ -255,21 +255,27 @@ class PressaoPlugin_API {
      * 
      * @param string $campanha_id ID da campanha
      * @param array $params Parâmetros adicionais
-     * @param int $cache_time Tempo de cache em segundos
+     * @param int $cache_time Tempo de cache em segundos. Zero ou negativo ignora o cache,
+     *                        garantindo um novo sorteio de template por requisição.
      * @return array|WP_Error Lista de alvos ou erro
      */
     public function get_alvos_cached($campanha_id, $params = [], $cache_time = 300) {
+        $cache_time = intval($cache_time);
+
         // Cria uma chave de cache baseada nos parâmetros
         $cache_key = 'pressao_alvos_' . md5($campanha_id . serialize($params));
-        $cached = get_transient($cache_key);
-        
-        if ($cached !== false) {
-            return [
-                'success' => true,
-                'data' => $cached,
-                'cached' => true,
-                'count' => count($cached)
-            ];
+
+        if ($cache_time > 0) {
+            $cached = get_transient($cache_key);
+
+            if ($cached !== false) {
+                return [
+                    'success' => true,
+                    'data' => $cached,
+                    'cached' => true,
+                    'count' => count($cached)
+                ];
+            }
         }
         
         $result = $this->get_alvos($campanha_id, $params);
@@ -279,7 +285,7 @@ class PressaoPlugin_API {
         }
         
         // Cache apenas se tiver dados
-        if (!empty($result)) {
+        if ($cache_time > 0 && !empty($result)) {
             set_transient($cache_key, $result, $cache_time);
         }
         
@@ -332,15 +338,8 @@ class PressaoPlugin_API {
             );
         }
         
-        // Se não for anônimo, valida dados do ativista
-        if (empty($dados['anonimo']) || $dados['anonimo'] === false) {
-            if (empty($dados['ativista']) || !is_array($dados['ativista'])) {
-                return new WP_Error(
-                    'invalid_data',
-                    __('ativista é obrigatório para ações não anônimas', 'pressao-plugin')
-                );
-            }
-            
+        // Valida dados do ativista quando fornecidos
+        if (!empty($dados['ativista']) && is_array($dados['ativista'])) {
             if (empty($dados['ativista']['nome'])) {
                 return new WP_Error(
                     'invalid_data',
@@ -361,12 +360,16 @@ class PressaoPlugin_API {
             'campanha_id' => $dados['campanha_id'],
             'alvo_id' => $dados['alvo_id'],
             'canal' => $dados['canal'],
-            'anonimo' => isset($dados['anonimo']) ? (bool) $dados['anonimo'] : true
+            'anonimo' => isset($dados['anonimo']) ? (bool) $dados['anonimo'] : false
         ];
         
         // Adiciona template_id se fornecido
         if (!empty($dados['template_id'])) {
             $payload['template_id'] = $dados['template_id'];
+        }
+        
+        if (!empty($dados['sessao_id'])) {
+            $payload['sessao_id'] = $dados['sessao_id'];
         }
         
         // Adiciona dados do ativista se não for anônimo
@@ -412,7 +415,7 @@ class PressaoPlugin_API {
      * @param string|null $template_id ID do template (opcional)
      * @return array|WP_Error Resultado da criação
      */
-    public function criar_acao_anonima($campanha_id, $alvo_id, $canal = 'email', $template_id = null) {
+    public function criar_acao_anonima($campanha_id, $alvo_id, $canal = 'email', $template_id = null, $sessao_id = null) {
         $dados = [
             'campanha_id' => $campanha_id,
             'alvo_id' => $alvo_id,
@@ -424,9 +427,35 @@ class PressaoPlugin_API {
             $dados['template_id'] = $template_id;
         }
         
+        if ($sessao_id) {
+            $dados['sessao_id'] = $sessao_id;
+        }
+        
         return $this->criar_acao($dados);
     }
     
+    /**
+     * Cria uma ação sem dados do ativista (não é anônima — sessão ainda não identificada)
+     */
+    public function criar_acao_sem_ativista($campanha_id, $alvo_id, $canal = 'email', $template_id = null, $sessao_id = null) {
+        $dados = [
+            'campanha_id' => $campanha_id,
+            'alvo_id' => $alvo_id,
+            'canal' => $canal,
+            'anonimo' => false
+        ];
+        
+        if ($template_id) {
+            $dados['template_id'] = $template_id;
+        }
+        
+        if ($sessao_id) {
+            $dados['sessao_id'] = $sessao_id;
+        }
+        
+        return $this->criar_acao($dados);
+    }
+
     /**
      * Cria uma ação com dados do ativista
      * 
@@ -437,7 +466,7 @@ class PressaoPlugin_API {
      * @param string|null $template_id ID do template (opcional)
      * @return array|WP_Error Resultado da criação
      */
-    public function criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id = null) {
+    public function criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id = null, $sessao_id = null) {
         $dados = [
             'campanha_id' => $campanha_id,
             'alvo_id' => $alvo_id,
@@ -454,7 +483,42 @@ class PressaoPlugin_API {
             $dados['template_id'] = $template_id;
         }
         
+        if ($sessao_id) {
+            $dados['sessao_id'] = $sessao_id;
+        }
+        
         return $this->criar_acao($dados);
+    }
+
+    /**
+     * Obtém contagem de ações confirmadas da campanha (cache curto).
+     *
+     * @param string $campanha_id ID da campanha
+     * @param int $cache_time TTL do transient em segundos
+     * @return array|WP_Error
+     */
+    public function get_acoes_confirmadas_count($campanha_id, $cache_time = 60) {
+        $cache_key = 'pressao_acoes_count_' . md5($campanha_id);
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return ['success' => true, 'count' => (int) $cached, 'cached' => true];
+        }
+        $campanha = $this->get_campanha($campanha_id);
+        if (is_wp_error($campanha)) {
+            return $campanha;
+        }
+        $count = isset($campanha['acoes_confirmadas']) ? (int) $campanha['acoes_confirmadas'] : 0;
+        set_transient($cache_key, $count, $cache_time);
+        return ['success' => true, 'count' => $count, 'cached' => false];
+    }
+
+    /**
+     * Invalida o cache do contador de ações confirmadas.
+     *
+     * @param string $campanha_id ID da campanha
+     */
+    public function invalidar_cache_contador($campanha_id) {
+        delete_transient('pressao_acoes_count_' . md5($campanha_id));
     }
 
     /**
@@ -481,6 +545,9 @@ class PressaoPlugin_API {
         return [
             'success' => true,
             'message' => __('Ação confirmada com sucesso!', 'pressao-plugin'),
+            'acoes_confirmadas' => isset($response['acoes_confirmadas'])
+                ? (int) $response['acoes_confirmadas']
+                : null,
         ];
     }
 }

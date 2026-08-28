@@ -166,7 +166,8 @@ class TestAPI:
 
         # Confirma ação
         response = client.patch(f"/api/v1/acoes/{acao_id}/confirmar")
-        assert response.status_code == 204
+        assert response.status_code == 200
+        assert response.json()["acoes_confirmadas"] == 1
 
         # Verifica status atualizado
         status_resp = client.get(f"/api/v1/acoes/{acao_id}/status")

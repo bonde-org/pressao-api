@@ -34,7 +34,7 @@ class PressaoPlugin_Ajax {
      */
     public function ajax_get_campanha() {
         // Verifica nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'pressao_widget_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'pressao_acao_nonce')) {
             wp_send_json_error(['message' => __('Nonce inválido', 'pressao-plugin')], 403);
         }
         
@@ -71,6 +71,7 @@ class PressaoPlugin_Ajax {
         $alvo_id = isset($_POST['alvo_id']) ? sanitize_text_field($_POST['alvo_id']) : '';
         $campanha_id = isset($_POST['campanha_id']) ? sanitize_text_field($_POST['campanha_id']) : '';
         $canal = isset($_POST['canal']) ? sanitize_text_field($_POST['canal']) : 'email';
+        $sessao_id = isset($_POST['sessao_id']) ? sanitize_text_field($_POST['sessao_id']) : '';
         $template_id = isset($_POST['template_id']) ? sanitize_text_field($_POST['template_id']) : null;
         
         // Dados do ativista
@@ -78,23 +79,22 @@ class PressaoPlugin_Ajax {
         $ativista_email = isset($_POST['ativista_email']) ? sanitize_email($_POST['ativista_email']) : '';
         $ativista_telefone = isset($_POST['ativista_telefone']) ? sanitize_text_field($_POST['ativista_telefone']) : '';
         
-        // Verifica se é anônimo ou tem dados do ativista
-        $is_anonimo = empty($ativista_nome) && empty($ativista_email) && empty($ativista_telefone);
+        $has_ativista_data = !empty($ativista_nome) || !empty($ativista_email) || !empty($ativista_telefone);
         
         if (empty($alvo_id) || empty($campanha_id)) {
             wp_send_json_error(['message' => __('Dados incompletos', 'pressao-plugin')], 400);
         }
         
         // Prepara dados para a API
-        if ($is_anonimo) {
-            $result = $this->api->criar_acao_anonima($campanha_id, $alvo_id, $canal, $template_id);
-        } else {
+        if ($has_ativista_data) {
             $ativista = [
                 'nome' => $ativista_nome,
                 'email' => $ativista_email,
                 'telefone' => $ativista_telefone
             ];
-            $result = $this->api->criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id);
+            $result = $this->api->criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id, $sessao_id);
+        } else {
+            $result = $this->api->criar_acao_sem_ativista($campanha_id, $alvo_id, $canal, $template_id, $sessao_id);
         }
         
         if (is_wp_error($result)) {
@@ -111,6 +111,10 @@ class PressaoPlugin_Ajax {
         // RETORNA O STATUS DA AÇÃO PARA O FRONTEND
         // ============================================
         $api_data = $result['data'] ?? [];
+
+        if (!empty($campanha_id)) {
+            $this->api->invalidar_cache_contador($campanha_id);
+        }
 
         wp_send_json_success([
             'message' => $result['message'] ?? __('Ação realizada com sucesso!', 'pressao-plugin'),
@@ -133,6 +137,7 @@ class PressaoPlugin_Ajax {
 
         $acao_id = isset($_POST['acao_id']) ? sanitize_text_field($_POST['acao_id']) : '';
         $alvo_id = isset($_POST['alvo_id']) ? sanitize_text_field($_POST['alvo_id']) : '';
+        $campanha_id = isset($_POST['campanha_id']) ? sanitize_text_field($_POST['campanha_id']) : '';
 
         if (empty($acao_id)) {
             wp_send_json_error(['message' => __('ID da ação não informado', 'pressao-plugin')], 400);
@@ -147,12 +152,17 @@ class PressaoPlugin_Ajax {
             ], 500);
         }
 
+        if ($campanha_id) {
+            $this->api->invalidar_cache_contador($campanha_id);
+        }
+
         wp_send_json_success([
             'message' => $result['message'] ?? __('Ação confirmada com sucesso!', 'pressao-plugin'),
             'acao_id' => $acao_id,
             'alvo_id' => $alvo_id,
             'status' => 'CONCLUIDA',
             'timestamp' => time(),
+            'acoes_confirmadas' => $result['acoes_confirmadas'] ?? null,
         ]);
     }
 

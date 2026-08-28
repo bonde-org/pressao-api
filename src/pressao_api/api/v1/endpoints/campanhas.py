@@ -6,7 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pressao_api.core.database import get_db
 from pressao_api.core.security import get_current_user
 from pressao_api.repositories.campanha_repository import CampanhaRepository
-from pressao_api.schemas.campanha import CampanhaCreate, CampanhaResponse, CampanhaUpdate
+from pressao_api.schemas.campanha import (
+    CampanhaCreate,
+    CampanhaResponse,
+    CampanhaUpdate,
+    ReconciliarContadorResponse,
+)
 
 router = APIRouter(prefix="/campanhas", tags=["Campanhas"])
 
@@ -91,3 +96,25 @@ async def deletar_campanha(
     deletado = await repo.deletar(campanha_id)
     if not deletado:
         raise HTTPException(status_code=404, detail="Campanha não encontrada")
+
+
+@router.post(
+    "/{campanha_id}/reconciliar-contador",
+    response_model=ReconciliarContadorResponse,
+    summary="Reconciliar contador de ações confirmadas",
+)
+async def reconciliar_contador(
+    campanha_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Apenas administradores")
+
+    repo = CampanhaRepository(db)
+    campanha = await repo.buscar_por_id(campanha_id)
+    if not campanha:
+        raise HTTPException(status_code=404, detail="Campanha não encontrada")
+
+    antes, depois = await repo.reconciliar_acoes_confirmadas(campanha_id)
+    return ReconciliarContadorResponse(antes=antes, depois=depois, divergencia=depois - antes)

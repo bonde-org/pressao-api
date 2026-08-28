@@ -4,11 +4,105 @@
  */
 
 // Constantes
-const ACTIVIST_STORAGE_KEY = 'pressao_ativista_data';
-const ACTIVIST_LAST_CONFIRM_KEY = 'pressao_ativista_last_confirm';
 const ACTIONS_STORAGE_KEY = pressaoData?.localStorageKey || 'pressao_acoes_realizadas';
 const COOKIE_USER_ID = pressaoData?.cookieUserIdKey || 'pressao_usuario_id';
 const COOKIE_ACTIONS = pressaoData?.cookieActionsKey || 'pressao_acoes_realizadas';
+const SESSAO_COOKIE = 'pressao_sessao_id';
+const ATIVISTA_COOKIE = 'pressao_ativista_data';
+const ATIVISTA_CONFIRM_COOKIE = 'pressao_ativista_last_confirm';
+
+// ============================================
+// COOKIE HELPERS
+// ============================================
+
+function setCookie(name, value, seconds) {
+    let expires = '';
+    if (seconds && seconds > 0) {
+        const date = new Date();
+        date.setTime(date.getTime() + (seconds * 1000));
+        expires = '; expires=' + date.toUTCString();
+    }
+    document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/; SameSite=Lax';
+}
+
+function getCookie(name) {
+    const nameEQ = name + '=';
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i].trim();
+        if (c.indexOf(nameEQ) === 0) {
+            return decodeURIComponent(c.substring(nameEQ.length));
+        }
+    }
+    return null;
+}
+
+function getSessionDuration() {
+    return parseInt(pressaoData?.sessionDuration) || 86400;
+}
+
+// ============================================
+// CONTADOR DE AÇÕES CONFIRMADAS
+// ============================================
+
+function formatCountDisplay(n) {
+    return n.toLocaleString('pt-BR');
+}
+
+function animateCountUp(el, from, to, durationMs) {
+    durationMs = durationMs || 800;
+    if (from === to) return;
+    const start = performance.now();
+    function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+    function frame(now) {
+        const progress = Math.min((now - start) / durationMs, 1);
+        const current = Math.round(from + (to - from) * easeOut(progress));
+        el.textContent = formatCountDisplay(current);
+        el.dataset.count = String(current);
+        if (progress < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+function incrementActionCounterByCampaign(campaignId, newValue) {
+    if (!campaignId) return;
+    document.querySelectorAll('.pressao-acoes-counter[data-campaign="' + campaignId + '"]').forEach(function(counter) {
+        const el = counter.querySelector('.pressao-acoes-count');
+        if (!el) return;
+        const from = parseInt(el.dataset.count || el.textContent.replace(/\D/g, ''), 10) || 0;
+        const to = (typeof newValue === 'number') ? newValue : from + 1;
+        animateCountUp(el, from, to);
+    });
+}
+
+// ============================================
+// SESSÃO
+// ============================================
+
+function getOrCreateSessaoId() {
+    let sessaoId = getCookie(SESSAO_COOKIE);
+    if (!sessaoId) {
+        sessaoId = crypto.randomUUID();
+        setCookie(SESSAO_COOKIE, sessaoId, getSessionDuration());
+    }
+    return sessaoId;
+}
+
+// ============================================
+// CANAIS E REQUISITOS DE DADOS
+// ============================================
+
+const CANAIS_QUE_REQUEREM_ATIVISTA = {
+    email: ['email'],
+    telefone: ['telefone'],
+    whatsapp: ['telefone'],
+    instagram: []
+};
+
+function canalRequerAtivista(canal) {
+    const campos = CANAIS_QUE_REQUEREM_ATIVISTA[canal];
+    return campos && campos.length > 0;
+}
 
 // ============================================
 // FUNÇÕES DO ATIVISTA
@@ -16,25 +110,19 @@ const COOKIE_ACTIONS = pressaoData?.cookieActionsKey || 'pressao_acoes_realizada
 
 function getAtivistaData() {
     try {
-        const data = localStorage.getItem(ACTIVIST_STORAGE_KEY);
-        console.log('🔍 getAtivistaData:', data);
+        const data = getCookie(ATIVISTA_COOKIE);
         return data ? JSON.parse(data) : null;
     } catch (e) {
-        console.error('❌ Erro no getAtivistaData:', e);
         return null;
     }
 }
 
 function saveAtivistaData(ativista) {
-    console.log('💾 saveAtivistaData chamado com:', ativista);
     try {
-        localStorage.setItem(ACTIVIST_STORAGE_KEY, JSON.stringify(ativista));
-        localStorage.setItem(ACTIVIST_LAST_CONFIRM_KEY, String(Date.now()));
-        console.log('✅ saveAtivistaData: dados salvos!');
-        console.log('🔍 Verificando:', localStorage.getItem(ACTIVIST_STORAGE_KEY));
+        setCookie(ATIVISTA_COOKIE, JSON.stringify(ativista), getSessionDuration());
+        setCookie(ATIVISTA_CONFIRM_COOKIE, String(Date.now()), getSessionDuration());
         return true;
     } catch (e) {
-        console.error('❌ Erro no saveAtivistaData:', e);
         return false;
     }
 }
@@ -44,16 +132,19 @@ function deleteCookie(name) {
 }
 
 function clearPressaoUserData() {
-    console.log('🧹 clearPressaoUserData: limpando storage e cookies...');
-    localStorage.removeItem(ACTIVIST_STORAGE_KEY);
-    localStorage.removeItem(ACTIVIST_LAST_CONFIRM_KEY);
-    localStorage.removeItem(ACTIONS_STORAGE_KEY);
+    deleteCookie(ATIVISTA_COOKIE);
+    deleteCookie(ATIVISTA_CONFIRM_COOKIE);
+    deleteCookie(SESSAO_COOKIE);
     deleteCookie(COOKIE_USER_ID);
     deleteCookie(COOKIE_ACTIONS);
+    try {
+        localStorage.removeItem(ACTIONS_STORAGE_KEY);
+    } catch (e) { /* ignore */ }
+    resetAllProgressoBars();
 }
 
 function precisaConfirmarAtivista(intervaloMinutos) {
-    const ultimaConfirmacao = localStorage.getItem(ACTIVIST_LAST_CONFIRM_KEY);
+    const ultimaConfirmacao = getCookie(ATIVISTA_CONFIRM_COOKIE);
     if (!ultimaConfirmacao) {
         return true;
     }
@@ -63,24 +154,159 @@ function precisaConfirmarAtivista(intervaloMinutos) {
 }
 
 // ============================================
-// FUNÇÕES DE AÇÕES (LOCALSTORAGE)
+// FUNÇÕES DE AÇÕES (COOKIE)
 // ============================================
 
-function getAcoesFromLocalStorage() {
+function getAcoesFromStorage() {
     try {
-        const data = localStorage.getItem(ACTIONS_STORAGE_KEY);
-        return data ? JSON.parse(data) : {};
+        const cookieData = getCookie(COOKIE_ACTIONS);
+        if (cookieData) {
+            const parsed = JSON.parse(cookieData);
+            if (parsed && typeof parsed === 'object') {
+                const slim = slimAcoesPayload(parsed);
+                // Regrava se o cookie antigo ainda carregava campos pesados (ex.: ativista)
+                if (JSON.stringify(slim) !== JSON.stringify(parsed)) {
+                    saveActionsToStorage(slim);
+                }
+                return slim;
+            }
+        }
     } catch (e) {
-        return {};
+        console.warn('Cookie de ações inválido:', e);
+    }
+
+    // Migração one-shot: localStorage legado → cookie (payload enxuto)
+    try {
+        const legacy = localStorage.getItem(ACTIONS_STORAGE_KEY);
+        if (legacy) {
+            const parsed = JSON.parse(legacy);
+            if (parsed && typeof parsed === 'object') {
+                const slim = slimAcoesPayload(parsed);
+                saveActionsToStorage(slim);
+                localStorage.removeItem(ACTIONS_STORAGE_KEY);
+                return slim;
+            }
+        }
+    } catch (e) {
+        console.warn('Falha na migração localStorage → cookie:', e);
+    }
+
+    return {};
+}
+
+/**
+ * Mantém só campos necessários no cookie (evita estourar limite ~4KB
+ * e derrubar cookies de sessão do WordPress — causa comum de "Nonce inválido").
+ */
+function slimAcoesPayload(acoes) {
+    const slim = {};
+    Object.keys(acoes || {}).forEach(function(alvoId) {
+        const a = acoes[alvoId];
+        if (!a || typeof a !== 'object') {
+            return;
+        }
+        slim[alvoId] = {
+            timestamp: a.timestamp || Math.floor(Date.now() / 1000),
+            acao_id: a.acao_id || null,
+            status: a.status || 'CONCLUIDA',
+            user_id: a.user_id || null
+        };
+    });
+    return slim;
+}
+
+function saveActionsToStorage(acoes) {
+    try {
+        const payload = slimAcoesPayload(acoes || {});
+        setCookie(COOKIE_ACTIONS, JSON.stringify(payload), getSessionDuration());
+        try {
+            localStorage.removeItem(ACTIONS_STORAGE_KEY);
+        } catch (e) { /* ignore */ }
+    } catch (e) {
+        console.warn('Não foi possível salvar ações no cookie:', e);
     }
 }
 
-function saveActionsToLocalStorage(acoes) {
-    try {
-        localStorage.setItem(ACTIONS_STORAGE_KEY, JSON.stringify(acoes));
-    } catch (e) {
-        console.warn('Não foi possível salvar no localStorage:', e);
+function getActionNonce(container) {
+    if (pressaoData && pressaoData.nonce) {
+        return pressaoData.nonce;
     }
+    if (container && container.dataset && container.dataset.nonce) {
+        return container.dataset.nonce;
+    }
+    return '';
+}
+
+// ============================================
+// PROGRESSO DO ATIVISTA
+// ============================================
+
+function isAcaoRealizada(acao) {
+    if (!acao || typeof acao !== 'object') {
+        return false;
+    }
+    // Pendente de confirmação humana ainda não conta como realizada
+    return acao.status !== 'AGUARDANDO_ACAO_HUMANA';
+}
+
+function countDoneForProgresso(el, acoes) {
+    const total = parseInt(el.dataset.total, 10) || 0;
+    const idsRaw = el.dataset.alvoIds || '';
+    const alvoIds = idsRaw ? idsRaw.split(',').map(function(id) { return id.trim(); }).filter(Boolean) : [];
+    let done = 0;
+    alvoIds.forEach(function(id) {
+        if (isAcaoRealizada(acoes[id])) {
+            done += 1;
+        }
+    });
+    return { done: done, total: total };
+}
+
+function applyProgressoToElement(el, done, total) {
+    const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const bar = el.querySelector('.pressao-progresso-bar');
+    const text = el.querySelector('.pressao-progresso-text');
+    const track = el.querySelector('.pressao-progresso-track');
+    if (bar) {
+        bar.style.width = pct + '%';
+    }
+    if (text) {
+        text.textContent = done + ' / ' + total;
+    }
+    if (track) {
+        track.setAttribute('aria-valuenow', String(done));
+        track.setAttribute('aria-valuemax', String(total));
+    }
+    el.dataset.done = String(done);
+}
+
+function updateProgressoElement(el, acoes) {
+    const counts = countDoneForProgresso(el, acoes || getAcoesFromStorage());
+    applyProgressoToElement(el, counts.done, counts.total);
+}
+
+function updateProgressoByCampaign(campaignId) {
+    const acoes = getAcoesFromStorage();
+    const selector = campaignId
+        ? '.pressao-progresso[data-campaign="' + campaignId + '"]'
+        : '.pressao-progresso';
+    document.querySelectorAll(selector).forEach(function(el) {
+        updateProgressoElement(el, acoes);
+    });
+}
+
+function resetAllProgressoBars() {
+    document.querySelectorAll('.pressao-progresso').forEach(function(el) {
+        const total = parseInt(el.dataset.total, 10) || 0;
+        applyProgressoToElement(el, 0, total);
+    });
+}
+
+function initProgressoBars() {
+    const acoes = getAcoesFromStorage();
+    document.querySelectorAll('.pressao-progresso').forEach(function(el) {
+        updateProgressoElement(el, acoes);
+    });
 }
 
 // ============================================
@@ -106,6 +332,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.pressao-alvos').forEach(function(container) {
         initAlvos(container);
     });
+
+    initProgressoBars();
 });
 
 // ============================================
@@ -300,30 +528,28 @@ function bindAlvoActionListeners(container) {
             const campaignId = this.dataset.campaign || container.dataset.campaign;
             const canal = this.dataset.canal || 'email';
 
-            console.log(`🖱️ .pressao-action-toggle clicado para alvo: ${alvoId}`);
-
             const ativista = getAtivistaData();
-            console.log('👤 Ativista atual:', ativista);
+
+            if (!canalRequerAtivista(canal)) {
+                realizarAcao(alvoId, campaignId, container, this, null, canal);
+                return;
+            }
 
             if (!ativista) {
-                console.log('⚠️ Sem ativista, mostrando formulário inline...');
                 const form = this.closest('.pressao-alvo-actions').querySelector('.pressao-ativista-form');
                 if (form) {
                     form.style.display = 'block';
                     form.dataset.canal = canal;
                 }
             } else if (precisaConfirmarAtivista(confirmInterval)) {
-                console.log('🔄 Precisa confirmar identidade');
                 const toggleRef = this;
                 mostrarConfirmacaoAtivista(container, ativista, function() {
-                    console.log('✅ Confirmado! Executando ação...');
                     const submit = toggleRef.closest('.pressao-alvo-actions').querySelector('.pressao-action-submit');
                     if (submit) {
                         submit.click();
                     }
                 }, toggleRef);
             } else {
-                console.log('✅ Tudo certo, executando ação...');
                 const submit = this.closest('.pressao-alvo-actions').querySelector('.pressao-action-submit');
                 if (submit) {
                     submit.click();
@@ -398,16 +624,12 @@ function bindAlvoActionListeners(container) {
             const saved = saveAtivistaData(ativista);
             console.log('✅ Resultado do save:', saved);
 
-            const verificar = localStorage.getItem(ACTIVIST_STORAGE_KEY);
-            console.log('🔍 Verificando localStorage:', verificar);
+            const verificar = getCookie(ATIVISTA_COOKIE);
 
             if (!verificar) {
-                console.error('❌ Dados NÃO foram salvos!');
                 showNotification(container, 'error', 'Erro ao salvar seus dados. Tente novamente.');
                 return;
             }
-
-            console.log('✅ Dados confirmados no localStorage!');
 
             if (form) {
                 form.style.display = 'none';
@@ -487,7 +709,7 @@ function mostrarConfirmacaoAtivista(container, ativista, callback, contextElemen
     
     overlay.querySelector('#pressao-confirm-yes').addEventListener('click', function() {
         console.log('✅ "Sou eu" clicado');
-        localStorage.setItem(ACTIVIST_LAST_CONFIRM_KEY, String(Date.now()));
+        setCookie(ATIVISTA_CONFIRM_COOKIE, String(Date.now()), getSessionDuration());
         overlay.remove();
         if (callback && typeof callback === 'function') {
             callback();
@@ -504,19 +726,7 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
     
     if (!ativista) {
         ativista = getAtivistaData();
-        console.log('📦 Ativista do localStorage:', ativista);
     }
-    
-    if (!ativista) {
-        console.log('❌ Nenhum ativista encontrado');
-        const form = container.querySelector(`.pressao-ativista-form[data-alvo-id="${alvoId}"]`);
-        if (form) {
-            form.style.display = 'block';
-        }
-        return;
-    }
-    
-    console.log('✅ Ativista encontrado:', ativista);
 
     // Se não tem canal, tenta buscar do item
     if (!canal) {
@@ -526,9 +736,11 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
     
     console.log('📡 Canal sendo usado:', canal);
     
-    const nonce = container.dataset.nonce;
+    const nonce = getActionNonce(container);
     const originalText = button.textContent;
-    const templateId = container.dataset.templateId || '';
+    // Template sorteado pela API para este alvo; o do container é fallback
+    const alvoItem = button.closest('.pressao-alvo-item');
+    const templateId = alvoItem?.dataset?.templateId || container.dataset.templateId || '';
     
     button.disabled = true;
     button.textContent = 'Processando...';
@@ -540,9 +752,10 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
         canal: canal,
         template_id: templateId,
         nonce: nonce,
-        ativista_nome: ativista.nome || '',
-        ativista_email: ativista.email || '',
-        ativista_telefone: ativista.telefone || ''
+        sessao_id: getOrCreateSessaoId(),
+        ativista_nome: ativista?.nome || '',
+        ativista_email: ativista?.email || '',
+        ativista_telefone: ativista?.telefone || ''
     };
     
     fetch(pressaoData.ajaxUrl, {
@@ -564,7 +777,7 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
     .then(function(response) {
         console.log('response', response);
         if (response.success) {
-            const acoes = getAcoesFromLocalStorage();
+            const acoes = getAcoesFromStorage();
             const apiData = response.data?.data || {};
             const acaoData = {
                 timestamp: response.data?.timestamp || Math.floor(Date.now() / 1000),
@@ -574,7 +787,8 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
                 status: response.data?.status || apiData.status_atual || 'CONCLUIDA',
             };
             acoes[alvoId] = acaoData;
-            saveActionsToLocalStorage(acoes);
+            saveActionsToStorage(acoes);
+            updateProgressoByCampaign(campaignId);
             
             if (acaoData.status === 'AGUARDANDO_ACAO_HUMANA') {
                 console.log('🔄 Ação aguardando confirmação manual');
@@ -589,6 +803,7 @@ function realizarAcao(alvoId, campaignId, container, button, ativista, canal) {
                 const item = button.closest('.pressao-alvo-item');
                 marcarAcaoRealizada(item, acoes[alvoId]);
                 showNotification(container, 'success', response.data?.message || 'Ação realizada!');
+                incrementActionCounterByCampaign(campaignId, null);
                 
                 const form = button.closest('.pressao-alvo-actions')?.querySelector('.pressao-ativista-form');
                 if (form) {
@@ -622,7 +837,7 @@ function confirmarAcao(alvoId, acaoId, campaignId, container, button) {
         return;
     }
 
-    const nonce = container.dataset.nonce;
+    const nonce = getActionNonce(container);
     const originalText = button.textContent;
 
     button.disabled = true;
@@ -655,18 +870,26 @@ function confirmarAcao(alvoId, acaoId, campaignId, container, button) {
     .then(function(response) {
         console.log('confirmarAcao response', response);
         if (response.success) {
-            const acoes = getAcoesFromLocalStorage();
+            const acoes = getAcoesFromStorage();
             acoes[alvoId] = {
                 ...(acoes[alvoId] || {}),
                 timestamp: response.data?.timestamp || Math.floor(Date.now() / 1000),
                 acao_id: acaoId,
                 status: response.data?.status || 'CONCLUIDA'
             };
-            saveActionsToLocalStorage(acoes);
+            saveActionsToStorage(acoes);
+            updateProgressoByCampaign(campaignId || container.dataset.campaign);
 
             const item = button.closest('.pressao-alvo-item');
             marcarAcaoRealizada(item, acoes[alvoId]);
             showNotification(container, 'success', response.data?.message || 'Ação confirmada!');
+
+            const campanhaAtual = campaignId || container.dataset.campaign;
+            if (response.data && response.data.acoes_confirmadas != null) {
+                incrementActionCounterByCampaign(campanhaAtual, response.data.acoes_confirmadas);
+            } else {
+                incrementActionCounterByCampaign(campanhaAtual, null);
+            }
         } else {
             button.disabled = false;
             button.textContent = originalText;
@@ -720,7 +943,7 @@ function mostrarBotaoConfirmacao(actionsDiv, alvoId, acaoId, campaignId, contain
 
 function checkActionsStatus(container) {
     const alvoItems = container.querySelectorAll('.pressao-alvo-item');
-    const acoes = getAcoesFromLocalStorage();
+    const acoes = getAcoesFromStorage();
     alvoItems.forEach(function(item) {
         const alvoId = item.dataset.alvoId;
         const acao = acoes[alvoId];

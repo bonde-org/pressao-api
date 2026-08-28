@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pressao_api.core.database import get_db
 from pressao_api.repositories.acao_repository import AcaoRepository
+from pressao_api.repositories.campanha_repository import CampanhaRepository
 from pressao_api.services.sendgrid_webhook import (
     HEADER_SIGNATURE,
     HEADER_TIMESTAMP,
@@ -41,6 +42,7 @@ async def webhook_sendgrid(request: Request, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=400, detail="Payload deve ser uma lista de eventos")
 
     repo = AcaoRepository(db)
-    resumo = await processar_eventos_sendgrid(eventos, repo)
+    campanha_repo = CampanhaRepository(db)
+    resumo = await processar_eventos_sendgrid(eventos, repo, campanha_repo)
     logger.info("Webhook SendGrid processado", **resumo)
     return {"status": "ok", **resumo}

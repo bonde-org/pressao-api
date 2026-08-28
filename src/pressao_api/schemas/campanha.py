@@ -40,8 +40,21 @@ class CampanhaUpdate(BaseModel):
 
 class CampanhaResponse(CampanhaBase):
     id: UUID4
+    acoes_confirmadas: int = Field(
+        default=0, description="Total de ações confirmadas na campanha"
+    )
     criado_em: datetime
     atualizado_em: datetime
 
     class Config:
         from_attributes = True
+
+
+class ConfirmacaoContadorResponse(BaseModel):
+    acoes_confirmadas: int
+
+
+class ReconciliarContadorResponse(BaseModel):
+    antes: int
+    depois: int
+    divergencia: int

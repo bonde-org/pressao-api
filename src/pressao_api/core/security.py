@@ -52,6 +52,15 @@ class KeycloakAuth:
                     issuer=self.issuer,
                     options={"verify_exp": True},
                 )
+            except jwt.InvalidIssuerError:
+                payload = jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=["RS256"],
+                    audience="account",  # Padrão do Keycloak para M2M
+                    issuer="http://keycloak:8080/realms/pressao",
+                    options={"verify_exp": True},
+                )
 
             logger.info("Token validated", user_id=payload.get("sub"))
             return payload

@@ -15,6 +15,7 @@ from pressao_api.core.security import get_current_user
 from pressao_api.repositories.acao_repository import AcaoRepository
 from pressao_api.repositories.alvo_repository import AlvoRepository
 from pressao_api.repositories.campanha_repository import CampanhaRepository
+from pressao_api.repositories.template_repository import TemplateRepository
 from pressao_api.schemas.acao import (
     AcaoDetailResponse,
     AcaoStatusResponse,
@@ -24,6 +25,8 @@ from pressao_api.schemas.acao import (
     RespostaAcaoResponse,
     StatusAcaoEnum,
 )
+from pressao_api.schemas.campanha import ConfirmacaoContadorResponse
+from pressao_api.services.confirmacao import incrementar_contador_se_confirmada
 from pressao_api.services.metricas import calculadora
 from pressao_api.services.orquestrador import orquestrador
 from pressao_api.utils.validadores import (
@@ -92,6 +95,28 @@ async def criar_acao(
                 detail=obter_mensagem_erro_compatibilidade(canal, alvo.tipo_contato.value),
             )
 
+        # Valida o template informado (quando houver)
+        template = None
+        if request.template_id:
+            template_repo = TemplateRepository(db)
+            template = await template_repo.buscar_por_id(request.template_id)
+            if not template:
+                raise HTTPException(status_code=404, detail="Template não encontrado")
+
+            if template.campanha_id != request.campanha_id:
+                raise HTTPException(
+                    status_code=400, detail="Template não pertence à campanha informada"
+                )
+
+            if template.canal != canal:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Template é do canal {template.canal}, incompatível com {canal}",
+                )
+
+            if not template.ativo:
+                raise HTTPException(status_code=400, detail="Template inativo")
+
         # ============================================
         # Preparando dados da Ação
         # ============================================
@@ -102,6 +127,7 @@ async def criar_acao(
             "canal": canal,
             "template_id": request.template_id,
             "status": StatusAcaoEnum.PROCESSANDO,
+            "sessao_id": request.sessao_id,
         }
 
         is_service = current_user.get("is_service", False)
@@ -116,6 +142,7 @@ async def criar_acao(
                         "ativista_nome": None,
                         "ativista_email": None,
                         "ativista_telefone": None,
+                        "ativista_preenchido": False,
                     }
                 )
                 logger.info("Ação anônima criada por usuário logado", user_id=current_user["id"])
@@ -127,6 +154,7 @@ async def criar_acao(
                         "ativista_email": current_user.get("email"),
                         "ativista_telefone": current_user.get("telefone"),
                         "anonimo": False,
+                        "ativista_preenchido": True,
                     }
                 )
                 logger.info("Ação criada por usuário logado", user_id=current_user["id"])
@@ -140,23 +168,32 @@ async def criar_acao(
                         "ativista_nome": None,
                         "ativista_email": None,
                         "ativista_telefone": None,
-                        # ativista_id fica None
+                        "ativista_preenchido": False,
                     }
                 )
                 logger.info("Ação anônima via service account")
+            elif request.ativista:
+                acao_data.update(
+                    {
+                        "anonimo": False,
+                        "ativista_nome": request.ativista.nome,
+                        "ativista_email": request.ativista.email,
+                        "ativista_telefone": request.ativista.telefone,
+                        "ativista_preenchido": True,
+                    }
+                )
+                logger.info("Ação via service account com dados do ativista")
             else:
                 acao_data.update(
                     {
                         "anonimo": False,
-                        "ativista_nome": request.ativista.nome if request.ativista else None,
-                        "ativista_email": request.ativista.email if request.ativista else None,
-                        "ativista_telefone": request.ativista.telefone
-                        if request.ativista
-                        else None,
-                        # ativista_id fica None (service account não é o ativista)
+                        "ativista_nome": None,
+                        "ativista_email": None,
+                        "ativista_telefone": None,
+                        "ativista_preenchido": False,
                     }
                 )
-                logger.info("Ação via service account para ativista")
+                logger.info("Ação via service account sem dados de ativista (sessão não identificada)")
 
         # Importante: se for anônimo, garantir que ativista_id seja None
         if acao_data.get("anonimo", False):
@@ -170,7 +207,9 @@ async def criar_acao(
         acao = await repo.criar(acao_data)
 
         try:
-            acao = await orquestrador.executar(acao, alvo=alvo, campanha=campanha)
+            acao = await orquestrador.executar(
+                acao, alvo=alvo, campanha=campanha, template=template
+            )
             await repo.salvar(acao)
         except ValueError as e:
             logger.error("Falha ao executar ação", error=str(e))
@@ -180,6 +219,21 @@ async def criar_acao(
             logger.error("Falha ao executar ação", error=str(e))
             await repo.salvar(acao)
             raise HTTPException(status_code=500, detail=f"Erro ao executar ação: {e!s}")
+
+        # Atualização retroativa de dados do ativista por sessão
+        if is_service and request.sessao_id and request.ativista and not request.anonimo:
+            atualizadas = await repo.atualizar_ativista_por_sessao(
+                sessao_id=request.sessao_id,
+                ativista_nome=request.ativista.nome,
+                ativista_email=request.ativista.email,
+                ativista_telefone=request.ativista.telefone,
+            )
+            if atualizadas > 0:
+                logger.info(
+                    "Ações anteriores atualizadas com dados do ativista",
+                    sessao_id=request.sessao_id,
+                    acoes_atualizadas=atualizadas,
+                )
 
         # ============================================
         # MÉTRICAS DE NEGÓCIO
@@ -270,7 +324,10 @@ async def obter_status_acao(
 
 
 @router.patch(
-    "/{acao_id}/confirmar", status_code=status.HTTP_204_NO_CONTENT, summary="Confirmar ação manual"
+    "/{acao_id}/confirmar",
+    response_model=ConfirmacaoContadorResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Confirmar ação manual",
 )
 async def confirmar_acao(
     acao_id: UUID,
@@ -284,6 +341,7 @@ async def confirmar_acao(
     - Calcula tempo de resposta
     - Calcula métrica de qualidade
     - Atualiza status para CONCLUIDA
+    - Incrementa contador de ações confirmadas da campanha
     """
     repo = AcaoRepository(db)
     acao = await repo.buscar_por_id(acao_id)
@@ -307,6 +365,7 @@ async def confirmar_acao(
     # Usar utcnow() para compatibilidade com o banco
     agora = datetime.utcnow()  # noqa: DTZ003
 
+    status_anterior = acao.status
     acao.confirmado_em = agora
     acao.status = StatusAcaoEnum.CONCLUIDA
 
@@ -324,6 +383,9 @@ async def confirmar_acao(
 
     await repo.salvar(acao)
 
+    campanha_repo = CampanhaRepository(db)
+    novo_total = await incrementar_contador_se_confirmada(acao, status_anterior, campanha_repo)
+
     acoes_tempo_confirmacao_seconds.labels(
         canal=acao.canal, campanha_id=str(acao.campanha_id)
     ).observe(tempo_resposta)
@@ -334,4 +396,7 @@ async def confirmar_acao(
         acao_id=str(acao.id),
         tempo_resposta=tempo_resposta,
         qualidade=acao.metrica_qualidade,
+        acoes_confirmadas=novo_total,
     )
+
+    return ConfirmacaoContadorResponse(acoes_confirmadas=novo_total or 0)

@@ -19,6 +19,8 @@ class PressaoPlugin_Shortcode {
         add_shortcode('pressao_form', [$this, 'render_form']);
         add_shortcode('pressao_list', [$this, 'render_list']);
         add_shortcode('pressao_alvos', [$this, 'render_alvos']);
+        add_shortcode('pressao_contador', [$this, 'render_contador']);
+        add_shortcode('pressao_progresso', [$this, 'render_progresso']);
     }
     
     /**
@@ -159,6 +161,8 @@ class PressaoPlugin_Shortcode {
             'action_done_label' => __('Ação realizada ✓', 'pressao-plugin'),
             'canal' => '', // Filtro (opcional)
             'template_id' => '',
+            'show_template' => 'no',
+            'cache' => 300,
             'class' => '',
             'id' => 'pressao-alvos-' . uniqid(),
             'ativista_confirm_interval' => 10,
@@ -176,6 +180,9 @@ class PressaoPlugin_Shortcode {
         $action_done_label = sanitize_text_field($atts['action_done_label']);
         $canal_filter = sanitize_text_field($atts['canal']); // Filtro
         $template_id = sanitize_text_field($atts['template_id']);
+        $show_template = sanitize_text_field($atts['show_template']);
+        // cache=0 sorteia um template novo a cada pageview; > 0 congela o sorteio pelo período
+        $cache_time = intval($atts['cache']);
         $class = sanitize_text_field($atts['class']);
         $alvos_id = sanitize_text_field($atts['id']);
         
@@ -190,7 +197,7 @@ class PressaoPlugin_Shortcode {
         }
         
         $api = new PressaoPlugin_API();
-        $result = $api->get_alvos_cached($campanha_id, $params, 300);
+        $result = $api->get_alvos_cached($campanha_id, $params, $cache_time);
         
         if (is_wp_error($result)) {
             return sprintf(
@@ -232,12 +239,21 @@ class PressaoPlugin_Shortcode {
                 <?php foreach ($alvos as $alvo) : 
                     $alvo_id = $alvo['id'];
                     $action_state = $this->get_alvo_action_state($alvo_id);
+                    $action_realizada = $this->is_acao_realizada($action_state);
                     // Pega o canal do alvo (prioriza o que vem da API)
                     $canal_alvo = isset($alvo['tipo_contato']) ? $alvo['tipo_contato'] : $canal_filter;
+                    // Template sorteado pela API para este alvo; o att do shortcode é fallback
+                    $alvo_template = isset($alvo['template']) && is_array($alvo['template'])
+                        ? $alvo['template']
+                        : null;
+                    $alvo_template_id = $alvo_template && !empty($alvo_template['id'])
+                        ? $alvo_template['id']
+                        : $template_id;
                 ?>
-                    <li class="pressao-alvo-item <?php echo $action_state ? 'action-done' : ''; ?>" 
+                    <li class="pressao-alvo-item <?php echo $action_realizada ? 'action-done' : ''; ?>" 
                         data-alvo-id="<?php echo esc_attr($alvo_id); ?>"
-                        data-canal="<?php echo esc_attr($canal_alvo); ?>">
+                        data-canal="<?php echo esc_attr($canal_alvo); ?>"
+                        data-template-id="<?php echo esc_attr($alvo_template_id); ?>">
                         
                         <div class="pressao-alvo-info">
                             <div class="pressao-alvo-detalhes">
@@ -261,11 +277,11 @@ class PressaoPlugin_Shortcode {
                             
                             <?php if ($show_actions === 'yes') : ?>
                                 <div class="pressao-alvo-actions">
-                                    <?php if ($action_state) : ?>
+                                    <?php if ($action_realizada) : ?>
                                         <span class="pressao-action-done">
                                             <?php echo esc_html($action_done_label); ?>
                                             <span class="pressao-action-time">
-                                                <?php echo $this->format_action_time($action_state); ?>
+                                                <?php echo esc_html($this->format_action_time($action_state)); ?>
                                             </span>
                                         </span>
                                     <?php else : ?>
@@ -316,6 +332,15 @@ class PressaoPlugin_Shortcode {
                             <?php endif; ?>
                         </div>
                         
+                        <?php if ($show_template === 'yes' && $alvo_template) : ?>
+                            <details class="pressao-alvo-template">
+                                <summary><?php echo esc_html($alvo_template['titulo']); ?></summary>
+                                <div class="pressao-alvo-template-corpo">
+                                    <?php echo wp_kses_post($alvo_template['conteudo']); ?>
+                                </div>
+                            </details>
+                        <?php endif; ?>
+
                         <?php if (!empty($alvo['metadados'])) : ?>
                             <div class="pressao-alvo-metadados">
                                 <small><?php esc_html_e('Metadados:', 'pressao-plugin'); ?></small>
@@ -341,17 +366,35 @@ class PressaoPlugin_Shortcode {
      * Verifica se o usuário já fez ação para um alvo
      */
     private function get_alvo_action_state($alvo_id) {
-        $actions = isset($_COOKIE['pressao_acoes_realizadas']) 
-            ? json_decode(stripslashes($_COOKIE['pressao_acoes_realizadas']), true) 
-            : [];
-        
+        $actions = $this->get_acoes_from_cookie();
         return isset($actions[$alvo_id]) ? $actions[$alvo_id] : false;
     }
 
     /**
-     * Formata o tempo da ação
+     * Ação realizada: automática já conta; canal manual só após confirmação.
+     * Pendentes (AGUARDANDO_ACAO_HUMANA) ainda não entram no progresso.
+     */
+    private function is_acao_realizada($action_state) {
+        if (!is_array($action_state)) {
+            return false;
+        }
+        $status = $action_state['status'] ?? 'CONCLUIDA';
+        return $status !== 'AGUARDANDO_ACAO_HUMANA';
+    }
+
+    /**
+     * Formata o tempo da ação.
+     * Aceita timestamp int ou o objeto completo da ação no cookie.
      */
     private function format_action_time($timestamp) {
+        if (is_array($timestamp)) {
+            $timestamp = isset($timestamp['timestamp']) ? $timestamp['timestamp'] : 0;
+        }
+        $timestamp = intval($timestamp);
+        if ($timestamp <= 0) {
+            return __('agora', 'pressao-plugin');
+        }
+
         $diff = time() - $timestamp;
         
         if ($diff < 60) {
@@ -366,6 +409,120 @@ class PressaoPlugin_Shortcode {
             $days = floor($diff / 86400);
             return sprintf(_n('%d dia', '%d dias', $days, 'pressao-plugin'), $days);
         }
+    }
+
+    /**
+     * Renderiza o contador de ações confirmadas da campanha.
+     */
+    public function render_contador($atts) {
+        $atts = shortcode_atts([
+            'campaign' => get_option('pressao_campaign_id', ''),
+            'label' => __('ações confirmadas', 'pressao-plugin'),
+            'class' => '',
+            'id' => 'pressao-contador-' . uniqid(),
+        ], $atts, 'pressao_contador');
+
+        $campanha_id = sanitize_text_field($atts['campaign']);
+        if (empty($campanha_id)) {
+            return '<p class="pressao-error">' . esc_html__('ID da campanha não informado', 'pressao-plugin') . '</p>';
+        }
+
+        $result = $this->api->get_acoes_confirmadas_count($campanha_id, 60);
+        if (is_wp_error($result)) {
+            return '<p class="pressao-error">' . esc_html($result->get_error_message()) . '</p>';
+        }
+        $count = $result['count'];
+        $formatted = number_format($count, 0, ',', '.');
+
+        ob_start();
+        ?>
+        <div id="<?php echo esc_attr($atts['id']); ?>"
+             class="pressao-acoes-counter <?php echo esc_attr($atts['class']); ?>"
+             data-campaign="<?php echo esc_attr($campanha_id); ?>">
+            <span class="pressao-acoes-count" data-count="<?php echo esc_attr($count); ?>">
+                <?php echo esc_html($formatted); ?>
+            </span>
+            <span class="pressao-acoes-label"><?php echo esc_html($atts['label']); ?></span>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Renderiza a barra de progresso pessoal do ativista (baseada no cookie).
+     */
+    public function render_progresso($atts) {
+        $atts = shortcode_atts([
+            'campaign' => get_option('pressao_campaign_id', ''),
+            'label' => __('seu progresso', 'pressao-plugin'),
+            'class' => '',
+            'id' => 'pressao-progresso-' . uniqid(),
+        ], $atts, 'pressao_progresso');
+
+        $campanha_id = sanitize_text_field($atts['campaign']);
+        if (empty($campanha_id)) {
+            return '<p class="pressao-error">' . esc_html__('ID da campanha não informado', 'pressao-plugin') . '</p>';
+        }
+
+        $result = $this->api->get_alvos_cached($campanha_id, [], 300);
+        if (is_wp_error($result)) {
+            return '<p class="pressao-error">' . esc_html($result->get_error_message()) . '</p>';
+        }
+
+        $alvos = (!empty($result['success']) && !empty($result['data'])) ? $result['data'] : [];
+        if (!is_array($alvos)) {
+            $alvos = [];
+        }
+
+        $alvo_ids = [];
+        foreach ($alvos as $alvo) {
+            if (!empty($alvo['id'])) {
+                $alvo_ids[] = $alvo['id'];
+            }
+        }
+
+        $total = count($alvo_ids);
+        $actions = $this->get_acoes_from_cookie();
+        $done = 0;
+        foreach ($alvo_ids as $alvo_id) {
+            if ($this->is_acao_realizada($actions[$alvo_id] ?? null)) {
+                $done++;
+            }
+        }
+
+        $pct = $total > 0 ? min(100, (int) round(($done / $total) * 100)) : 0;
+        $alvo_ids_attr = implode(',', $alvo_ids);
+
+        ob_start();
+        ?>
+        <div id="<?php echo esc_attr($atts['id']); ?>"
+             class="pressao-progresso <?php echo esc_attr($atts['class']); ?>"
+             data-campaign="<?php echo esc_attr($campanha_id); ?>"
+             data-alvo-ids="<?php echo esc_attr($alvo_ids_attr); ?>"
+             data-total="<?php echo esc_attr($total); ?>"
+             data-done="<?php echo esc_attr($done); ?>">
+            <div class="pressao-progresso-track" role="progressbar"
+                 aria-valuemin="0"
+                 aria-valuemax="<?php echo esc_attr($total); ?>"
+                 aria-valuenow="<?php echo esc_attr($done); ?>">
+                <div class="pressao-progresso-bar" style="width: <?php echo esc_attr($pct); ?>%;"></div>
+            </div>
+            <span class="pressao-progresso-text"><?php echo esc_html($done . ' / ' . $total); ?></span>
+            <span class="pressao-progresso-label"><?php echo esc_html($atts['label']); ?></span>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Lê o mapa de ações realizadas do cookie do navegador.
+     */
+    private function get_acoes_from_cookie() {
+        if (!isset($_COOKIE['pressao_acoes_realizadas'])) {
+            return [];
+        }
+        $actions = json_decode(stripslashes($_COOKIE['pressao_acoes_realizadas']), true);
+        return is_array($actions) ? $actions : [];
     }
 }
 

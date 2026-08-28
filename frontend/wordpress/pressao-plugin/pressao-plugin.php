@@ -113,7 +113,8 @@ final class PressaoPlugin {
         $has_shortcode = has_shortcode($post->post_content, 'pressao_widget') ||
                          has_shortcode($post->post_content, 'pressao_form') ||
                          has_shortcode($post->post_content, 'pressao_list') ||
-                         has_shortcode($post->post_content, 'pressao_alvos');
+                         has_shortcode($post->post_content, 'pressao_alvos') ||
+                         has_shortcode($post->post_content, 'pressao_contador');
         
         if ($has_shortcode) {
             wp_enqueue_style(
@@ -147,6 +148,7 @@ final class PressaoPlugin {
                 'ativistaTelefoneLabel' => get_option('pressao_ativista_telefone_label', __('Telefone', 'pressao-plugin')),
                 'ativistaSaveButton' => get_option('pressao_ativista_save_button', __('Salvar e continuar', 'pressao-plugin')),
                 'confirmInterval' => get_option('pressao_ativista_confirm_interval', 10),
+                'sessionDuration' => get_option('pressao_session_duration', '86400'),
             ]);
         }
     }

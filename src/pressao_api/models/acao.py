@@ -20,6 +20,7 @@ class Acao(Base):
     ativista_email = Column(String(200), nullable=True, index=True)
     ativista_telefone = Column(String(20), nullable=True, index=True)
     anonimo = Column(Boolean, nullable=False, default=False)
+    sessao_id = Column(String(36), nullable=True, index=True)
 
     # Ação
     campanha_id = Column(UUID(as_uuid=True), nullable=False, index=True)
@@ -50,6 +51,8 @@ class Acao(Base):
         Enum("suspeita", "alta", "media", "baixa", name="metrica_qualidade"), nullable=True
     )
     tempo_resposta_seg = Column(Integer, nullable=True)
+
+    ativista_preenchido = Column(Boolean, nullable=True, default=None)
 
     confirmado_em = Column(DateTime, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)

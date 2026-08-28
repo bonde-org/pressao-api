@@ -702,3 +702,87 @@
     background: #3a1a1a;
     color: #df8f8f;
 }
+
+/* Contador de ações confirmadas */
+.pressao-acoes-counter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 1rem;
+}
+
+.pressao-acoes-count {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.pressao-acoes-label {
+    font-size: 0.875rem;
+    color: #666;
+    text-transform: lowercase;
+}
+
+/* Progresso pessoal do ativista (cookie) */
+.pressao-progresso {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 28rem;
+    padding: 0.75rem 0;
+}
+
+.pressao-progresso-track {
+    width: 100%;
+    height: 0.75rem;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.pressao-progresso-bar {
+    height: 100%;
+    width: 0;
+    background: #16a34a;
+    border-radius: 999px;
+    transition: width 0.45s ease;
+}
+
+.pressao-progresso-text {
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #166534;
+}
+
+.pressao-progresso-label {
+    font-size: 0.875rem;
+    color: #666;
+    text-transform: lowercase;
+}
+
+/* Preview do template sorteado (show_template="yes") */
+.pressao-alvo-template {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    background: #f9fafb;
+}
+
+.pressao-alvo-template > summary {
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.pressao-alvo-template-corpo {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #4b5563;
+}

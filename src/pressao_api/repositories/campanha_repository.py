@@ -1,8 +1,9 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pressao_api.models.acao import Acao
 from pressao_api.models.campanha import Campanha
 
 
@@ -53,3 +54,33 @@ class CampanhaRepository:
         await self.session.delete(campanha)
         await self.session.flush()
         return True
+
+    async def incrementar_acoes_confirmadas(self, campanha_id: UUID) -> int:
+        stmt = (
+            update(Campanha)
+            .where(Campanha.id == campanha_id)
+            .values(acoes_confirmadas=Campanha.acoes_confirmadas + 1)
+            .returning(Campanha.acoes_confirmadas)
+        )
+        result = await self.session.execute(stmt)
+        valor = result.scalar_one()
+        await self.session.flush()
+        return int(valor)
+
+    async def contar_acoes_confirmadas_real(self, campanha_id: UUID) -> int:
+        stmt = select(func.count()).where(
+            Acao.campanha_id == campanha_id,
+            Acao.status == "CONCLUIDA",
+        )
+        result = await self.session.execute(stmt)
+        return int(result.scalar_one())
+
+    async def reconciliar_acoes_confirmadas(self, campanha_id: UUID) -> tuple[int, int]:
+        campanha = await self.buscar_por_id(campanha_id)
+        if not campanha:
+            return (0, 0)
+        antes = int(campanha.acoes_confirmadas or 0)
+        depois = await self.contar_acoes_confirmadas_real(campanha_id)
+        campanha.acoes_confirmadas = depois
+        await self.session.flush()
+        return (antes, depois)

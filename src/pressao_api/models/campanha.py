@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, String, Text
+from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 
 from pressao_api.core.database import Base
@@ -15,6 +15,7 @@ class Campanha(Base):
     descricao = Column(Text, nullable=True)
     dominios_permitidos = Column(JSON, nullable=True, default=list)
     ativa = Column(Boolean, default=True)
+    acoes_confirmadas = Column(BigInteger, default=0, nullable=False)
 
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
