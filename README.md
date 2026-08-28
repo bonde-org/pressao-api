@@ -162,6 +162,7 @@ curl -X POST http://localhost:8000/api/v1/acoes/ \
 - Alembic - Migrações de banco de dados
 - Pydantic - Validação de dados
 - UV - Gerenciador de pacotes rápido
+- SendGrid - Envio de e-mails de pressão
 
 ### Infraestrutura
 
@@ -280,6 +281,9 @@ make docker-down
 | `KEYCLOAK_CLIENT_ID` | Client ID do Keycloak | `pressao-api` |
 | `KEYCLOAK_CLIENT_SECRET` | Client Secret do Keycloak | `seu-secret` |
 | `SENDGRID_API_KEY` | API Key do SendGrid | `SG.xxxxx` |
+| `SENDGRID_SANDBOX_MODE` | Se `true`, não entrega e-mails reais | `true` |
+| `SENDGRID_WEBHOOK_VERIFICATION_KEY` | Chave pública ECDSA do Event Webhook | `MFkwEwYH...` |
+| `SENDGRID_WEBHOOK_URL` | URL pública do webhook | `https://seu-dominio/api/v1/webhooks/sendgrid` |
 | `TWILIO_ACCOUNT_SID` | SID da conta Twilio | `ACxxxxx` |
 | `TWILIO_AUTH_TOKEN` | Token de autenticação Twilio | `xxxxx` |
 | `LOG_LEVEL` | Nível de log | `INFO` / `DEBUG` |
@@ -352,6 +356,19 @@ Content-Type: application/json
 ```http
 GET /api/v1/acoes/{acao_id}
 Authorization: Bearer {token_jwt}
+```
+
+**Webhook SendGrid** (sem JWT; autenticação por assinatura ECDSA)
+
+```http
+POST /api/v1/webhooks/sendgrid
+Content-Type: application/json
+X-Twilio-Email-Event-Webhook-Signature: {assinatura}
+X-Twilio-Email-Event-Webhook-Timestamp: {timestamp}
+
+[
+  {"event": "delivered", "acao_id": "550e8400-e29b-41d4-a716-446655440003"}
+]
 ```
 
 **Obter Status da Ação**
@@ -472,6 +489,132 @@ Ativista → POST /api/acoes → Backend registra → Gera link/texto →
 | WhatsApp | Manual (Link) | `REDIRECIONAR_LINK` | Manual (PATCH /confirmar) | 5s - 60s |
 | Instagram | Manual (Texto) | `EXIBIR_TEXTO_E_ABRIR_PERFIL` | Manual (PATCH /confirmar) | 5s - 60s |
 
+## 📧 Ação de Pressão por E-mail (SendGrid)
+
+O canal `email` dispara a mensagem via SendGrid quando a ação é criada (`POST /api/v1/acoes/` com `"canal": "email"`).
+
+**Papéis no e-mail**
+
+| Campo SMTP | Quem | Origem |
+|------------|------|--------|
+| Remetente (`From` / `Reply-To`) | Ativista | `ativista.email` e `ativista.nome` (ou claims do JWT) |
+| Destinatário (`To`) | Alvo | `alvo.contato` e `alvo.nome` |
+
+Ação anônima **não** dispara e-mail: o canal exige e-mail do ativista como remetente.
+
+O orquestrador chama `EmailService.enviar_pressao`, grava `message_id` em `proximo_passo_dados` e aguarda o Event Webhook para marcar a ação como `CONCLUIDA` ou `FALHA`.
+
+> O SendGrid só entrega se o domínio do e-mail do ativista estiver autorizado na conta (Single Sender ou Domain Authentication). Sem isso o envio real pode ser rejeitado mesmo com From correto.
+
+### Configuração
+
+1. Crie uma API Key em [SendGrid → Settings → API Keys](https://app.sendgrid.com/settings/api_keys) com permissão de envio.
+2. Autentique o domínio (ou remetentes) que os ativistas usarão.
+3. Preencha o `.env` (veja `.env.example`):
+
+```bash
+SENDGRID_API_KEY=SG.xxxxx
+SENDGRID_SANDBOX_MODE=true
+SENDGRID_WEBHOOK_VERIFICATION_KEY=
+SENDGRID_WEBHOOK_URL=https://seu-dominio/api/v1/webhooks/sendgrid
+```
+
+**Sandbox**
+
+| `SENDGRID_SANDBOX_MODE` | API Key | Comportamento |
+|-------------------------|---------|---------------|
+| `true` | placeholder (`mock-key`, `test-key`) | Dry-run local: **não** chama a API; retorna `sandbox-{uuid}` |
+| `true` | chave real (`SG....`) | Chama a API com `sandbox_mode` do SendGrid (não entrega) |
+| `false` | chave real | Envio real |
+
+Em desenvolvimento e no Docker o padrão é `SENDGRID_SANDBOX_MODE=true`.
+
+### Como usar
+
+Não há endpoint separado de e-mail: o disparo ocorre ao criar a ação no canal email.
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/realms/pressao/protocol/openid-connect/token \
+  -d "client_id=pressao-api" \
+  -d "client_secret=SEU_SECRET" \
+  -d "grant_type=client_credentials" | jq -r '.access_token')
+
+curl -X POST http://localhost:8000/api/v1/acoes/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campanha_id": "550e8400-e29b-41d4-a716-446655440000",
+    "alvo_id": "550e8400-e29b-41d4-a716-446655440001",
+    "canal": "email",
+    "anonimo": false,
+    "ativista": {"nome": "Maria Silva", "email": "maria@email.com"}
+  }'
+```
+
+Resposta esperada: `status_atual: PROCESSANDO`, `proximo_passo.tipo: WEBHOOK_AGUARDAR`, com `message_id` e `sandbox` em `proximo_passo.dados`.
+
+Uso direto do serviço (testes ou scripts):
+
+```python
+from pressao_api.services.email_service import email_service
+
+resultado = email_service.enviar_pressao(
+    destinatario="alvo@orgao.gov.br",
+    remetente_email="maria@email.com",
+    remetente_nome="Maria Silva",
+    assunto="Pressão: Campanha X",
+    conteudo_html="<p>Olá {nome}</p>",
+    acao_id="550e8400-e29b-41d4-a716-446655440003",
+    campanha_id="550e8400-e29b-41d4-a716-446655440000",
+    dados_dinamicos={"nome": "Deputado"},
+)
+# resultado.message_id, resultado.sandbox, resultado.status
+```
+
+O HTML padrão é montado por `EmailService.montar_template_pressao` com nome do alvo, campanha e assinatura do ativista.
+
+### Webhook
+
+Endpoint: `POST /api/v1/webhooks/sendgrid` (público; **não** usa JWT).
+
+1. No SendGrid: **Settings → Mail Settings → Event Webhook**.
+2. URL: `https://seu-dominio/api/v1/webhooks/sendgrid`.
+3. Eventos: pelo menos `delivered`, `bounce`, `dropped`, `spamreport`, `blocked` (opcional: `open`, `click`).
+4. Ative **Signed Event Webhook** e copie a chave pública para `SENDGRID_WEBHOOK_VERIFICATION_KEY`.
+5. Em production a chave é **obrigatória**. Em development, webhook sem chave é aceito (com warning no log).
+
+O SendGrid devolve `acao_id` via `custom_args` gravados no envio.
+
+| Evento | Efeito na ação |
+|--------|----------------|
+| `delivered` | `CONCLUIDA` (somente se estava `PROCESSANDO`) |
+| `bounce`, `dropped`, `blocked`, `spamreport` | `FALHA` |
+| `processed`, `open`, `click`, … | apenas log / `ultimo_evento` |
+
+**Teste local com ngrok**
+
+```bash
+ngrok http 8000
+# No SendGrid, use: https://xxxx.ngrok.io/api/v1/webhooks/sendgrid
+
+# Simular delivered (development, sem assinatura):
+curl -X POST http://localhost:8000/api/v1/webhooks/sendgrid \
+  -H "Content-Type: application/json" \
+  -d '[{"event":"delivered","acao_id":"UUID-DA-ACAO"}]'
+```
+
+### Testes
+
+```bash
+# Unidade: envio, sandbox, validação, orquestrador e webhook
+uv run python -m pytest tests/unit/test_email_service.py tests/unit/test_webhook_sendgrid.py tests/unit/test_acoes.py -v
+
+# Integração: POST /api/v1/webhooks/sendgrid
+uv run python -m pytest tests/integration/test_api_webhook_sendgrid.py -v
+```
+
+A API do SendGrid é mockada nos testes; com `SENDGRID_API_KEY=test-key` o sandbox faz dry-run e **não** envia e-mail.
+
 ### Métricas de Qualidade
 
 | Tempo de Resposta | Classificação | Significado |
@@ -494,6 +637,9 @@ make test-cov
 
 # Testes específicos
 pytest tests/unit/test_acoes.py -v
+
+# SendGrid (envio, sandbox, webhook)
+pytest tests/unit/test_email_service.py tests/unit/test_webhook_sendgrid.py tests/integration/test_api_webhook_sendgrid.py -v
 ```
 
 ### Cobertura de Testes
@@ -569,6 +715,24 @@ docker exec -it pressao-api-1 alembic upgrade head
 - `ALLOWED_ORIGINS` = Lista de domínios permitidos
 - Certificados SSL/HTTPS configurados
 - Variáveis de banco de dados de produção
+
+### Kubernetes (Helm)
+
+Chart em [`helm/`](helm/) (`Chart.yaml`, `values.yaml`, `templates/`). PostgreSQL via CloudNativePG e ServiceMonitor (kube-prometheus-stack) são **opcionais e desligados por padrão**. Guia completo: [CHART.md](helm/CHART.md).
+
+```bash
+# Banco externo (padrão)
+helm upgrade --install pressao-api ./helm \
+  --set secrets.DATABASE_URL='postgresql://user:pass@host:5432/pressao'
+
+# Banco gerenciado pelo CNPG
+helm upgrade --install pressao-api ./helm -f helm/values-dev.yaml
+
+# Métricas no Prometheus Operator (path /api/metrics)
+helm upgrade --install pressao-api ./helm --set serviceMonitor.enabled=true
+```
+
+GitOps: exemplo Argo CD em [`argocd/application.yaml`](argocd/application.yaml) (produção com ServiceMonitor e banco externo).
 
 ## 🤝 Contribuição
 

@@ -1,0 +1,18 @@
+apiVersion: v2
+name: pressao-api
+description: API orquestradora de ações de pressão multicanal (CNPG opcional)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.25.0-0"
+keywords:
+  - pressao
+  - fastapi
+  - postgresql
+  - cnpg
+annotations:
+  artifacthub.io/operator: "false"
+home: https://github.com/bonde-org/pressao-api
+maintainers:
+  - name: Igor Santos
+    email: igor@aztrid.tech

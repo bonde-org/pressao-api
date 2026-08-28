@@ -1,0 +1,25 @@
+1. A API estará disponível internamente em:
+   http://{{ include "pressao-api.fullname" . }}:{{ .Values.service.port }}
+
+{{- if .Values.ingress.enabled }}
+2. Ingress: http{{ if .Values.ingress.tls }}s{{ end }}://{{ (index .Values.ingress.hosts 0).host }}
+{{- end }}
+
+3. Banco de dados:
+{{- if .Values.database.enabled }}
+   CloudNativePG ATIVO.
+   Cluster: {{ include "pressao-api.cnpg.clusterName" . }}
+   Serviço RW: {{ include "pressao-api.cnpg.clusterName" . }}-rw
+   Secret da aplicação (DATABASE_URL / uri): {{ include "pressao-api.databaseSecretName" . }}
+   Aguarde o cluster ficar Ready antes das migrações:
+     kubectl wait --for=condition=Ready cluster/{{ include "pressao-api.cnpg.clusterName" . }} --timeout=300s
+{{- else }}
+   CloudNativePG DESLIGADO. DATABASE_URL vem do Secret
+   {{ include "pressao-api.databaseSecretName" . }} (chave {{ include "pressao-api.databaseSecretKey" . }}).
+{{- end }}
+
+4. Rode as migrações Alembic:
+   kubectl exec -it deploy/{{ include "pressao-api.fullname" . }} -- alembic upgrade head
+
+5. Credenciais no values.yaml NÃO devem ir para produção.
+   Use SealedSecrets ou ExternalSecrets (veja CHART.md).

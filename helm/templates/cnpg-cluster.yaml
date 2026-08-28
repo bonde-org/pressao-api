@@ -1,0 +1,62 @@
+{{- if .Values.database.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "pressao-api.cnpg.clusterName" . }}
+  labels:
+    {{- include "pressao-api.labels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.database.instances }}
+  imageName: {{ .Values.database.imageName | quote }}
+  enableSuperuserAccess: {{ .Values.database.enableSuperuserAccess }}
+  {{- if .Values.database.enableSuperuserAccess }}
+  superuserSecret:
+    name: {{ include "pressao-api.cnpg.superuserSecretName" . }}
+  {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.database.database | quote }}
+      owner: {{ .Values.database.owner | quote }}
+  storage:
+    size: {{ .Values.database.storage.size | quote }}
+    {{- if .Values.database.storage.storageClass }}
+    storageClass: {{ .Values.database.storage.storageClass | quote }}
+    {{- end }}
+  {{- if .Values.database.walStorage.enabled }}
+  walStorage:
+    size: {{ .Values.database.walStorage.size | quote }}
+    {{- if .Values.database.walStorage.storageClass }}
+    storageClass: {{ .Values.database.walStorage.storageClass | quote }}
+    {{- end }}
+  {{- end }}
+  resources:
+    {{- toYaml .Values.database.resources | nindent 4 }}
+  postgresql:
+    parameters:
+      {{- toYaml .Values.database.postgresql.parameters | nindent 6 }}
+  monitoring:
+    enablePodMonitor: {{ .Values.database.monitoring.enablePodMonitor }}
+  {{- if .Values.database.backup.clusterPlugin.enabled }}
+  plugins:
+    - name: {{ .Values.database.backup.clusterPlugin.name | quote }}
+      isWALArchiver: {{ .Values.database.backup.clusterPlugin.isWALArchiver }}
+      {{- with .Values.database.backup.clusterPlugin.parameters }}
+      parameters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- end }}
+  {{- if or .Values.database.nodeSelector .Values.database.tolerations .Values.database.affinity }}
+  affinity:
+    {{- with .Values.database.nodeSelector }}
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.database.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.database.affinity }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

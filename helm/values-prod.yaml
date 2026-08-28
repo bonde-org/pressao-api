@@ -1,0 +1,90 @@
+# Overlay de produção: 3 instâncias CNPG, backups, secrets externos.
+# NÃO coloque senhas neste arquivo. Use SealedSecrets ou ExternalSecrets.
+# helm upgrade --install pressao-api ./helm -f helm/values.yaml -f helm/values-prod.yaml
+
+replicaCount: 3
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+config:
+  APP_ENV: production
+  DEBUG: "false"
+  LOG_LEVEL: INFO
+  SENDGRID_SANDBOX_MODE: "false"
+
+# Credenciais da API: Secret pré-existente (sem DATABASE_URL se CNPG estiver ativo).
+secrets:
+  existingSecret: pressao-api-app-prod
+
+database:
+  enabled: true
+  instances: 3
+  storage:
+    size: 50Gi
+  walStorage:
+    enabled: true
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "512MB"
+  monitoring:
+    enablePodMonitor: true
+  nodeSelector: {}
+  backup:
+    enabled: true
+    schedule: "0 0 2 * * *"
+    method: plugin
+    immediate: false
+    target: prefer-standby
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+    clusterPlugin:
+      enabled: true
+      name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: pressao-pg-backup-prod
+  # Superuser: crie o Secret basic-auth antes e aponte o nome.
+  # Alternativa: deixe o chart criar o Secret e injete a senha via --set-file
+  # ou ExternalSecret gerando o mesmo nome.
+  enableSuperuserAccess: true
+  superuser:
+    createSecret: false
+    secretName: pressao-pg-superuser-prod
+    username: postgres
+
+serviceMonitor:
+  enabled: true
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: pressao-api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: pressao-api-tls
+      hosts:
+        - pressao-api.example.com

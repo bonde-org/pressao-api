@@ -24,6 +24,9 @@ class Settings(BaseSettings):
 
     # Providers
     SENDGRID_API_KEY: str
+    SENDGRID_SANDBOX_MODE: bool = True
+    SENDGRID_WEBHOOK_VERIFICATION_KEY: str = ""
+    SENDGRID_WEBHOOK_URL: str = "/api/v1/webhooks/sendgrid"
     TWILIO_ACCOUNT_SID: str
     TWILIO_AUTH_TOKEN: str
 

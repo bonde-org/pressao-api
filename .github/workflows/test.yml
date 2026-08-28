@@ -37,6 +37,7 @@ jobs:
           KEYCLOAK_CLIENT_ID: "pressao-api"
           KEYCLOAK_CLIENT_SECRET: "test-secret"
           SENDGRID_API_KEY: "test-key"
+          SENDGRID_SANDBOX_MODE: "true"
           TWILIO_ACCOUNT_SID: "test-sid"
           TWILIO_AUTH_TOKEN: "test-token"
         run: |

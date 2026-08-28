@@ -170,8 +170,12 @@ async def criar_acao(
         acao = await repo.criar(acao_data)
 
         try:
-            acao = await orquestrador.executar(acao)
+            acao = await orquestrador.executar(acao, alvo=alvo, campanha=campanha)
             await repo.salvar(acao)
+        except ValueError as e:
+            logger.error("Falha ao executar ação", error=str(e))
+            await repo.salvar(acao)
+            raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:  # noqa
             logger.error("Falha ao executar ação", error=str(e))
             await repo.salvar(acao)
@@ -320,10 +324,10 @@ async def confirmar_acao(
 
     await repo.salvar(acao)
 
-    acoes_tempo_confirmacao_seconds.labels(canal=acao.canal, campanha_id=acao.campanha_id).observe(
-        tempo_resposta
-    )
-    acoes_aguardando_confirmacao.labels(campanha_id=acao.campanha_id, canal=acao.canal).dec()
+    acoes_tempo_confirmacao_seconds.labels(
+        canal=acao.canal, campanha_id=str(acao.campanha_id)
+    ).observe(tempo_resposta)
+    acoes_aguardando_confirmacao.labels(campanha_id=str(acao.campanha_id), canal=acao.canal).dec()
 
     logger.info(
         "Ação confirmada",

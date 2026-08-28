@@ -1,10 +1,14 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
 from pressao_api.models.acao import Acao
+from pressao_api.models.alvo import Alvo
+from pressao_api.models.campanha import Campanha
 from pressao_api.schemas.acao import CanalEnum, ProximoPassoTipoEnum, StatusAcaoEnum
+from pressao_api.schemas.email import ResultadoEnvioEmail
 from pressao_api.services.metricas import CalculadoraMetricas
 from pressao_api.services.orquestrador import OrquestradorCanais
 
@@ -45,7 +49,53 @@ class TestOrquestrador:
 
     @pytest.mark.asyncio
     async def test_estrategia_email(self):
-        """Testa estratégia de email."""
+        """Testa estratégia de email disparando o EmailService."""
+        campanha_id = uuid4()
+        acao = Acao(
+            id=uuid4(),
+            ativista_id="test",
+            campanha_id=campanha_id,
+            alvo_id=uuid4(),
+            canal=CanalEnum.EMAIL,
+            ativista_email="ativista@email.com",
+            ativista_nome="Ativista Teste",
+        )
+        alvo = Alvo(
+            id=acao.alvo_id,
+            nome="Alvo Email",
+            contato="alvo@email.com",
+            tipo_contato="email",
+            campanha_id=campanha_id,
+        )
+        campanha = Campanha(id=campanha_id, nome="Campanha Email")
+        resultado = ResultadoEnvioEmail(
+            sucesso=True,
+            message_id="sandbox-123",
+            sandbox=True,
+            status="sandbox",
+            destinatario="alvo@email.com",
+        )
+
+        orquestrador = OrquestradorCanais()
+        with patch(
+            "pressao_api.services.orquestrador.email_service.enviar_pressao",
+            return_value=resultado,
+        ) as mock_enviar:
+            await orquestrador.executar(acao, alvo=alvo, campanha=campanha)
+
+        mock_enviar.assert_called_once()
+        kwargs = mock_enviar.call_args.kwargs
+        assert kwargs["destinatario"] == "alvo@email.com"
+        assert kwargs["remetente_email"] == "ativista@email.com"
+        assert kwargs["acao_id"] == str(acao.id)
+        assert "Pressão" in kwargs["assunto"]
+        assert acao.status == StatusAcaoEnum.PROCESSANDO
+        assert acao.proximo_passo_tipo == ProximoPassoTipoEnum.WEBHOOK_AGUARDAR
+        assert acao.proximo_passo_dados["provider"] == "sendgrid"
+        assert acao.proximo_passo_dados["message_id"] == "sandbox-123"
+
+    @pytest.mark.asyncio
+    async def test_estrategia_email_sem_alvo_falha(self):
         acao = Acao(
             id=uuid4(),
             ativista_id="test",
@@ -53,12 +103,35 @@ class TestOrquestrador:
             alvo_id=uuid4(),
             canal=CanalEnum.EMAIL,
         )
-
         orquestrador = OrquestradorCanais()
-        await orquestrador.executar(acao)
+        with pytest.raises(ValueError, match="Alvo com e-mail"):
+            await orquestrador.executar(acao)
 
-        assert acao.status == StatusAcaoEnum.PROCESSANDO
-        assert acao.proximo_passo_tipo == ProximoPassoTipoEnum.WEBHOOK_AGUARDAR
+        assert acao.status == StatusAcaoEnum.FALHA
+
+    @pytest.mark.asyncio
+    async def test_estrategia_email_sem_remetente_falha(self):
+        campanha_id = uuid4()
+        acao = Acao(
+            id=uuid4(),
+            campanha_id=campanha_id,
+            alvo_id=uuid4(),
+            canal=CanalEnum.EMAIL,
+            anonimo=True,
+            ativista_email=None,
+        )
+        alvo = Alvo(
+            id=acao.alvo_id,
+            nome="Alvo Email",
+            contato="alvo@email.com",
+            tipo_contato="email",
+            campanha_id=campanha_id,
+        )
+        orquestrador = OrquestradorCanais()
+        with pytest.raises(ValueError, match="e-mail do ativista"):
+            await orquestrador.executar(acao, alvo=alvo)
+
+        assert acao.status == StatusAcaoEnum.FALHA
 
     @pytest.mark.asyncio
     async def test_estrategia_whatsapp(self):

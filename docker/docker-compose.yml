@@ -1,4 +1,5 @@
 services:
+  # FastAPI (API)
   api:
     build:
       context: ..
@@ -13,6 +14,9 @@ services:
       - KEYCLOAK_CLIENT_ID=pressao-api
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-mock-secret}
       - SENDGRID_API_KEY=${SENDGRID_API_KEY:-mock-key}
+      - SENDGRID_SANDBOX_MODE=${SENDGRID_SANDBOX_MODE:-true}
+      - SENDGRID_WEBHOOK_VERIFICATION_KEY=${SENDGRID_WEBHOOK_VERIFICATION_KEY:-}
+      - SENDGRID_WEBHOOK_URL=${SENDGRID_WEBHOOK_URL:-http://localhost:8000/api/v1/webhooks/sendgrid}
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-mock-sid}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-mock-token}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
@@ -35,7 +39,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - ./postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pressao"]
       interval: 5s
@@ -79,6 +83,73 @@ services:
       - grafana_data:/var/lib/grafana
     restart: unless-stopped
 
+  # Wordpress (plugin)
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${WORDPRESS_DB_NAME}
+      MYSQL_USER: ${WORDPRESS_DB_USER}
+      MYSQL_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${WORDPRESS_DB_ROOT_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # WordPress + PHP-FPM
+  wordpress:
+    build:
+      context: ./wordpress
+      dockerfile: Dockerfile
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      WORDPRESS_DB_HOST: mysql:3306
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      WORDPRESS_DEBUG: ${WORDPRESS_DEBUG}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_DEBUG', ${WORDPRESS_DEBUG});
+        define('WP_DEBUG_LOG', ${WORDPRESS_DEBUG_LOG});
+        define('WP_DEBUG_DISPLAY', ${WORDPRESS_DEBUG_DISPLAY});
+        define('SCRIPT_DEBUG', ${SCRIPT_DEBUG});
+    volumes:
+      - ../frontend/wordpress/pressao-plugin:/var/www/html/wp-content/plugins/pressao-plugin
+      - ./wordpress/themes:/var/www/html/wp-content/themes
+      - ./wordpress/wp-config.php:/var/www/html/wp-config.php
+      - wordpress_data:/var/www/html/wp-content/uploads
+    ports:
+      - "8181:80"
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    platform: linux/amd64
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 100M
+    ports:
+      - "8282:80"
+
+  mailhog:
+    image: mailhog/mailhog
+    platform: linux/amd64
+    ports:
+      - "8025:8025"
+
 volumes:
   postgres_data:
   grafana_data:
+  mysql_data:
+  wordpress_data:
