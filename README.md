@@ -25,6 +25,7 @@ API para orquestração de ações de pressão multicanal, suportando canais aut
 - [Testes](#🧪-testes)
 - [Monitoramento](#📊-monitoramento)
 - [Deploy](#🐳-deploy)
+- [CI / GitHub Actions](#🔄-ci--github-actions)
 - [Contribuição](#🤝-contribuição)
 - [Licença](#📝-licença)
 - [Recursos Adicionais](#📚-recursos-adicionais)
@@ -952,6 +953,55 @@ helm upgrade --install pressao-api ./helm --set serviceMonitor.enabled=true
 ```
 
 GitOps: exemplo Argo CD em [`argocd/application.yaml`](argocd/application.yaml) (produção com ServiceMonitor e banco externo).
+
+## 🔄 CI / GitHub Actions
+
+Pipeline em [`.github/workflows/`](.github/workflows/). O orquestrador é [`ci.yml`](.github/workflows/ci.yml): **lint → test → docker-build** (este último só em push para `main` / `develop` / tags `v*`).
+
+```text
+push / PR
+   │
+   ├─ lint.yml   → Ruff + Ruff format check + Mypy
+   ├─ test.yml   → pytest + cobertura (Codecov)
+   │
+   └─ docker-build.yml  (apenas push em main/develop/tags)
+         ├─ build + push da imagem no Docker Hub
+         │     tags: <branch>, <sha8>, latest
+         └─ em main/develop: atualiza helm/values.yaml (image.tag = sha8),
+            commit "chore: update image tag … [skip ci]" e push
+            → Argo CD detecta a mudança e sincroniza a nova imagem
+```
+
+`ci.yml` ignora mudanças só em `helm/**` e `**.md` (`paths-ignore`), e o commit do Helm usa `[skip ci]`, para não entrar em loop com o bump automático da tag.
+
+### Secrets do repositório
+
+Configure em **Settings → Secrets and variables → Actions**:
+
+| Secret | Obrigatório | Usado em | Descrição |
+|--------|-------------|----------|-----------|
+| `CODECOV_TOKEN` | sim (testes) | `test.yml` | Upload de cobertura no Codecov (`fail_ci_if_error: false`) |
+| `DOCKER_HUB_USERNAME` | sim (build) | `docker-build.yml` | Usuário Docker Hub |
+| `DOCKER_HUB_TOKEN` | sim (build) | `docker-build.yml` | Access Token Docker Hub (não use a senha da conta) |
+| `DOCKER_HUB_REPO` | não | `docker-build.yml` | Repositório da imagem; default `igrsantos/pressao-api` |
+| `GIT_TOKEN` | sim (GitOps) | `docker-build.yml` | PAT com permissão de **conteúdo (write)** no repositório, para o bot commitar `helm/values.yaml` |
+
+Sem `GIT_TOKEN` com escopo de escrita, o build/push da imagem pode funcionar, mas o passo que atualiza o Helm falha e o Argo CD não vê tag nova.
+
+### Fluxo Helm → Argo CD
+
+1. Merge/push em `develop` ou `main` (ou tag `v*`) dispara o CI.
+2. Após lint e testes, a imagem é publicada (`:<branch>`, `:<sha8>`, `:latest`).
+3. Em `main`/`develop`, o workflow faz `sed` em [`helm/values.yaml`](helm/values.yaml) (`image.tag: <sha8>`), commit e push na mesma branch.
+4. O Application do Argo CD (ex.: [`argocd/application.yaml`](argocd/application.yaml)) aponta para o chart neste repo; ao detectar o commit, sincroniza o Deployment com a nova tag.
+
+Para validar localmente o que o CI fará na imagem:
+
+```bash
+make docker-build
+```
+
+Testes de carga (k6) **não** rodam no CI — são manuais (`make load-test`). Ver [Testes de Carga](#testes-de-carga-k6).
 
 ## 🤝 Contribuição
 
