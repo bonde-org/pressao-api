@@ -824,6 +824,51 @@ pytest tests/unit/test_email_service.py tests/unit/test_webhook_sendgrid.py test
 - ✅ Testes de segurança
 - ✅ Testes de validação
 
+### Testes de Carga (k6)
+
+Simulam o fluxo do plugin WordPress contra a API (listar alvos → criar ação → confirmar). O plugin em si não é alvo de carga — o gargalo está na API.
+
+**Pré-requisitos:** [k6](https://grafana.com/docs/k6/latest/set-up/install-k6/) (`brew install k6`), `curl`, `jq`, stack local no ar (`make docker-up`).
+
+```bash
+# Secret do client M2M no Keycloak (obrigatório)
+export KEYCLOAK_CLIENT_SECRET=seu-secret
+
+# 1. Seed: cria campanha, alvos e templates (grava IDs em tests/k6/.env.load-test)
+make load-test-seed
+
+# 2. Smoke (~5 VUs, 1,5 min) — validação rápida
+make load-test SCENARIO=smoke
+
+# 3. Baseline MVP (~200 VUs, 5 min)
+make load-test SCENARIO=load
+
+# Teste maior / stress / spike
+make load-test SCENARIO=stress VUS=500 DURATION=10m
+make load-test SCENARIO=spike
+
+# Relatório Markdown parcial (colar em docs/04-performance-e-escalabilidade.md)
+make load-test-report
+```
+
+| Cenário | Objetivo | Default |
+|---------|----------|---------|
+| `smoke` | Validar setup e auth | 5 VUs, ~1,5 min |
+| `load` | Baseline MVP | 200 VUs, 5 min |
+| `stress` | Encontrar limite | 500 VUs, 10 min |
+| `spike` | Pico súbito | 10→300 VUs |
+
+**Homologação:**
+
+```bash
+export BASE_URL=https://sua-api-homolog.example.com
+export KEYCLOAK_URL=https://seu-keycloak.example.com
+export KEYCLOAK_CLIENT_SECRET=...
+make load-test SCENARIO=load
+```
+
+**Troubleshooting — 100% de falha / 401:** o k6 obtém um JWT fresco no `setup`. Não reutilize `TOKEN` antigo (o JWT do Keycloak local expira em ~5 min). Se `tests/k6/.env.load-test` tiver uma linha `TOKEN=...`, remova-a e rode de novo com `KEYCLOAK_CLIENT_SECRET` exportado. Detalhes em [`tests/k6/README.md`](tests/k6/README.md) e no documento [`docs/04-performance-e-escalabilidade.md`](../docs/04-performance-e-escalabilidade.md).
+
 ## 📊 Monitoramento
 
 ### Logs Estruturados

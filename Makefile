@@ -1,4 +1,4 @@
-.PHONY: help setup install dev test test-cov lint format migrate docker-build docker-up docker-down clean
+.PHONY: help setup install dev test test-cov lint format migrate docker-build docker-up docker-down clean load-test-seed load-test load-test-report
 
 # Variáveis
 VENV = .venv
@@ -19,6 +19,9 @@ help:
 	@echo "  docker-build Build da imagem docker"
 	@echo "  docker-up    Sobe containers docker"
 	@echo "  docker-down  Para containers docker"
+	@echo "  load-test-seed  Prepara campanha/alvos para testes k6"
+	@echo "  load-test       Executa teste de carga (SCENARIO=load|smoke|stress|spike)"
+	@echo "  load-test-report Gera Markdown parcial a partir do último resultado k6"
 	@echo "  clean        Limpa arquivos temporários e cache"
 
 setup:
@@ -88,6 +91,20 @@ docker-down:
 docker-logs:
 	@echo "📋 Logs dos containers..."
 	docker compose -f docker/docker-compose.yml logs -f
+
+load-test-seed:
+	@./scripts/load-test-seed.sh
+
+load-test:
+	@SCENARIO="$(SCENARIO)" VUS="$(VUS)" DURATION="$(DURATION)" RPS="$(RPS)" \
+		SKIP_THRESHOLDS="$(SKIP_THRESHOLDS)" \
+		BASE_URL="$(BASE_URL)" KEYCLOAK_URL="$(KEYCLOAK_URL)" \
+		KEYCLOAK_REALM="$(KEYCLOAK_REALM)" KEYCLOAK_CLIENT_ID="$(KEYCLOAK_CLIENT_ID)" \
+		KEYCLOAK_CLIENT_SECRET="$(KEYCLOAK_CLIENT_SECRET)" \
+		./scripts/run-load-test.sh
+
+load-test-report:
+	@RESULT_DIR="$(RESULT_DIR)" OUTPUT_FILE="$(OUTPUT_FILE)" ./scripts/generate-load-test-report.sh
 
 clean:
 	@echo "🧹 Limpando arquivos temporários..."
