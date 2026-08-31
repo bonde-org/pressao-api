@@ -18,9 +18,7 @@ down_revision: str | Sequence[str] | None = "d4e5f6a7b8c9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-modo_alvo_enum = postgresql.ENUM(
-    "individual", "agregado", name="modoalvo", create_type=False
-)
+modo_alvo_enum = postgresql.ENUM("individual", "agregado", name="modoalvo", create_type=False)
 tipo_acao_enum = postgresql.ENUM("simples", "multi_alvo", name="tipo_acao", create_type=False)
 status_disparo_enum = postgresql.ENUM(
     "ENVIADO", "ENTREGUE", "FALHA", "ERRO_ENVIO", name="status_disparo", create_type=False
