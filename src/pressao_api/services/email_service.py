@@ -137,6 +137,7 @@ class EmailService:
         campanha_id: str | None = None,
         remetente_nome: str | None = None,
         nome_destinatario: str | None = None,
+        disparo_id: str | None = None,
         dados_dinamicos: dict[str, Any] | None = None,
     ) -> ResultadoEnvioEmail:
         """
@@ -167,6 +168,7 @@ class EmailService:
             acao_id=acao_id,
             campanha_id=campanha_id,
             nome_destinatario=nome_destinatario,
+            disparo_id=disparo_id,
         )
 
         sandbox = bool(settings.SENDGRID_SANDBOX_MODE)
@@ -256,6 +258,7 @@ class EmailService:
         acao_id: str,
         campanha_id: str | None,
         nome_destinatario: str | None,
+        disparo_id: str | None = None,
     ) -> Mail:
         mail = Mail(
             from_email=From(remetente_email, remetente_nome or remetente_email),
@@ -264,6 +267,8 @@ class EmailService:
             html_content=HtmlContent(conteudo_html),
         )
         mail.add_custom_arg(CustomArg("acao_id", acao_id))
+        if disparo_id:
+            mail.add_custom_arg(CustomArg("disparo_id", disparo_id))
         if campanha_id:
             mail.add_custom_arg(CustomArg("campanha_id", campanha_id))
 

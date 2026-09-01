@@ -18,6 +18,9 @@ on:
         required: true
       DOCKER_HUB_REPO:
         required: false
+      GIT_TOKEN:
+        description: 'Token para fazer commit no repositório'
+        required: true
 
 jobs:
   docker-build:
@@ -25,6 +28,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_TOKEN }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -69,3 +74,28 @@ jobs:
             docker.io/${{ steps.tags.outputs.repo }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Update Helm values with new image tag
+        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          SHA_SHORT="${{ steps.tags.outputs.sha_short }}"
+          BRANCH_NAME="${{ steps.tags.outputs.branch_tag }}"
+          if [ -f "helm/values.yaml" ]; then
+            echo "Atualizando helm/values.yaml"
+            sed -i "s/tag: .*/tag: ${SHA_SHORT}/g" helm/values.yaml
+          fi
+          git diff
+
+      - name: Commit and push changes
+        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet; then
+            echo "Nenhuma mudança para commitar"
+            exit 0
+          fi
+          git add helm/
+          SHA_SHORT="${{ steps.tags.outputs.sha_short }}"
+          git commit -m "chore: update image tag to ${SHA_SHORT} [skip ci]"
+          git push origin ${{ inputs.branch }}

@@ -35,6 +35,18 @@ class MetricaQualidadeEnum(str, Enum):
     BAIXA = "baixa"
 
 
+class TipoAcaoEnum(str, Enum):
+    SIMPLES = "simples"
+    MULTI_ALVO = "multi_alvo"
+
+
+class DisparosResumoResponse(BaseModel):
+    total: int = 0
+    enviados: int = 0
+    entregues: int = 0
+    falhas: int = 0
+
+
 # Request schemas
 
 
@@ -66,14 +78,20 @@ class CriarAcaoRequest(BaseModel):
 
     ativista: AtivistaInfo | None = None
     anonimo: bool = False
-    sessao_id: str | None = Field(None, max_length=36, description="Identificador único da sessão do navegador (UUID v4)")
+    sessao_id: str | None = Field(
+        None, max_length=36, description="Identificador único da sessão do navegador (UUID v4)"
+    )
 
     @field_validator("sessao_id")
     @classmethod
     def validate_sessao_id(cls, v: str | None) -> str | None:
         if v:
             import re
-            uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', re.IGNORECASE)
+
+            uuid_pattern = re.compile(
+                r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+                re.IGNORECASE,
+            )
             if not uuid_pattern.match(v):
                 raise ValueError("sessao_id deve ser um UUID v4 válido")
         return v
@@ -109,8 +127,10 @@ class RespostaAcaoResponse(BaseModel):
     anonimo: bool = False  # ← IMPORTANTE!
     campanha_id: UUID4
     alvo_id: UUID4
+    tipo_acao: TipoAcaoEnum = TipoAcaoEnum.SIMPLES
     status_atual: StatusAcaoEnum
     proximo_passo: ProximoPassoResponse
+    disparos_resumo: DisparosResumoResponse | None = None
 
 
 class AcaoDetailResponse(BaseModel):
@@ -122,6 +142,7 @@ class AcaoDetailResponse(BaseModel):
     anonimo: bool = False
     campanha_id: UUID4
     alvo_id: UUID4
+    tipo_acao: TipoAcaoEnum = TipoAcaoEnum.SIMPLES
     canal: str
     template_id: UUID4 | None
     status: StatusAcaoEnum
