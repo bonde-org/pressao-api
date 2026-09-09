@@ -169,7 +169,11 @@ class PressaoPlugin_Shortcode {
             'ativista_confirm_interval' => 10,
             'ativista_confirm_message' => __('Confirmar identidade', 'pressao-plugin'),
             'ativista_confirm_yes' => __('Sou eu', 'pressao-plugin'),
-            'ativista_confirm_no' => __('Não sou eu', 'pressao-plugin')
+            'ativista_confirm_no' => __('Não sou eu', 'pressao-plugin'),
+            'ordem' => '',
+            'tempo_tiktok' => '2 min',
+            'tempo_instagram' => '2 min',
+            'tempo_email' => '1 min',
         ], $atts, 'pressao_alvos');
         
         $campanha_id = sanitize_text_field($atts['campaign']);
@@ -186,6 +190,12 @@ class PressaoPlugin_Shortcode {
         $cache_time = intval($atts['cache']);
         $class = sanitize_text_field($atts['class']);
         $alvos_id = sanitize_text_field($atts['id']);
+        $ordem = sanitize_text_field($atts['ordem']);
+        $tempos_canal = [
+            'tiktok' => sanitize_text_field($atts['tempo_tiktok']),
+            'instagram' => sanitize_text_field($atts['tempo_instagram']),
+            'email' => sanitize_text_field($atts['tempo_email']),
+        ];
         
         if (empty($campanha_id)) {
             return '<p class="pressao-error">' . esc_html__('ID da campanha não informado', 'pressao-plugin') . '</p>';
@@ -216,6 +226,11 @@ class PressaoPlugin_Shortcode {
         if ($limit > 0) {
             $alvos = array_slice($alvos, 0, $limit);
         }
+
+        $alvos = $this->ordenar_alvos_por_canal($alvos, $ordem);
+        $share_config = $this->get_compartilhamento_config_for_render();
+        $share_done_state = $this->get_alvo_action_state('__compartilhar');
+        $share_realizado = $this->is_acao_realizada($share_done_state);
         
         $nonce = wp_create_nonce('pressao_acao_nonce');
         
@@ -250,11 +265,14 @@ class PressaoPlugin_Shortcode {
                     $alvo_template_id = $alvo_template && !empty($alvo_template['id'])
                         ? $alvo_template['id']
                         : $template_id;
-                    $canal_labels = $this->get_canal_list_labels($canal_alvo);
+                    $canal_labels = $this->get_canal_list_labels($canal_alvo, $tempos_canal);
                     $usa_overlay = in_array($canal_alvo, ['email', 'instagram', 'tiktok'], true);
                     $list_title = $canal_labels
                         ? $canal_labels['title']
                         : (isset($alvo['nome']) ? $alvo['nome'] : '');
+                    $list_tempo = $canal_labels && !empty($canal_labels['tempo'])
+                        ? $canal_labels['tempo']
+                        : '';
                     $list_subtitle = '';
                     if ($canal_labels) {
                         $list_subtitle = $canal_labels['subtitle'];
@@ -293,7 +311,12 @@ class PressaoPlugin_Shortcode {
                             <?php endif; ?>
 
                             <div class="pressao-alvo-detalhes">
-                                <strong class="pressao-alvo-nome"><?php echo esc_html($list_title); ?></strong>
+                                <strong class="pressao-alvo-nome">
+                                    <?php echo esc_html($list_title); ?>
+                                    <?php if ($list_tempo !== '') : ?>
+                                        <span class="pressao-canal-tempo">· <?php echo esc_html($list_tempo); ?></span>
+                                    <?php endif; ?>
+                                </strong>
                                 <?php if ($list_subtitle !== '') : ?>
                                     <span class="pressao-alvo-contato"><?php echo esc_html($list_subtitle); ?></span>
                                 <?php endif; ?>
@@ -370,6 +393,49 @@ class PressaoPlugin_Shortcode {
                         <?php endif; ?>
                     </li>
                 <?php endforeach; ?>
+
+                <?php if ($share_config) : ?>
+                    <li class="pressao-alvo-item pressao-compartilhar-item <?php echo $share_realizado ? 'action-done' : ''; ?>"
+                        data-alvo-id="__compartilhar"
+                        data-canal="compartilhar"
+                        data-share-config="<?php echo esc_attr(wp_json_encode($share_config)); ?>">
+                        <div class="pressao-alvo-info pressao-compartilhar-info">
+                            <span class="pressao-alvo-canal">
+                                <span class="pressao-alvo-canal-badge" data-canal="compartilhar"></span>
+                            </span>
+                            <div class="pressao-alvo-detalhes">
+                                <strong class="pressao-alvo-nome">
+                                    <?php echo esc_html($share_config['titulo']); ?>
+                                    <?php if (!empty($share_config['tempo'])) : ?>
+                                        <span class="pressao-canal-tempo">· <?php echo esc_html($share_config['tempo']); ?></span>
+                                    <?php endif; ?>
+                                </strong>
+                                <?php if (!empty($share_config['subtitulo'])) : ?>
+                                    <span class="pressao-alvo-contato"><?php echo esc_html($share_config['subtitulo']); ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <?php if ($show_actions === 'yes') : ?>
+                                <div class="pressao-alvo-actions">
+                                    <?php if ($share_realizado) : ?>
+                                        <span class="pressao-action-done">
+                                            <?php echo esc_html($action_done_label); ?>
+                                            <span class="pressao-action-time">
+                                                <?php echo esc_html($this->format_action_time($share_done_state)); ?>
+                                            </span>
+                                        </span>
+                                    <?php else : ?>
+                                        <button type="button"
+                                                class="pressao-action-button pressao-compartilhar-button"
+                                                data-alvo-id="__compartilhar"
+                                                data-canal="compartilhar"
+                                                aria-label="<?php echo esc_attr($share_config['titulo']); ?>">
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </li>
+                <?php endif; ?>
             </ul>
             
             <?php if ($result['cached']) : ?>
@@ -393,23 +459,147 @@ class PressaoPlugin_Shortcode {
 
     /**
      * Textos fixos da lista por canal (índice visual, não o nome do alvo).
+     *
+     * @param string $canal
+     * @param array  $tempos Mapa canal => texto de tempo (ex.: "2 min"), vindos do shortcode.
      */
-    private function get_canal_list_labels($canal) {
+    private function get_canal_list_labels($canal, $tempos = []) {
         $labels = [
             'tiktok' => [
                 'title' => __('TikTok', 'pressao-plugin'),
                 'subtitle' => __('Marque em um video estrategico', 'pressao-plugin'),
+                'tempo' => '2 min',
             ],
             'instagram' => [
                 'title' => __('Instagram', 'pressao-plugin'),
                 'subtitle' => __('Faça barulho nas redes sociais', 'pressao-plugin'),
+                'tempo' => '2 min',
             ],
             'email' => [
                 'title' => __('Email', 'pressao-plugin'),
                 'subtitle' => __('Envie diretamente para os alvos', 'pressao-plugin'),
+                'tempo' => '1 min',
             ],
         ];
-        return isset($labels[$canal]) ? $labels[$canal] : null;
+        if (!isset($labels[$canal])) {
+            return null;
+        }
+        if (isset($tempos[$canal]) && $tempos[$canal] !== '') {
+            $labels[$canal]['tempo'] = $tempos[$canal];
+        }
+        return $labels[$canal];
+    }
+
+    /**
+     * Ordena alvos pela lista CSV de canais do atributo ordem (estável).
+     * Canais omitidos ficam depois, na ordem original da API.
+     */
+    private function ordenar_alvos_por_canal($alvos, $ordem) {
+        if (!is_array($alvos) || empty($ordem)) {
+            return $alvos;
+        }
+
+        $canais = array_values(array_filter(array_map(function ($canal) {
+            return strtolower(trim($canal));
+        }, explode(',', $ordem))));
+
+        if (empty($canais)) {
+            return $alvos;
+        }
+
+        $prioridade = array_flip($canais);
+        $indexed = [];
+        foreach ($alvos as $i => $alvo) {
+            $indexed[] = [
+                'alvo' => $alvo,
+                'index' => $i,
+                'canal' => isset($alvo['tipo_contato']) ? strtolower((string) $alvo['tipo_contato']) : '',
+            ];
+        }
+
+        usort($indexed, function ($a, $b) use ($prioridade) {
+            $pa = array_key_exists($a['canal'], $prioridade) ? $prioridade[$a['canal']] : PHP_INT_MAX;
+            $pb = array_key_exists($b['canal'], $prioridade) ? $prioridade[$b['canal']] : PHP_INT_MAX;
+            if ($pa === $pb) {
+                return $a['index'] <=> $b['index'];
+            }
+            return $pa <=> $pb;
+        });
+
+        return array_map(function ($row) {
+            return $row['alvo'];
+        }, $indexed);
+    }
+
+    /**
+     * Config pública de compartilhamento para SSR/JS, ou null se inativo/incompleto.
+     */
+    private function get_compartilhamento_config_for_render() {
+        $config = get_option('pressao_compartilhamento', []);
+        if (!is_array($config) || empty($config['ativo'])) {
+            return null;
+        }
+
+        $link = isset($config['link']) ? trim((string) $config['link']) : '';
+        $mensagem = isset($config['mensagem']) ? trim((string) $config['mensagem']) : '';
+        if ($link === '' && $mensagem === '') {
+            return null;
+        }
+
+        $whatsapp_url = isset($config['whatsapp_url']) ? trim((string) $config['whatsapp_url']) : '';
+        if ($whatsapp_url === '' && $mensagem !== '') {
+            $whatsapp_url = 'https://wa.me/?text=' . rawurlencode($mensagem);
+        }
+
+        $imagens = [];
+        if (!empty($config['imagens']) && is_array($config['imagens'])) {
+            foreach ($config['imagens'] as $imagem) {
+                if (!is_array($imagem)) {
+                    continue;
+                }
+                $imagem_id = absint($imagem['imagem_id'] ?? 0);
+                if (!$imagem_id) {
+                    continue;
+                }
+                $url = wp_get_attachment_url($imagem_id);
+                $thumb = wp_get_attachment_image_url($imagem_id, 'medium');
+                if (!$url) {
+                    continue;
+                }
+                $imagens[] = [
+                    'rotulo' => sanitize_text_field($imagem['rotulo'] ?? ''),
+                    'url' => $url,
+                    'thumb' => $thumb ? $thumb : $url,
+                    'filename' => basename(parse_url($url, PHP_URL_PATH) ?: ('imagem-' . $imagem_id)),
+                ];
+            }
+        }
+
+        return [
+            'titulo' => !empty($config['titulo'])
+                ? $config['titulo']
+                : __('Compartilhar ação', 'pressao-plugin'),
+            'subtitulo' => $config['subtitulo'] ?? '',
+            'tempo' => $config['tempo'] ?? '',
+            'overlay_titulo' => !empty($config['overlay_titulo'])
+                ? $config['overlay_titulo']
+                : __('Compartilhe e aumente o seu impacto', 'pressao-plugin'),
+            'link' => $link,
+            'mensagem' => $mensagem,
+            'whatsapp_url' => $whatsapp_url,
+            'instagram_url' => $config['instagram_url'] ?? '',
+            'messenger_url' => $config['messenger_url'] ?? '',
+            'imagens_titulo' => !empty($config['imagens_titulo'])
+                ? $config['imagens_titulo']
+                : __('Imagens para postar', 'pressao-plugin'),
+            'imagens_subtitulo' => !empty($config['imagens_subtitulo'])
+                ? $config['imagens_subtitulo']
+                : __('baixe imagens prontas para postar nas redes', 'pressao-plugin'),
+            'imagens_instrucao' => !empty($config['imagens_instrucao'])
+                ? $config['imagens_instrucao']
+                : __('Utilize nossas imagens nas suas redes para que outras pessoas conheçam a campanha:', 'pressao-plugin'),
+            'imagens' => $imagens,
+        ];
     }
 
     /**

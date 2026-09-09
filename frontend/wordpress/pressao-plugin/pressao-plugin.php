@@ -83,7 +83,8 @@ final class PressaoPlugin {
             'pressao_api_url' => '',
             'pressao_campaign_id' => '',
             'pressao_widget_title' => 'Pressão Widget',
-            'pressao_candidatos' => []
+            'pressao_candidatos' => [],
+            'pressao_compartilhamento' => [],
         ];
         
         foreach ($defaults as $key => $value) {
@@ -129,7 +130,7 @@ final class PressaoPlugin {
 
             $icons_url = PRESSAO_PLUGIN_URL . 'assets/icons/';
             $icon_vars = sprintf(
-                ':root{--pressao-icon-instagram:url("%1$sinstagram.svg");--pressao-icon-tiktok:url("%1$stiktok.svg");--pressao-icon-email:url("%1$semail.svg");--pressao-icon-seta:url("%1$sseta.svg");--pressao-icon-raio:url("%1$sraio-barra-progresso.svg");}',
+                ':root{--pressao-icon-instagram:url("%1$sinstagram.svg");--pressao-icon-tiktok:url("%1$stiktok.svg");--pressao-icon-email:url("%1$semail.svg");--pressao-icon-seta:url("%1$sseta.svg");--pressao-icon-raio:url("%1$sraio-barra-progresso.svg");--pressao-icon-compartilhar:url("%1$scompartilhar.svg");--pressao-icon-copiar:url("%1$scopiar.svg");--pressao-icon-download:url("%1$sdownload.svg");--pressao-icon-whatsapp:url("%1$swhatsapp.svg");--pressao-icon-messenger:url("%1$smessenger.svg");--pressao-icon-seta-circulo:url("%1$sseta-com-circulo.svg");}',
                 esc_url_raw($icons_url)
             );
             wp_add_inline_style('pressao-plugin', $icon_vars);
@@ -191,6 +192,7 @@ final class PressaoPlugin {
 
         wp_localize_script('pressao-admin', 'pressaoAdminData', [
             'selectCandidateImage' => __('Selecionar imagem do candidato', 'pressao-plugin'),
+            'selectShareImage' => __('Selecionar imagem para postar', 'pressao-plugin'),
             'useThisImage' => __('Usar esta imagem', 'pressao-plugin'),
         ]);
     }
