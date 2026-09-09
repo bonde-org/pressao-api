@@ -577,12 +577,21 @@ function bindAlvoActionListeners(container) {
         }
         item.dataset.itemBound = 'true';
         item.addEventListener('click', function(e) {
-            if (item.classList.contains('action-done')) {
+            const isShareItem = item.classList.contains('pressao-compartilhar-item') ||
+                item.dataset.alvoId === '__compartilhar' ||
+                item.dataset.canal === 'compartilhar';
+            if (item.classList.contains('action-done') && !isShareItem) {
                 return;
             }
             if (e.target.closest('.pressao-ativista-form') ||
                 e.target.closest('.pressao-action-submit') ||
                 e.target.closest('.pressao-action-confirm')) {
+                return;
+            }
+
+            if (isShareItem) {
+                e.preventDefault();
+                abrirOverlayCompartilhar(container, item);
                 return;
             }
 
@@ -654,6 +663,11 @@ function handleAlvoItemActivate(container, item, button, confirmInterval) {
     const alvoId = button.dataset.alvoId || item.dataset.alvoId;
     const campaignId = button.dataset.campaign || container.dataset.campaign;
     const canal = button.dataset.canal || item.dataset.canal || 'email';
+
+    if (canal === 'compartilhar' || alvoId === '__compartilhar') {
+        abrirOverlayCompartilhar(container, item);
+        return;
+    }
 
     if (canalUsaOverlay(canal)) {
         abrirOverlayAcao(container, item, canal);
@@ -1429,6 +1443,13 @@ function checkActionsStatus(container) {
 }
 
 function marcarAcaoRealizada(item, actionData) {
+    if (item.classList.contains('pressao-compartilhar-item') ||
+        item.dataset.alvoId === '__compartilhar' ||
+        item.dataset.canal === 'compartilhar') {
+        marcarCompartilhamentoUI(item, actionData);
+        return;
+    }
+
     const actionsDiv = item.querySelector('.pressao-alvo-actions');
     if (!actionsDiv) return;
     const timestamp = actionData.timestamp || actionData;
@@ -1442,6 +1463,333 @@ function marcarAcaoRealizada(item, actionData) {
     `;
     item.classList.add('action-done');
     item.classList.remove('action-pending');
+}
+
+// ============================================
+// COMPARTILHAMENTO (overlay editorial)
+// ============================================
+
+const SHARE_ACTION_ID = '__compartilhar';
+let pressaoShareState = null;
+
+function marcarCompartilhamentoUI(item, actionData) {
+    const actionsDiv = item.querySelector('.pressao-alvo-actions');
+    if (!actionsDiv) {
+        return;
+    }
+
+    const timestamp = actionData.timestamp || actionData;
+    const timeText = formatActionTime(timestamp);
+    const doneLabel = pressaoData?.actionDoneLabel || 'Ação realizada ✓';
+
+    actionsDiv.innerHTML = `
+        <span class="pressao-action-done">
+            ${doneLabel}
+            <span class="pressao-action-time">${timeText}</span>
+        </span>
+    `;
+    item.classList.add('action-done');
+    item.classList.remove('action-pending');
+}
+
+function parseShareConfig(item) {
+    if (!item || !item.dataset.shareConfig) {
+        return null;
+    }
+    try {
+        return JSON.parse(item.dataset.shareConfig);
+    } catch (e) {
+        console.warn('Config de compartilhamento inválida:', e);
+        return null;
+    }
+}
+
+function getOrCreateShareOverlay() {
+    let overlay = document.getElementById('pressao-share-overlay');
+    if (overlay) {
+        return overlay;
+    }
+
+    overlay = document.createElement('div');
+    overlay.id = 'pressao-share-overlay';
+    overlay.className = 'pressao-share-overlay';
+    overlay.hidden = true;
+    overlay.innerHTML = `
+        <div class="pressao-share-overlay-backdrop" data-pressao-share-close="1"></div>
+        <div class="pressao-share-panel" role="dialog" aria-modal="true">
+            <div class="pressao-share-screens">
+                <div class="pressao-share-screen pressao-share-screen-main" data-share-screen="main"></div>
+                <div class="pressao-share-screen pressao-share-screen-images" data-share-screen="images" hidden></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('[data-pressao-share-close]').addEventListener('click', function() {
+        fecharOverlayCompartilhar();
+    });
+
+    return overlay;
+}
+
+function fecharOverlayCompartilhar() {
+    const overlay = document.getElementById('pressao-share-overlay');
+    if (!overlay || overlay.hidden) {
+        return;
+    }
+
+    const panel = overlay.querySelector('.pressao-share-panel');
+    overlay.classList.add('is-closing');
+    if (panel) {
+        panel.classList.add('is-closing');
+    }
+
+    window.setTimeout(function() {
+        overlay.hidden = true;
+        overlay.classList.remove('is-closing');
+        if (panel) {
+            panel.classList.remove('is-closing');
+        }
+        const main = overlay.querySelector('[data-share-screen="main"]');
+        const images = overlay.querySelector('[data-share-screen="images"]');
+        if (main) {
+            main.innerHTML = '';
+            main.hidden = false;
+        }
+        if (images) {
+            images.innerHTML = '';
+            images.hidden = true;
+            images.classList.remove('is-entering');
+        }
+        pressaoShareState = null;
+        document.body.style.overflow = '';
+    }, 200);
+}
+
+function marcarCompartilhamentoRealizado(item) {
+    if (!item || item.classList.contains('action-done')) {
+        return;
+    }
+    const acoes = getAcoesFromStorage();
+    const entry = {
+        timestamp: Math.floor(Date.now() / 1000),
+        status: 'CONCLUIDA',
+        acao_id: null,
+        user_id: null
+    };
+    acoes[SHARE_ACTION_ID] = entry;
+    saveActionsToStorage(acoes);
+    marcarAcaoRealizada(item, entry);
+}
+
+function abrirOverlayCompartilhar(container, item) {
+    const config = parseShareConfig(item);
+    if (!config) {
+        showNotification(container, 'error', 'Compartilhamento não configurado.');
+        return;
+    }
+
+    const overlay = getOrCreateShareOverlay();
+    const main = overlay.querySelector('[data-share-screen="main"]');
+    const images = overlay.querySelector('[data-share-screen="images"]');
+    images.hidden = true;
+    images.classList.remove('is-entering');
+    main.hidden = false;
+
+    const socialButtons = [];
+    if (config.whatsapp_url) {
+        socialButtons.push({ canal: 'whatsapp', url: config.whatsapp_url, label: 'WhatsApp' });
+    }
+    if (config.instagram_url) {
+        socialButtons.push({ canal: 'instagram', url: config.instagram_url, label: 'Instagram' });
+    }
+    if (config.messenger_url) {
+        socialButtons.push({ canal: 'messenger', url: config.messenger_url, label: 'Messenger' });
+    }
+
+    const socialHtml = socialButtons.map(function(btn) {
+        return `
+            <a class="pressao-share-social-btn" data-canal="${escapeAttribute(btn.canal)}"
+               href="${escapeAttribute(btn.url)}" target="_blank" rel="noopener noreferrer"
+               aria-label="${escapeAttribute(btn.label)}">
+                <span class="pressao-share-social-icon" data-canal="${escapeAttribute(btn.canal)}"></span>
+            </a>
+        `;
+    }).join('');
+
+    const hasImages = Array.isArray(config.imagens) && config.imagens.length > 0;
+    const firstThumb = hasImages ? (config.imagens[0].thumb || config.imagens[0].url || '') : '';
+    const imagesCard = hasImages ? `
+        <button type="button" class="pressao-share-images-card">
+            <span class="pressao-share-images-thumb" aria-hidden="true"${firstThumb ? ` style="background-image:url('${escapeAttribute(firstThumb)}')"` : ''}></span>
+            <span class="pressao-share-images-copy">
+                <strong>${escapeHtml(config.imagens_titulo || 'Imagens para postar')}</strong>
+                <span>${escapeHtml(config.imagens_subtitulo || '')}</span>
+            </span>
+            <span class="pressao-share-images-arrow" aria-hidden="true"></span>
+        </button>
+    ` : '';
+
+    main.innerHTML = `
+        <h2 class="pressao-share-title">${escapeHtml(config.overlay_titulo || 'Compartilhe e aumente o seu impacto')}</h2>
+        <div class="pressao-share-link-row">
+            <input type="text" class="pressao-share-link-input" readonly value="${escapeAttribute(config.link || '')}" />
+        </div>
+        <button type="button" class="pressao-share-copy-btn">
+            <span class="pressao-share-copy-icon" aria-hidden="true"></span>
+            <span class="pressao-share-copy-label">Copiar link</span>
+        </button>
+        ${socialHtml ? `<div class="pressao-share-social-row">${socialHtml}</div>` : ''}
+        ${imagesCard}
+    `;
+
+    pressaoShareState = {
+        container: container,
+        item: item,
+        config: config
+    };
+
+    const copyBtn = main.querySelector('.pressao-share-copy-btn');
+    copyBtn.addEventListener('click', function() {
+        const link = config.link || '';
+        if (!link) {
+            return;
+        }
+        const done = function() {
+            copyBtn.classList.add('is-copied');
+            copyBtn.querySelector('.pressao-share-copy-label').textContent = 'Copiado!';
+            marcarCompartilhamentoRealizado(item);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(link).then(done).catch(function() {
+                const input = main.querySelector('.pressao-share-link-input');
+                if (input) {
+                    input.select();
+                    document.execCommand('copy');
+                }
+                done();
+            });
+        } else {
+            const input = main.querySelector('.pressao-share-link-input');
+            if (input) {
+                input.select();
+                document.execCommand('copy');
+            }
+            done();
+        }
+    });
+
+    main.querySelectorAll('.pressao-share-social-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            marcarCompartilhamentoRealizado(item);
+        });
+    });
+
+    const imagesCardBtn = main.querySelector('.pressao-share-images-card');
+    if (imagesCardBtn) {
+        imagesCardBtn.addEventListener('click', function() {
+            abrirTelaImagensCompartilhar(overlay, config);
+        });
+    }
+
+    overlay.hidden = false;
+    overlay.classList.remove('is-closing');
+    document.body.style.overflow = 'hidden';
+}
+
+function abrirTelaImagensCompartilhar(overlay, config) {
+    const main = overlay.querySelector('[data-share-screen="main"]');
+    const images = overlay.querySelector('[data-share-screen="images"]');
+    const lista = Array.isArray(config.imagens) ? config.imagens : [];
+
+    const gridHtml = lista.map(function(img, index) {
+        return `
+            <div class="pressao-share-image-item" data-index="${index}">
+                <div class="pressao-share-image-preview">
+                    <img src="${escapeAttribute(img.thumb || img.url)}" alt="${escapeAttribute(img.rotulo || '')}" />
+                </div>
+                <span class="pressao-share-image-label">${escapeHtml(img.rotulo || '')}</span>
+                <button type="button" class="pressao-share-image-download" data-index="${index}">BAIXAR</button>
+            </div>
+        `;
+    }).join('');
+
+    images.innerHTML = `
+        <div class="pressao-share-images-header">
+            <button type="button" class="pressao-share-back" aria-label="Voltar">←</button>
+            <h2 class="pressao-share-title">${escapeHtml(config.imagens_titulo || 'Imagens para postar')}</h2>
+        </div>
+        <p class="pressao-share-images-instruction">${escapeHtml(config.imagens_instrucao || '')}</p>
+        <div class="pressao-share-images-grid">${gridHtml}</div>
+        <button type="button" class="pressao-share-download-all">
+            <span class="pressao-share-download-icon" aria-hidden="true"></span>
+            Baixar todas as imagens
+        </button>
+    `;
+
+    images.querySelector('.pressao-share-back').addEventListener('click', function() {
+        images.classList.remove('is-entering');
+        images.hidden = true;
+        main.hidden = false;
+    });
+
+    images.querySelectorAll('.pressao-share-image-download').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const index = parseInt(btn.dataset.index, 10);
+            if (!isNaN(index) && lista[index]) {
+                downloadShareImage(lista[index]);
+            }
+        });
+    });
+
+    images.querySelector('.pressao-share-download-all').addEventListener('click', function() {
+        lista.forEach(function(img, i) {
+            window.setTimeout(function() {
+                downloadShareImage(img);
+            }, i * 250);
+        });
+    });
+
+    main.hidden = true;
+    images.hidden = false;
+    images.classList.remove('is-entering');
+    // force reflow for animation restart
+    void images.offsetWidth;
+    images.classList.add('is-entering');
+}
+
+function downloadShareImage(img) {
+    if (!img || !img.url) {
+        return;
+    }
+    const filename = img.filename || 'imagem-campanha';
+    fetch(img.url, { mode: 'cors' })
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('download failed');
+            }
+            return response.blob();
+        })
+        .then(function(blob) {
+            const objectUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(objectUrl);
+        })
+        .catch(function() {
+            const a = document.createElement('a');
+            a.href = img.url;
+            a.download = filename;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        });
 }
 
 function formatActionTime(timestamp) {

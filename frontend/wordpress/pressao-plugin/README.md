@@ -53,6 +53,20 @@ docker compose up -d
 
 O `docker-compose.yml` monta esta pasta como volume em `wp-content/plugins/pressao-plugin`, então alterações em PHP/JS/CSS refletem sem rebuild.
 
+A Media Library grava em um volume Docker (`wordpress_data` → `/var/www/html/wp-content/uploads`). Se o upload falhar por permissão no ambiente local:
+
+```bash
+# Correção imediata (já aplicada no entrypoint após rebuild da imagem wordpress)
+docker compose exec wordpress chown -R www-data:www-data /var/www/html/wp-content/uploads
+docker compose exec wordpress chmod -R ug+rwX /var/www/html/wp-content/uploads
+```
+
+Para tornar o ajuste automático no próximo start:
+
+```bash
+docker compose build wordpress && docker compose up -d wordpress
+```
+
 ### Estrutura do plugin
 
 ```text
@@ -68,10 +82,10 @@ pressao-plugin/
 │   ├── css/
 │   │   └── style.css           # Tokens, mask-image dos ícones, @font-face
 │   ├── fonts/                  # NeueHaasGroteskText.woff2/.woff (adicionar manualmente)
-│   ├── icons/                  # SVG de canais, seta e raio (via CSS mask-image)
+│   ├── icons/                  # SVG de canais, compartilhar, copiar, download, seta e raio (via CSS mask-image)
 │   └── js/
-│       ├── admin.js            # Campo repetível de candidatos + Media Library
-│       └── widget.js           # UI, cookies, ações e confirmações
+│       ├── admin.js            # Campos repetíveis (candidatos + imagens de compartilhamento) + Media Library
+│       └── widget.js           # UI, cookies, ações, compartilhamento e confirmações
 └── views/
     └── widget-template.php
 ```
@@ -103,6 +117,7 @@ Acesse Configurações > Pressão Plugin e preencha:
 | Título do Widget | `pressao_widget_title` | Título exibido em `[pressao_widget]` |
 | Duração da sessão | `pressao_session_duration` | TTL dos cookies em segundos (padrão `86400`) |
 | Candidatos | `pressao_candidatos` | Lista de candidatos exibida em `[pressao_candidatos]` |
+| Compartilhamento | `pressao_compartilhamento` | Textos, links, deep links e imagens do botão de compartilhar |
 
 ### Configuração de candidatos
 
@@ -118,6 +133,22 @@ Campos por candidato:
 - `imagem_id`
 
 As imagens são selecionadas pela Biblioteca de Mídia do WordPress. O plugin armazena o `attachment ID` e renderiza com `wp_get_attachment_image()`, sem implementar upload próprio. Assim, se o WordPress passar a enviar mídias para S3 via offload/plugin de storage, o comportamento continua transparente para o Pressão Plugin.
+
+### Configuração de compartilhamento
+
+A seção "Configurações de Compartilhamento" controla o botão exibido **sempre por último** em `[pressao_alvos]`.
+
+Campos principais da option `pressao_compartilhamento`:
+
+- `ativo` — exibe ou não o botão
+- `titulo`, `subtitulo`, `tempo` — textos do item na lista
+- `overlay_titulo`, `link`, `mensagem` — overlay principal
+- `whatsapp_url` (opcional; se vazio, monta `https://wa.me/?text=` com `mensagem`)
+- `instagram_url`, `messenger_url` — deep links completos definidos no admin
+- `imagens_titulo`, `imagens_subtitulo`, `imagens_instrucao`
+- `imagens[]` — repetível com `imagem_id` (Media Library) + `rotulo`
+
+Não cria ação na API. Ao copiar o link ou abrir WhatsApp/Instagram/Messenger, grava a chave sintética `__compartilhar` no cookie `pressao_acoes_realizadas` para o estado “já realizei”. Essa chave **não** entra no `done/total` de `[pressao_progresso]`. Depois de realizado, a linha mostra só o check verde e continua clicável para reabrir o overlay na mesma sessão.
 
 ### Debug
 
@@ -154,8 +185,11 @@ Principal shortcode do plugin: lista os alvos da campanha e permite agir por can
 nome do perfil a comentar e `contato` é a **URL da postagem/vídeo**. O overlay copia o texto e
 abre esse link; a confirmação segue via `PATCH /api/v1/acoes/{id}/confirmar`.
 
+**Compartilhamento:** item editorial no fim da lista (configurado no admin). Overlay com copiar link,
+deep links WhatsApp/Instagram/Messenger e download de imagens. Sem `POST /acoes`.
+
 ```text
-[pressao_alvos campaign="uuid" show_ativista_form="yes" show_template="yes" cache="0" action_label="Pressionar por E-mail"]
+[pressao_alvos campaign="uuid" show_ativista_form="yes" show_template="yes" cache="0" action_label="Pressionar por E-mail" ordem="instagram,tiktok,email" tempo_instagram="2 min" tempo_tiktok="2 min" tempo_email="1 min"]
 ```
 
 | Atributo | Padrão | Descrição |
@@ -168,6 +202,10 @@ abre esse link; a confirmação segue via `PATCH /api/v1/acoes/{id}/confirmar`.
 | `action_label` | `Agir` | Rótulo do botão de ação |
 | `action_done_label` | `Ação realizada ✓` | Rótulo após a ação |
 | `canal` | — | Filtra os alvos por canal |
+| `ordem` | — | CSV de canais para ordenar a lista (ex.: `instagram,tiktok,email`). Canais omitidos ficam depois, na ordem da API. Compartilhamento permanece sempre por último |
+| `tempo_instagram` | `2 min` | Tempo estimado exibido ao lado do título Instagram |
+| `tempo_tiktok` | `2 min` | Tempo estimado exibido ao lado do título TikTok |
+| `tempo_email` | `1 min` | Tempo estimado exibido ao lado do título Email |
 | `template_id` | — | **Fallback**; normalmente o template vem sorteado da API |
 | `show_template` | `no` | `yes` exibe a mensagem sorteada no toggle "Ver mensagem" |
 | `cache` | `300` | TTL do transient de alvos. `0` desliga o cache e sorteia um template a cada pageview |
@@ -270,7 +308,7 @@ Todos usam o TTL de `pressao_session_duration` e são limpos de uma vez por `cle
 | `pressao_sessao_id` | UUID v4 da sessão do navegador |
 | `pressao_ativista_data` | Nome, email e telefone do ativista (JSON) |
 | `pressao_ativista_last_confirm` | Timestamp da última confirmação de identidade |
-| `pressao_acoes_realizadas` | Mapa `alvoId → {timestamp, acao_id, status, user_id}` — fonte de verdade do progresso e do estado SSR |
+| `pressao_acoes_realizadas` | Mapa `alvoId → {timestamp, acao_id, status, user_id}` — fonte de verdade do progresso e do estado SSR. Inclui a chave sintética `__compartilhar` quando o ativista compartilha (sem `acao_id`) |
 | `pressao_usuario_id` | ID anônimo do usuário (legado) |
 
 O payload de `pressao_acoes_realizadas` é mantido enxuto de propósito: estourar ~4KB derruba os cookies de sessão do WordPress e o AJAX começa a responder 403 "Nonce inválido".
