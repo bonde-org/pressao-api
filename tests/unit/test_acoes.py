@@ -194,8 +194,7 @@ class TestOrquestrador:
 
         assert acao.proximo_passo_dados["perfil"] == "Deputada Ana"
         assert (
-            acao.proximo_passo_dados["url_postagem"]
-            == "https://www.instagram.com/p/AbCdEfGhIjK/"
+            acao.proximo_passo_dados["url_postagem"] == "https://www.instagram.com/p/AbCdEfGhIjK/"
         )
         assert acao.proximo_passo_dados["url_perfil"] == acao.proximo_passo_dados["url_postagem"]
 

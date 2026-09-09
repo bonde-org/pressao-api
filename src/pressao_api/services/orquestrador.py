@@ -284,9 +284,7 @@ class OrquestradorCanais:
         )
         acao.status = StatusAcaoEnum.AGUARDANDO_ACAO_HUMANA
         acao.proximo_passo_tipo = ProximoPassoTipoEnum.EXIBIR_TEXTO_E_ABRIR_PERFIL
-        acao.proximo_passo_instrucao = (
-            "Copie o texto e comente na postagem do Instagram"
-        )
+        acao.proximo_passo_instrucao = "Copie o texto e comente na postagem do Instagram"
         acao.proximo_passo_dados = {
             "perfil": nome_perfil,
             "texto": self._montar_texto_social(
