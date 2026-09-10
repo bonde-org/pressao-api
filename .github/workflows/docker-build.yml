@@ -46,7 +46,7 @@ jobs:
           if [ -n "${{ secrets.DOCKER_HUB_REPO }}" ]; then
             REPO="${{ secrets.DOCKER_HUB_REPO }}"
           else
-            REPO="igrsantos/pressao-api"
+            REPO="nossas/pressao-api"
           fi
           echo "repo=${REPO}" >> $GITHUB_OUTPUT
           

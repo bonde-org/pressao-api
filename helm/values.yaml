@@ -7,7 +7,7 @@ fullnameOverride: ""
 replicaCount: 1
 
 image:
-  repository: igrsantos/pressao-api
+  repository: nossas/pressao-api
   pullPolicy: IfNotPresent
   tag: 34168b98
 

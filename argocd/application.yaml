@@ -23,7 +23,7 @@ spec:
       values: |
         replicaCount: 3
         image:
-          repository: igrsantos/pressao-api
+          repository: nossas/pressao-api
           tag: "0.1.0"
           pullPolicy: IfNotPresent
         resources:
