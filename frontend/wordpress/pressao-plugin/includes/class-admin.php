@@ -202,25 +202,40 @@ class PressaoPlugin_Admin {
     public function render_text_field($args) {
         $field = $args['field'];
         $type = isset($args['type']) ? $args['type'] : 'text';
-        $value = get_option($field, '');
+        $constant = strtoupper($field);
+        $overridden = defined($constant);
+        $value = $overridden ? constant($constant) : get_option($field, '');
         ?>
-        <input type="<?php echo esc_attr($type); ?>" 
-               name="<?php echo esc_attr($field); ?>" 
-               value="<?php echo esc_attr($value); ?>" 
-               class="regular-text" />
+        <input type="<?php echo esc_attr($type); ?>"
+               name="<?php echo esc_attr($field); ?>"
+               value="<?php echo esc_attr($value); ?>"
+               class="regular-text"
+               <?php disabled($overridden); ?> />
+        <?php if ($overridden) : ?>
+            <p class="description">
+                <?php printf(esc_html__('Definido via wp-config.php (constante %s), não editável aqui.', 'pressao-plugin'), esc_html($constant)); ?>
+            </p>
+        <?php endif; ?>
         <?php
     }
-    
+
     public function render_password_field($args) {
         $field = $args['field'];
-        $value = get_option($field, '');
+        $constant = strtoupper($field);
+        $overridden = defined($constant);
+        $value = $overridden ? constant($constant) : get_option($field, '');
         ?>
-        <input type="password" 
-               name="<?php echo esc_attr($field); ?>" 
-               value="<?php echo esc_attr($value); ?>" 
-               class="regular-text" />
+        <input type="password"
+               name="<?php echo esc_attr($field); ?>"
+               value="<?php echo esc_attr($value); ?>"
+               class="regular-text"
+               <?php disabled($overridden); ?> />
         <p class="description">
-            <?php esc_html_e('O Client Secret fica guardado no servidor.', 'pressao-plugin'); ?>
+            <?php if ($overridden) : ?>
+                <?php printf(esc_html__('Definido via wp-config.php (constante %s), não editável aqui.', 'pressao-plugin'), esc_html($constant)); ?>
+            <?php else : ?>
+                <?php esc_html_e('O Client Secret fica guardado no servidor.', 'pressao-plugin'); ?>
+            <?php endif; ?>
         </p>
         <?php
     }

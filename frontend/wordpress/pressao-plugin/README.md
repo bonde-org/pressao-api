@@ -119,6 +119,20 @@ Acesse Configurações > Pressão Plugin e preencha:
 | Candidatos | `pressao_candidatos` | Lista de candidatos exibida em `[pressao_candidatos]` |
 | Compartilhamento | `pressao_compartilhamento` | Textos, links, deep links e imagens do botão de compartilhar |
 
+### Configuração compartilhada via wp-config.php (multisite)
+
+Os 5 campos de autenticação (`pressao_keycloak_url`, `pressao_realm`, `pressao_client_id`, `pressao_client_secret`, `pressao_api_url`) aceitam uma constante PHP com o mesmo nome em maiúsculas, definida no `wp-config.php`, que sobrescreve a option daquele site:
+
+```php
+define('PRESSAO_KEYCLOAK_URL', 'https://auth.bonde.org');
+define('PRESSAO_REALM', 'bonde');
+define('PRESSAO_CLIENT_ID', 'pressao-api');
+define('PRESSAO_CLIENT_SECRET', getenv('PRESSAO_KEYCLOAK_CLIENT_SECRET'));
+define('PRESSAO_API_URL', 'https://pressao-api.bonde.cloud');
+```
+
+Útil numa rede multisite onde todos os sites compartilham o mesmo client Keycloak/API — evita reescrever (e reexpor) o `client_secret` em cada site. Quando uma constante está definida, o campo correspondente aparece desabilitado na tela de admin, com uma nota indicando a constante. `pressao_campaign_id` e os demais campos continuam por site (não têm override por constante).
+
 ### Configuração de candidatos
 
 O painel possui uma seção "Configurações de Candidatos" para cadastrar os dados renderizados pelo shortcode `[pressao_candidatos]`.

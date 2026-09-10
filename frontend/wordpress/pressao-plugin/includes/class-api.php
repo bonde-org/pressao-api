@@ -19,11 +19,13 @@ class PressaoPlugin_API {
     private $token_cache_key = 'pressao_keycloak_token';
     
     public function __construct() {
-        $this->keycloak_url = get_option('pressao_keycloak_url', '');
-        $this->realm = get_option('pressao_realm', 'master');
-        $this->client_id = get_option('pressao_client_id', '');
-        $this->client_secret = get_option('pressao_client_secret', '');
-        $this->api_url = get_option('pressao_api_url', '');
+        // Constantes do wp-config.php (ex: rede multisite com config compartilhada
+        // entre sites) têm prioridade sobre as opções configuradas pela tela de admin.
+        $this->keycloak_url = defined('PRESSAO_KEYCLOAK_URL') ? PRESSAO_KEYCLOAK_URL : get_option('pressao_keycloak_url', '');
+        $this->realm = defined('PRESSAO_REALM') ? PRESSAO_REALM : get_option('pressao_realm', 'master');
+        $this->client_id = defined('PRESSAO_CLIENT_ID') ? PRESSAO_CLIENT_ID : get_option('pressao_client_id', '');
+        $this->client_secret = defined('PRESSAO_CLIENT_SECRET') ? PRESSAO_CLIENT_SECRET : get_option('pressao_client_secret', '');
+        $this->api_url = defined('PRESSAO_API_URL') ? PRESSAO_API_URL : get_option('pressao_api_url', '');
     }
     
     /**
