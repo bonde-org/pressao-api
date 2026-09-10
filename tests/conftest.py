@@ -13,6 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from pressao_api.core.database import Base, get_db  # ← Mudou
 from pressao_api.core.security import get_current_user  # ← Mudou
 from pressao_api.main import app  # ← Mudou de app.main para pressao_api.main
+from pressao_api.models.acao import Acao  # noqa: F401 — registra metadata
+from pressao_api.models.alvo import Alvo  # noqa: F401
+from pressao_api.models.alvo_membro import AlvoMembro  # noqa: F401
+from pressao_api.models.campanha import Campanha  # noqa: F401
+from pressao_api.models.disparo import Disparo  # noqa: F401
+from pressao_api.models.template import Template  # noqa: F401
 
 # Configuração para testes
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"

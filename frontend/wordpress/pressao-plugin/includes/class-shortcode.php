@@ -259,13 +259,27 @@ class PressaoPlugin_Shortcode {
                             <div class="pressao-alvo-detalhes">
                                 <strong class="pressao-alvo-nome"><?php echo esc_html($alvo['nome']); ?></strong>
                                 
-                                <?php if ($show_contact === 'yes' && !empty($alvo['contato'])) : ?>
+                                <?php if ($show_contact === 'yes') : ?>
+                                    <?php if (!empty($alvo['modo']) && $alvo['modo'] === 'agregado' && !empty($alvo['total_membros'])) : ?>
+                                    <span class="pressao-alvo-contato">
+                                        <?php
+                                        echo esc_html(
+                                            sprintf(
+                                                _n('%d destinatário', '%d destinatários', (int) $alvo['total_membros'], 'pressao-plugin'),
+                                                (int) $alvo['total_membros']
+                                            )
+                                        );
+                                        ?>
+                                        <span class="pressao-alvo-tipo">(<?php echo esc_html($canal_alvo); ?>)</span>
+                                    </span>
+                                    <?php elseif (!empty($alvo['contato'])) : ?>
                                     <span class="pressao-alvo-contato">
                                         <?php echo esc_html($alvo['contato']); ?>
                                         <?php if (!empty($alvo['tipo_contato'])) : ?>
                                             <span class="pressao-alvo-tipo">(<?php echo esc_html($alvo['tipo_contato']); ?>)</span>
                                         <?php endif; ?>
                                     </span>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                                 
                                 <?php if (!empty($canal_alvo)) : ?>

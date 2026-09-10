@@ -23,24 +23,20 @@ def upgrade() -> None:
         "campanhas",
         sa.Column("acoes_confirmadas", sa.BigInteger(), nullable=False, server_default="0"),
     )
-    op.execute(
-        """
+    op.execute("""
         UPDATE campanhas
         SET acoes_confirmadas = (
             SELECT COUNT(*) FROM acoes
             WHERE acoes.campanha_id = campanhas.id AND acoes.status = 'CONCLUIDA'
         )
-        """
-    )
+        """)
     # Índice parcial (PostgreSQL). Em SQLite o dialect pode ignorar ou aceitar WHERE.
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        op.execute(
-            """
+        op.execute("""
             CREATE INDEX idx_acoes_campanha_concluida
             ON acoes(campanha_id) WHERE status = 'CONCLUIDA'
-            """
-        )
+            """)
     else:
         op.create_index("idx_acoes_campanha_concluida", "acoes", ["campanha_id"])
 

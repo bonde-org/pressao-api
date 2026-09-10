@@ -104,7 +104,9 @@ class TestAPIAlvo:
         response = client.get(f"/api/v1/alvos/campanha/{campanha_id}")
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 3
+        assert len(data) == 1
+        assert data[0]["modo"] == "agregado"
+        assert data[0]["total_membros"] == 3
 
     def test_buscar_alvo_por_id(self, client, db_session, mock_user, campanha):
         """Busca alvo por ID"""

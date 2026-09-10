@@ -260,7 +260,9 @@ class TestAtualizacaoRetroativa:
         acao1 = acao1_resp.json()
         assert acao1["ativista_nome"] == "Ana"
 
-    def test_sessao_id_invalido_rejeitado(self, client, db_session, mock_service_account, setup_data):
+    def test_sessao_id_invalido_rejeitado(
+        self, client, db_session, mock_service_account, setup_data
+    ):
         """sessao_id com formato inválido é rejeitado."""
         app.dependency_overrides[get_current_user] = lambda: mock_service_account
 

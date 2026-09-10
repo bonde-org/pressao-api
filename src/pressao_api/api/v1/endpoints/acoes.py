@@ -12,20 +12,26 @@ from pressao_api.core.metrics import (
     acoes_tempo_confirmacao_seconds,
 )
 from pressao_api.core.security import get_current_user
+from pressao_api.models.alvo import ModoAlvo
 from pressao_api.repositories.acao_repository import AcaoRepository
+from pressao_api.repositories.alvo_membro_repository import AlvoMembroRepository
 from pressao_api.repositories.alvo_repository import AlvoRepository
 from pressao_api.repositories.campanha_repository import CampanhaRepository
+from pressao_api.repositories.disparo_repository import DisparoRepository
 from pressao_api.repositories.template_repository import TemplateRepository
 from pressao_api.schemas.acao import (
     AcaoDetailResponse,
     AcaoStatusResponse,
     CriarAcaoRequest,
+    DisparosResumoResponse,
     ProximoPassoResponse,
     ProximoPassoTipoEnum,
     RespostaAcaoResponse,
     StatusAcaoEnum,
+    TipoAcaoEnum,
 )
 from pressao_api.schemas.campanha import ConfirmacaoContadorResponse
+from pressao_api.services.alvo_agregado import AlvoAgregadoService
 from pressao_api.services.confirmacao import incrementar_contador_se_confirmada
 from pressao_api.services.metricas import calculadora
 from pressao_api.services.orquestrador import orquestrador
@@ -117,6 +123,19 @@ async def criar_acao(
             if not template.ativo:
                 raise HTTPException(status_code=400, detail="Template inativo")
 
+        tipo_acao = TipoAcaoEnum.SIMPLES
+        if alvo.modo == ModoAlvo.AGREGADO and canal == "email":
+            tipo_acao = TipoAcaoEnum.MULTI_ALVO
+            agregado_service = AlvoAgregadoService(db)
+            await agregado_service.sincronizar_membros(request.campanha_id)
+            membro_repo = AlvoMembroRepository(db)
+            membros = await membro_repo.listar_membros_alvos(alvo.id)
+            if not membros:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Nenhum destinatário de e-mail ativo para esta ação",
+                )
+
         # ============================================
         # Preparando dados da Ação
         # ============================================
@@ -125,6 +144,7 @@ async def criar_acao(
             "campanha_id": request.campanha_id,
             "alvo_id": request.alvo_id,
             "canal": canal,
+            "tipo_acao": tipo_acao.value,
             "template_id": request.template_id,
             "status": StatusAcaoEnum.PROCESSANDO,
             "sessao_id": request.sessao_id,
@@ -193,7 +213,9 @@ async def criar_acao(
                         "ativista_preenchido": False,
                     }
                 )
-                logger.info("Ação via service account sem dados de ativista (sessão não identificada)")
+                logger.info(
+                    "Ação via service account sem dados de ativista (sessão não identificada)"
+                )
 
         # Importante: se for anônimo, garantir que ativista_id seja None
         if acao_data.get("anonimo", False):
@@ -205,12 +227,20 @@ async def criar_acao(
 
         repo = AcaoRepository(db)
         acao = await repo.criar(acao_data)
+        status_antes_exec = StatusAcaoEnum.PROCESSANDO
 
         try:
             acao = await orquestrador.executar(
-                acao, alvo=alvo, campanha=campanha, template=template
+                acao,
+                alvo=alvo,
+                campanha=campanha,
+                template=template,
+                session=db,
             )
             await repo.salvar(acao)
+
+            if acao.status == StatusAcaoEnum.CONCLUIDA:
+                await incrementar_contador_se_confirmada(acao, status_antes_exec, campanha_repo)
         except ValueError as e:
             logger.error("Falha ao executar ação", error=str(e))
             await repo.salvar(acao)
@@ -249,6 +279,12 @@ async def criar_acao(
         acoes_aguardando_confirmacao.labels(campanha_id=str(request.campanha_id), canal=canal).inc()
 
         # Prepara resposta
+        disparos_resumo = None
+        if acao.tipo_acao == TipoAcaoEnum.MULTI_ALVO.value:
+            disparo_repo = DisparoRepository(db)
+            resumo = await disparo_repo.resumo_por_acao(acao.id)
+            disparos_resumo = DisparosResumoResponse(**resumo)
+
         return RespostaAcaoResponse(
             acao_id=acao.id,
             ativista_id=acao.ativista_id,
@@ -258,12 +294,14 @@ async def criar_acao(
             anonimo=acao.anonimo,
             campanha_id=acao.campanha_id,
             alvo_id=acao.alvo_id,
+            tipo_acao=TipoAcaoEnum(acao.tipo_acao),
             status_atual=acao.status,
             proximo_passo=ProximoPassoResponse(
                 tipo=acao.proximo_passo_tipo,
                 instrucao=acao.proximo_passo_instrucao,
                 dados=acao.proximo_passo_dados or {},
             ),
+            disparos_resumo=disparos_resumo,
         )
     except HTTPException:
         if canal:

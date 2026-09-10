@@ -219,3 +219,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# k6 load tests
+tests/k6/.env.load-test
+tests/k6/results/
+!tests/k6/lib/

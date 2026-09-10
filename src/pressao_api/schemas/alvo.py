@@ -15,6 +15,11 @@ class TipoContato(str, Enum):
     INSTAGRAM = "instagram"
 
 
+class ModoAlvo(str, Enum):
+    INDIVIDUAL = "individual"
+    AGREGADO = "agregado"
+
+
 class AlvoBase(BaseModel):
     nome: str = Field(..., min_length=1, max_length=200, description="Nome do alvo")
     contato: str = Field(..., max_length=200, description="Contato (email ou telefone)")
@@ -48,6 +53,10 @@ class AlvoUpdate(BaseModel):
 class AlvoResponse(AlvoBase):
     id: UUID4
     campanha_id: UUID4
+    modo: ModoAlvo = ModoAlvo.INDIVIDUAL
+    total_membros: int | None = Field(
+        None, description="Quantidade de membros (apenas alvo agregado de e-mail)"
+    )
     criado_em: datetime
     atualizado_em: datetime
     template: TemplateSorteadoResponse | None = Field(

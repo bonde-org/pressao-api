@@ -40,9 +40,7 @@ class CampanhaUpdate(BaseModel):
 
 class CampanhaResponse(CampanhaBase):
     id: UUID4
-    acoes_confirmadas: int = Field(
-        default=0, description="Total de ações confirmadas na campanha"
-    )
+    acoes_confirmadas: int = Field(default=0, description="Total de ações confirmadas na campanha")
     criado_em: datetime
     atualizado_em: datetime
 

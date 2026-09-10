@@ -15,9 +15,7 @@ class TestContadorAcoesConfirmadas:
     def setup_data(self, client, db_session, mock_admin):
         app.dependency_overrides[get_current_user] = lambda: mock_admin
 
-        campanha = client.post(
-            "/api/v1/campanhas/", json={"nome": "Campanha Contador"}
-        ).json()
+        campanha = client.post("/api/v1/campanhas/", json={"nome": "Campanha Contador"}).json()
         alvo_whatsapp = client.post(
             "/api/v1/alvos/",
             json={
@@ -214,9 +212,7 @@ class TestContadorAcoesConfirmadas:
         campanha_antes = client.get(f"/api/v1/campanhas/{campanha['id']}")
         assert campanha_antes.json()["acoes_confirmadas"] == 0
 
-        reconciliar = client.post(
-            f"/api/v1/campanhas/{campanha['id']}/reconciliar-contador"
-        )
+        reconciliar = client.post(f"/api/v1/campanhas/{campanha['id']}/reconciliar-contador")
         assert reconciliar.status_code == 200
         body = reconciliar.json()
         assert body["antes"] == 0
@@ -230,7 +226,5 @@ class TestContadorAcoesConfirmadas:
         app.dependency_overrides[get_current_user] = lambda: mock_user
 
         campanha = setup_data["campanha"]
-        response = client.post(
-            f"/api/v1/campanhas/{campanha['id']}/reconciliar-contador"
-        )
+        response = client.post(f"/api/v1/campanhas/{campanha['id']}/reconciliar-contador")
         assert response.status_code == 403
