@@ -75,27 +75,38 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Update Helm values with new image tag
+      - name: Update Helm values, commit and push (com retry contra race condition)
         if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           SHA_SHORT="${{ steps.tags.outputs.sha_short }}"
-          BRANCH_NAME="${{ steps.tags.outputs.branch_tag }}"
-          if [ -f "helm/values.yaml" ]; then
-            echo "Atualizando helm/values.yaml"
-            sed -i "s/tag: .*/tag: ${SHA_SHORT}/g" helm/values.yaml
-          fi
-          git diff
+          BRANCH="${{ inputs.branch }}"
 
-      - name: Commit and push changes
-        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
-        run: |
-          if git diff --quiet; then
-            echo "Nenhuma mudança para commitar"
-            exit 0
-          fi
-          git add helm/
-          SHA_SHORT="${{ steps.tags.outputs.sha_short }}"
-          git commit -m "chore: update image tag to ${SHA_SHORT} [skip ci]"
-          git push origin ${{ inputs.branch }}
+          for i in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            if [ -f "helm/values.yaml" ]; then
+              sed -i "s/tag: .*/tag: ${SHA_SHORT}/g" helm/values.yaml
+            fi
+
+            if git diff --quiet; then
+              echo "Nenhuma mudança para commitar"
+              exit 0
+            fi
+
+            git add helm/
+            git commit -m "chore: update image tag to ${SHA_SHORT} [skip ci]"
+
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Push ok na tentativa $i"
+              exit 0
+            fi
+
+            echo "Push rejeitado (tentativa $i/5), outra execução deve ter empurrado antes - resincronizando..."
+            sleep $((RANDOM % 5 + 1))
+          done
+
+          echo "Falhou apos 5 tentativas"
+          exit 1
