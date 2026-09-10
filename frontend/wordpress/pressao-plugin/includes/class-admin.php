@@ -40,6 +40,17 @@ class PressaoPlugin_Admin {
             'sanitize_callback' => [$this, 'sanitize_candidatos'],
             'default' => [],
         ]);
+        register_setting('pressao_settings_group', 'pressao_fluxo_limite_candidatos', [
+            'sanitize_callback' => [$this, 'sanitize_fluxo_limite_candidatos'],
+            'default' => 5,
+        ]);
+        register_setting('pressao_settings_group', 'pressao_fluxo_ajuda', [
+            'sanitize_callback' => [$this, 'sanitize_fluxo_ajuda'],
+            'default' => [
+                'titulo' => '',
+                'conteudo' => '',
+            ],
+        ]);
         register_setting('pressao_settings_group', 'pressao_compartilhamento', [
             'sanitize_callback' => [$this, 'sanitize_compartilhamento'],
             'default' => [],
@@ -182,6 +193,22 @@ class PressaoPlugin_Admin {
             'pressao_candidatos_section'
         );
 
+        add_settings_field(
+            'pressao_fluxo_limite_candidatos',
+            __('Limite de candidatos por marcação (fluxo)', 'pressao-plugin'),
+            [$this, 'render_fluxo_limite_field'],
+            'pressao-settings',
+            'pressao_candidatos_section'
+        );
+
+        add_settings_field(
+            'pressao_fluxo_ajuda',
+            __('Ajuda do fluxo (?)', 'pressao-plugin'),
+            [$this, 'render_fluxo_ajuda_field'],
+            'pressao-settings',
+            'pressao_candidatos_section'
+        );
+
         // Seção: Compartilhamento
         add_settings_section(
             'pressao_compartilhamento_section',
@@ -250,6 +277,7 @@ class PressaoPlugin_Admin {
                     <li><code>[pressao_list]</code> - <?php esc_html_e('Apenas lista', 'pressao-plugin'); ?></li>
                     <li><code>[pressao_alvos]</code> - <?php esc_html_e('Lista de alvos com ações (inclui compartilhamento se ativo no admin)', 'pressao-plugin'); ?></li>
                     <li><code>[pressao_candidatos]</code> - <?php esc_html_e('Bloco de candidatos configurado no admin', 'pressao-plugin'); ?></li>
+                    <li><code>[pressao_fluxo]</code> - <?php esc_html_e('Fluxo único sequencial por alvo/canal (Instagram no v1)', 'pressao-plugin'); ?></li>
                 </ul>
                 
                 <p><?php esc_html_e('Exemplos:', 'pressao-plugin'); ?></p>
@@ -262,6 +290,8 @@ class PressaoPlugin_Admin {
                 <code>[pressao_alvos campaign="123" show_ativista_form="yes" ordem="instagram,tiktok,email" tempo_email="1 min"]</code>
                 <br>
                 <code>[pressao_candidatos title="Conheça os candidatos"]</code>
+                <br>
+                <code>[pressao_fluxo alvo_id="uuid-do-alvo" canal="instagram"]</code>
                 
                 <div class="pressao-lgpd-info" style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 6px; border-left: 4px solid #0073aa;">
                     <h3 style="margin-top: 0;"><?php esc_html_e('Sobre a LGPD', 'pressao-plugin'); ?></h3>
@@ -371,11 +401,12 @@ class PressaoPlugin_Admin {
             </p>
             <p>
                 <label>
-                    <?php esc_html_e('Link', 'pressao-plugin'); ?><br>
-                    <input type="url"
+                    <?php esc_html_e('Instagram (@)', 'pressao-plugin'); ?><br>
+                    <input type="text"
                            name="pressao_candidatos[<?php echo esc_attr($index); ?>][link_url]"
-                           value="<?php echo esc_url($candidato['link_url'] ?? ''); ?>"
-                           class="regular-text" />
+                           value="<?php echo esc_attr($candidato['link_url'] ?? ''); ?>"
+                           class="regular-text"
+                           placeholder="@candidato" />
                 </label>
             </p>
             <p>
@@ -428,10 +459,10 @@ class PressaoPlugin_Admin {
             $cargo = sanitize_text_field($candidato['cargo'] ?? '');
             $partido = sanitize_text_field($candidato['partido'] ?? '');
             $descricao = sanitize_textarea_field($candidato['descricao'] ?? '');
-            $link_url = esc_url_raw($candidato['link_url'] ?? '');
+            $link_url = $this->sanitize_instagram_handle($candidato['link_url'] ?? '');
             $imagem_id = absint($candidato['imagem_id'] ?? 0);
 
-            if ($nome === '' && $cargo === '' && $partido === '' && $descricao === '' && !$imagem_id) {
+            if ($nome === '' && $cargo === '' && $partido === '' && $descricao === '' && $link_url === '' && !$imagem_id) {
                 continue;
             }
 
@@ -446,6 +477,108 @@ class PressaoPlugin_Admin {
         }
 
         return $sanitized;
+    }
+
+    /**
+     * Normaliza @handle do Instagram (aceita URL de perfil ou @user).
+     */
+    public function sanitize_instagram_handle($value) {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return '';
+        }
+
+        if (preg_match('#instagram\.com/([^/?#]+)#i', $value, $matches)) {
+            $value = $matches[1];
+        }
+
+        $value = ltrim($value, '@');
+        $value = preg_replace('/[^A-Za-z0-9._]/', '', $value);
+        if ($value === '') {
+            return '';
+        }
+
+        return '@' . $value;
+    }
+
+    public function sanitize_fluxo_limite_candidatos($value) {
+        $n = absint($value);
+        if ($n < 1) {
+            $n = 1;
+        }
+        if ($n > 20) {
+            $n = 20;
+        }
+        return $n;
+    }
+
+    public function render_fluxo_limite_field() {
+        $value = (int) get_option('pressao_fluxo_limite_candidatos', 5);
+        ?>
+        <input type="number"
+               name="pressao_fluxo_limite_candidatos"
+               value="<?php echo esc_attr($value); ?>"
+               min="1"
+               max="20"
+               class="small-text" />
+        <p class="description">
+            <?php esc_html_e('Máximo de candidatos que o ativista pode marcar na mensagem do [pressao_fluxo].', 'pressao-plugin'); ?>
+        </p>
+        <?php
+    }
+
+    public function sanitize_fluxo_ajuda($value) {
+        if (!is_array($value)) {
+            return [
+                'titulo' => '',
+                'conteudo' => '',
+            ];
+        }
+
+        return [
+            'titulo' => sanitize_text_field($value['titulo'] ?? ''),
+            'conteudo' => wp_kses_post($value['conteudo'] ?? ''),
+        ];
+    }
+
+    public function render_fluxo_ajuda_field() {
+        $ajuda = get_option('pressao_fluxo_ajuda', []);
+        if (!is_array($ajuda)) {
+            $ajuda = [];
+        }
+        $titulo = $ajuda['titulo'] ?? '';
+        $conteudo = $ajuda['conteudo'] ?? '';
+        ?>
+        <p>
+            <label>
+                <?php esc_html_e('Título', 'pressao-plugin'); ?><br>
+                <input type="text"
+                       name="pressao_fluxo_ajuda[titulo]"
+                       value="<?php echo esc_attr($titulo); ?>"
+                       class="regular-text"
+                       placeholder="<?php esc_attr_e('Como funciona?', 'pressao-plugin'); ?>" />
+            </label>
+        </p>
+        <p>
+            <label for="pressao_fluxo_ajuda_conteudo"><?php esc_html_e('Conteúdo (HTML permitido)', 'pressao-plugin'); ?></label>
+        </p>
+        <?php
+        wp_editor(
+            $conteudo,
+            'pressao_fluxo_ajuda_conteudo',
+            [
+                'textarea_name' => 'pressao_fluxo_ajuda[conteudo]',
+                'textarea_rows' => 10,
+                'media_buttons' => false,
+                'teeny' => true,
+                'quicktags' => true,
+            ]
+        );
+        ?>
+        <p class="description">
+            <?php esc_html_e('Exibido no modal/drawer ao clicar no ? do [pressao_fluxo].', 'pressao-plugin'); ?>
+        </p>
+        <?php
     }
 
     public function render_compartilhamento_field() {
