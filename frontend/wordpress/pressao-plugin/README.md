@@ -53,6 +53,20 @@ docker compose up -d
 
 O `docker-compose.yml` monta esta pasta como volume em `wp-content/plugins/pressao-plugin`, então alterações em PHP/JS/CSS refletem sem rebuild.
 
+A Media Library grava em um volume Docker (`wordpress_data` → `/var/www/html/wp-content/uploads`). Se o upload falhar por permissão no ambiente local:
+
+```bash
+# Correção imediata (já aplicada no entrypoint após rebuild da imagem wordpress)
+docker compose exec wordpress chown -R www-data:www-data /var/www/html/wp-content/uploads
+docker compose exec wordpress chmod -R ug+rwX /var/www/html/wp-content/uploads
+```
+
+Para tornar o ajuste automático no próximo start:
+
+```bash
+docker compose build wordpress && docker compose up -d wordpress
+```
+
 ### Estrutura do plugin
 
 ```text
@@ -66,12 +80,17 @@ pressao-plugin/
 │   └── class-ajax.php          # AJAX handlers
 ├── assets/
 │   ├── css/
-│   │   └── style.css
+│   │   └── style.css           # Tokens, mask-image dos ícones, @font-face
+│   ├── fonts/                  # NeueHaasGroteskText.woff2/.woff (adicionar manualmente)
+│   ├── icons/                  # SVG de canais, compartilhar, copiar, download, seta e raio (via CSS mask-image)
 │   └── js/
-│       └── widget.js           # UI, cookies, ações e confirmações
+│       ├── admin.js            # Campos repetíveis (candidatos + imagens de compartilhamento) + Media Library
+│       └── widget.js           # UI, cookies, ações, compartilhamento e confirmações
 └── views/
     └── widget-template.php
 ```
+
+Ícones usam `mask-image` (cor via CSS): lista com ícone branco; modal Instagram `#b21e99`, Email `#0068b2`, TikTok `#4d4d4d`. Seta: círculo CSS + mask; só a seta fica branca no hover.
 
 ### Ativando o plugin
 
@@ -97,6 +116,39 @@ Acesse Configurações > Pressão Plugin e preencha:
 | ID da Campanha | `pressao_campaign_id` | Campanha padrão dos shortcodes |
 | Título do Widget | `pressao_widget_title` | Título exibido em `[pressao_widget]` |
 | Duração da sessão | `pressao_session_duration` | TTL dos cookies em segundos (padrão `86400`) |
+| Candidatos | `pressao_candidatos` | Lista de candidatos exibida em `[pressao_candidatos]` |
+| Compartilhamento | `pressao_compartilhamento` | Textos, links, deep links e imagens do botão de compartilhar |
+
+### Configuração de candidatos
+
+O painel possui uma seção "Configurações de Candidatos" para cadastrar os dados renderizados pelo shortcode `[pressao_candidatos]`.
+
+Campos por candidato:
+
+- `nome`
+- `cargo`
+- `partido`
+- `descricao`
+- `link_url`
+- `imagem_id`
+
+As imagens são selecionadas pela Biblioteca de Mídia do WordPress. O plugin armazena o `attachment ID` e renderiza com `wp_get_attachment_image()`, sem implementar upload próprio. Assim, se o WordPress passar a enviar mídias para S3 via offload/plugin de storage, o comportamento continua transparente para o Pressão Plugin.
+
+### Configuração de compartilhamento
+
+A seção "Configurações de Compartilhamento" controla o botão exibido **sempre por último** em `[pressao_alvos]`.
+
+Campos principais da option `pressao_compartilhamento`:
+
+- `ativo` — exibe ou não o botão
+- `titulo`, `subtitulo`, `tempo` — textos do item na lista
+- `overlay_titulo`, `link`, `mensagem` — overlay principal
+- `whatsapp_url` (opcional; se vazio, monta `https://wa.me/?text=` com `mensagem`)
+- `instagram_url`, `messenger_url` — deep links completos definidos no admin
+- `imagens_titulo`, `imagens_subtitulo`, `imagens_instrucao`
+- `imagens[]` — repetível com `imagem_id` (Media Library) + `rotulo`
+
+Não cria ação na API. Ao copiar o link ou abrir WhatsApp/Instagram/Messenger, grava a chave sintética `__compartilhar` no cookie `pressao_acoes_realizadas` para o estado “já realizei”. Essa chave **não** entra no `done/total` de `[pressao_progresso]`. Depois de realizado, a linha mostra só o check verde e continua clicável para reabrir o overlay na mesma sessão.
 
 ### Debug
 
@@ -121,7 +173,7 @@ docker compose exec wordpress php -l wp-content/plugins/pressao-plugin/includes/
 
 ## Uso
 
-Todos os shortcodes aceitam `campaign` e caem em `pressao_campaign_id` quando o atributo é omitido.
+Os shortcodes ligados à campanha aceitam `campaign` e caem em `pressao_campaign_id` quando o atributo é omitido. O shortcode `[pressao_candidatos]` é editorial e usa os dados cadastrados no admin do plugin.
 
 ### `[pressao_alvos]` — lista de alvos com botão de ação
 
@@ -129,8 +181,15 @@ Principal shortcode do plugin: lista os alvos da campanha e permite agir por can
 
 **E-mail:** a API agrupa todos os contatos de e-mail da campanha em um único item (`modo=agregado`, nome padrão "Pressionar por E-mail"). Um clique dispara a ação `multi_alvo` para todos os destinatários. O campo `total_membros` indica quantos e-mails serão pressionados. Use `action_label="Pressionar por E-mail"` para o rótulo do botão.
 
+**Instagram e TikTok:** fluxo manual com mensagem sorteada. No cadastro do alvo, `nome` é o
+nome do perfil a comentar e `contato` é a **URL da postagem/vídeo**. O overlay copia o texto e
+abre esse link; a confirmação segue via `PATCH /api/v1/acoes/{id}/confirmar`.
+
+**Compartilhamento:** item editorial no fim da lista (configurado no admin). Overlay com copiar link,
+deep links WhatsApp/Instagram/Messenger e download de imagens. Sem `POST /acoes`.
+
 ```text
-[pressao_alvos campaign="uuid" show_ativista_form="yes" show_template="yes" cache="0" action_label="Pressionar por E-mail"]
+[pressao_alvos campaign="uuid" show_ativista_form="yes" show_template="yes" cache="0" action_label="Pressionar por E-mail" ordem="instagram,tiktok,email" tempo_instagram="2 min" tempo_tiktok="2 min" tempo_email="1 min"]
 ```
 
 | Atributo | Padrão | Descrição |
@@ -143,8 +202,12 @@ Principal shortcode do plugin: lista os alvos da campanha e permite agir por can
 | `action_label` | `Agir` | Rótulo do botão de ação |
 | `action_done_label` | `Ação realizada ✓` | Rótulo após a ação |
 | `canal` | — | Filtra os alvos por canal |
+| `ordem` | — | CSV de canais para ordenar a lista (ex.: `instagram,tiktok,email`). Canais omitidos ficam depois, na ordem da API. Compartilhamento permanece sempre por último |
+| `tempo_instagram` | `2 min` | Tempo estimado exibido ao lado do título Instagram |
+| `tempo_tiktok` | `2 min` | Tempo estimado exibido ao lado do título TikTok |
+| `tempo_email` | `1 min` | Tempo estimado exibido ao lado do título Email |
 | `template_id` | — | **Fallback**; normalmente o template vem sorteado da API |
-| `show_template` | `no` | `yes` exibe a mensagem sorteada num `<details>` (título no `summary`, corpo filtrado por `wp_kses_post`) |
+| `show_template` | `no` | `yes` exibe a mensagem sorteada no toggle "Ver mensagem" |
 | `cache` | `300` | TTL do transient de alvos. `0` desliga o cache e sorteia um template a cada pageview |
 | `class` | — | Classe CSS extra |
 | `id` | gerado | ID do container |
@@ -181,6 +244,20 @@ Barra `done / total` de alvos baseada no cookie `pressao_acoes_realizadas`. Cont
 | `label` | `seu progresso` | Texto da barra |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
 
+### `[pressao_candidatos]` — bloco de candidatos
+
+Renderiza os candidatos cadastrados no painel do plugin.
+
+```text
+[pressao_candidatos title="Conheça os candidatos"]
+```
+
+| Atributo | Padrão | Descrição |
+|----------|--------|-----------|
+| `title` | `Candidatos` | Título do bloco |
+| `show_title` | `yes` | Exibe ou oculta o título |
+| `class` / `id` | — / gerado | Classe CSS extra e ID do container |
+
 ### `[pressao_widget]` — widget principal
 
 ```text
@@ -199,14 +276,15 @@ Barra `done / total` de alvos baseada no cookie `pressao_acoes_realizadas`. Cont
 
 Containers básicos, ainda sem lógica de renderização completa. Aceitam `campaign`, `id` e — no caso de `pressao_list` — `limit`; `pressao_form` aceita `button_text`.
 
-## ✉️ Templates de e-mail sorteados
+## ✉️ Templates sorteados
 
-A API mantém templates de mensagem por campanha e sorteia um deles para cada alvo de e-mail. O fluxo ponta a ponta:
+A API mantém templates de mensagem por campanha e sorteia um deles para cada alvo de e-mail, Instagram e TikTok. O fluxo ponta a ponta:
 
-1. `GET /api/v1/alvos/campanha/{id}` devolve, em cada alvo com `tipo_contato=email`, o campo `template` (`id`, `canal`, `titulo`, `conteudo`) **sorteado naquele request**.
+1. `GET /api/v1/alvos/campanha/{id}` devolve, em cada alvo com `tipo_contato=email`, `instagram` ou `tiktok`, o campo `template` (`id`, `canal`, `titulo`, `conteudo`) **sorteado naquele request**.
 2. `render_alvos()` grava esse `template.id` em `data-template-id` **no `<li>` de cada alvo**.
 3. `realizarAcao()` no `widget.js` lê o `data-template-id` do item (o do container é fallback) e o envia no AJAX.
-4. `PressaoPlugin_API::criar_acao*` repassa como `template_id` no `POST /api/v1/acoes/`, onde `titulo` vira o assunto e `conteudo` o corpo do e-mail.
+4. `PressaoPlugin_API::criar_acao*` repassa como `template_id` no `POST /api/v1/acoes/`.
+5. Em e-mail, `titulo` vira o assunto e `conteudo` vira o corpo. Em Instagram/TikTok, `conteudo` vira a mensagem para copiar no fluxo manual.
 
 **Cadastro de templates é feito pela API**, não pelo painel WordPress:
 
@@ -219,7 +297,7 @@ curl -X POST "$API_URL/api/v1/templates/" \
 
 Placeholders disponíveis no `conteudo`: `{alvo_nome}`, `{campanha_nome}`, `{ativista_nome}` (vazio em ação anônima) e `{acao_id}`.
 
-**Atenção ao cache:** com `cache` maior que zero o template sorteado fica congelado pelo período do transient. Use `cache="0"` no `[pressao_alvos]` quando a variação por pageview importar. Campanha sem template ativo devolve `template: null` e o fluxo segue com o HTML padrão da API.
+**Atenção ao cache:** com `cache` maior que zero o template sorteado fica congelado pelo período do transient. Use `cache="0"` no `[pressao_alvos]` quando a variação por pageview importar. Campanha sem template ativo devolve `template: null` e o fluxo segue com a mensagem padrão da API.
 
 ## 🍪 Cookies
 
@@ -230,10 +308,12 @@ Todos usam o TTL de `pressao_session_duration` e são limpos de uma vez por `cle
 | `pressao_sessao_id` | UUID v4 da sessão do navegador |
 | `pressao_ativista_data` | Nome, email e telefone do ativista (JSON) |
 | `pressao_ativista_last_confirm` | Timestamp da última confirmação de identidade |
-| `pressao_acoes_realizadas` | Mapa `alvoId → {timestamp, acao_id, status, user_id}` — fonte de verdade do progresso e do estado SSR |
+| `pressao_acoes_realizadas` | Mapa `alvoId → {timestamp, acao_id, status, user_id}` — fonte de verdade do progresso e do estado SSR. Inclui a chave sintética `__compartilhar` quando o ativista compartilha (sem `acao_id`) |
 | `pressao_usuario_id` | ID anônimo do usuário (legado) |
 
 O payload de `pressao_acoes_realizadas` é mantido enxuto de propósito: estourar ~4KB derruba os cookies de sessão do WordPress e o AJAX começa a responder 403 "Nonce inválido".
+
+Instagram/TikTok disparam `pressao_realizar_acao` **ao abrir o modal**. Se o nonce embutido na página estiver inválido (page cache aquecido por outro usuário, ou cookie de login WP perdido), o erro aparece na hora. O plugin renova o nonce via `pressao_refresh_nonce` antes do POST e tenta de novo uma vez se ainda falhar.
 
 ## 🔌 Handlers AJAX
 
@@ -241,6 +321,7 @@ Todos registrados nas variantes logada e `nopriv`:
 
 | Action | Método em `PressaoPlugin_API` | Endpoint da API |
 |--------|-------------------------------|-----------------|
+| `pressao_refresh_nonce` | — | Nenhum: devolve `wp_create_nonce('pressao_acao_nonce')` da sessão atual (sem exigir nonce prévio) |
 | `pressao_get_campanha` | `get_campanha` | `GET /api/v1/campanhas/{id}` |
 | `pressao_realizar_acao` | `criar_acao_com_ativista` / `criar_acao_sem_ativista` | `POST /api/v1/acoes/` |
 | `pressao_confirmar_acao` | `confirmar_acao` | `PATCH /api/v1/acoes/{id}/confirmar` |

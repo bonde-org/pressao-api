@@ -25,7 +25,14 @@ RUN a2enmod rewrite headers
 # Configurações adicionais do PHP
 COPY php.ini /usr/local/etc/php/conf.d/custom.ini
 
+# Garante permissão de escrita em uploads no volume nomeado (local)
+COPY docker-entrypoint-permissions.sh /usr/local/bin/docker-entrypoint-permissions.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint-permissions.sh
+
 # Limpa cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/html
+
+ENTRYPOINT ["docker-entrypoint-permissions.sh"]
+CMD ["apache2-foreground"]

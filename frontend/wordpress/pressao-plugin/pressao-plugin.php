@@ -82,7 +82,9 @@ final class PressaoPlugin {
             'pressao_client_secret' => '',
             'pressao_api_url' => '',
             'pressao_campaign_id' => '',
-            'pressao_widget_title' => 'Pressão Widget'
+            'pressao_widget_title' => 'Pressão Widget',
+            'pressao_candidatos' => [],
+            'pressao_compartilhamento' => [],
         ];
         
         foreach ($defaults as $key => $value) {
@@ -114,7 +116,9 @@ final class PressaoPlugin {
                          has_shortcode($post->post_content, 'pressao_form') ||
                          has_shortcode($post->post_content, 'pressao_list') ||
                          has_shortcode($post->post_content, 'pressao_alvos') ||
-                         has_shortcode($post->post_content, 'pressao_contador');
+                         has_shortcode($post->post_content, 'pressao_contador') ||
+                         has_shortcode($post->post_content, 'pressao_progresso') ||
+                         has_shortcode($post->post_content, 'pressao_candidatos');
         
         if ($has_shortcode) {
             wp_enqueue_style(
@@ -123,6 +127,13 @@ final class PressaoPlugin {
                 [],
                 PRESSAO_PLUGIN_VERSION
             );
+
+            $icons_url = PRESSAO_PLUGIN_URL . 'assets/icons/';
+            $icon_vars = sprintf(
+                ':root{--pressao-icon-instagram:url("%1$sinstagram.svg");--pressao-icon-tiktok:url("%1$stiktok.svg");--pressao-icon-email:url("%1$semail.svg");--pressao-icon-seta:url("%1$sseta.svg");--pressao-icon-raio:url("%1$sraio-barra-progresso.svg");--pressao-icon-compartilhar:url("%1$scompartilhar.svg");--pressao-icon-copiar:url("%1$scopiar.svg");--pressao-icon-download:url("%1$sdownload.svg");--pressao-icon-whatsapp:url("%1$swhatsapp.svg");--pressao-icon-messenger:url("%1$smessenger.svg");--pressao-icon-seta-circulo:url("%1$sseta-com-circulo.svg");}',
+                esc_url_raw($icons_url)
+            );
+            wp_add_inline_style('pressao-plugin', $icon_vars);
             
             wp_enqueue_script(
                 'pressao-plugin',
@@ -137,6 +148,7 @@ final class PressaoPlugin {
                 'campaignId' => get_option('pressao_campaign_id', ''),
                 'nonce' => wp_create_nonce('pressao_acao_nonce'),
                 'ajaxUrl' => admin_url('admin-ajax.php'),
+                'iconsUrl' => $icons_url,
                 'localStorageKey' => 'pressao_acoes_realizadas',
                 'cookieUserIdKey' => 'pressao_usuario_id',
                 'cookieActionsKey' => 'pressao_acoes_realizadas',
@@ -157,13 +169,32 @@ final class PressaoPlugin {
         if (strpos($hook, 'pressao-settings') === false) {
             return;
         }
-        
-        wp_enqueue_style(
+
+        wp_enqueue_media();
+
+        $admin_css = PRESSAO_PLUGIN_DIR . 'assets/css/admin.css';
+        if (file_exists($admin_css)) {
+            wp_enqueue_style(
+                'pressao-admin',
+                PRESSAO_PLUGIN_URL . 'assets/css/admin.css',
+                [],
+                PRESSAO_PLUGIN_VERSION
+            );
+        }
+
+        wp_enqueue_script(
             'pressao-admin',
-            PRESSAO_PLUGIN_URL . 'assets/css/admin.css',
-            [],
-            PRESSAO_PLUGIN_VERSION
+            PRESSAO_PLUGIN_URL . 'assets/js/admin.js',
+            ['jquery'],
+            PRESSAO_PLUGIN_VERSION,
+            true
         );
+
+        wp_localize_script('pressao-admin', 'pressaoAdminData', [
+            'selectCandidateImage' => __('Selecionar imagem do candidato', 'pressao-plugin'),
+            'selectShareImage' => __('Selecionar imagem para postar', 'pressao-plugin'),
+            'useThisImage' => __('Usar esta imagem', 'pressao-plugin'),
+        ]);
     }
 }
 

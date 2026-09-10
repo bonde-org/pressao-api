@@ -36,6 +36,14 @@ class PressaoPlugin_Admin {
         register_setting('pressao_settings_group', 'pressao_campaign_id');
         register_setting('pressao_settings_group', 'pressao_widget_title');
         register_setting('pressao_settings_group', 'pressao_session_duration');
+        register_setting('pressao_settings_group', 'pressao_candidatos', [
+            'sanitize_callback' => [$this, 'sanitize_candidatos'],
+            'default' => [],
+        ]);
+        register_setting('pressao_settings_group', 'pressao_compartilhamento', [
+            'sanitize_callback' => [$this, 'sanitize_compartilhamento'],
+            'default' => [],
+        ]);
         
         // Seção: Autenticação
         add_settings_section(
@@ -157,6 +165,38 @@ class PressaoPlugin_Admin {
             'pressao-settings',
             'pressao_ativista_section'
         );
+
+        // Seção: Candidatos
+        add_settings_section(
+            'pressao_candidatos_section',
+            __('Configurações de Candidatos', 'pressao-plugin'),
+            null,
+            'pressao-settings'
+        );
+
+        add_settings_field(
+            'pressao_candidatos',
+            __('Candidatos', 'pressao-plugin'),
+            [$this, 'render_candidatos_field'],
+            'pressao-settings',
+            'pressao_candidatos_section'
+        );
+
+        // Seção: Compartilhamento
+        add_settings_section(
+            'pressao_compartilhamento_section',
+            __('Configurações de Compartilhamento', 'pressao-plugin'),
+            null,
+            'pressao-settings'
+        );
+
+        add_settings_field(
+            'pressao_compartilhamento',
+            __('Compartilhamento', 'pressao-plugin'),
+            [$this, 'render_compartilhamento_field'],
+            'pressao-settings',
+            'pressao_compartilhamento_section'
+        );
     }
     
     public function render_text_field($args) {
@@ -208,7 +248,8 @@ class PressaoPlugin_Admin {
                     <li><code>[pressao_widget]</code> - <?php esc_html_e('Widget principal', 'pressao-plugin'); ?></li>
                     <li><code>[pressao_form]</code> - <?php esc_html_e('Apenas formulário', 'pressao-plugin'); ?></li>
                     <li><code>[pressao_list]</code> - <?php esc_html_e('Apenas lista', 'pressao-plugin'); ?></li>
-                    <li><code>[pressao_alvos]</code> - <?php esc_html_e('Lista de alvos com ações', 'pressao-plugin'); ?></li>
+                    <li><code>[pressao_alvos]</code> - <?php esc_html_e('Lista de alvos com ações (inclui compartilhamento se ativo no admin)', 'pressao-plugin'); ?></li>
+                    <li><code>[pressao_candidatos]</code> - <?php esc_html_e('Bloco de candidatos configurado no admin', 'pressao-plugin'); ?></li>
                 </ul>
                 
                 <p><?php esc_html_e('Exemplos:', 'pressao-plugin'); ?></p>
@@ -218,7 +259,9 @@ class PressaoPlugin_Admin {
                 <br>
                 <code>[pressao_list limit="5"]</code>
                 <br>
-                <code>[pressao_alvos campaign="123" show_ativista_form="yes"]</code>
+                <code>[pressao_alvos campaign="123" show_ativista_form="yes" ordem="instagram,tiktok,email" tempo_email="1 min"]</code>
+                <br>
+                <code>[pressao_candidatos title="Conheça os candidatos"]</code>
                 
                 <div class="pressao-lgpd-info" style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 6px; border-left: 4px solid #0073aa;">
                     <h3 style="margin-top: 0;"><?php esc_html_e('Sobre a LGPD', 'pressao-plugin'); ?></h3>
@@ -269,6 +312,384 @@ class PressaoPlugin_Admin {
         </select>
         <p class="description"><?php esc_html_e('Tempo que a sessão do ativista permanece ativa no navegador.', 'pressao-plugin'); ?></p>
         <?php
+    }
+
+    public function render_candidatos_field() {
+        $candidatos = get_option('pressao_candidatos', []);
+        if (!is_array($candidatos) || empty($candidatos)) {
+            $candidatos = [[]];
+        }
+        ?>
+        <div class="pressao-candidatos-admin" data-next-index="<?php echo esc_attr(count($candidatos)); ?>">
+            <div class="pressao-candidatos-list">
+                <?php foreach ($candidatos as $index => $candidato) : ?>
+                    <?php $this->render_candidato_admin_item((int) $index, $candidato); ?>
+                <?php endforeach; ?>
+            </div>
+            <button type="button" class="button pressao-add-candidato">
+                <?php esc_html_e('Adicionar candidato', 'pressao-plugin'); ?>
+            </button>
+            <p class="description">
+                <?php esc_html_e('As imagens usam a Biblioteca de Mídia do WordPress. Se o WordPress enviar mídias para S3 no futuro, o plugin continuará usando o mesmo attachment ID.', 'pressao-plugin'); ?>
+            </p>
+        </div>
+        <?php
+    }
+
+    private function render_candidato_admin_item($index, $candidato) {
+        $candidato = is_array($candidato) ? $candidato : [];
+        $imagem_id = absint($candidato['imagem_id'] ?? 0);
+        $imagem_url = $imagem_id ? wp_get_attachment_image_url($imagem_id, 'thumbnail') : '';
+        ?>
+        <div class="pressao-candidato-admin-item" data-index="<?php echo esc_attr($index); ?>">
+            <p>
+                <label>
+                    <?php esc_html_e('Nome', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_candidatos[<?php echo esc_attr($index); ?>][nome]"
+                           value="<?php echo esc_attr($candidato['nome'] ?? ''); ?>"
+                           class="regular-text" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Cargo', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_candidatos[<?php echo esc_attr($index); ?>][cargo]"
+                           value="<?php echo esc_attr($candidato['cargo'] ?? ''); ?>"
+                           class="regular-text" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Partido/organização', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_candidatos[<?php echo esc_attr($index); ?>][partido]"
+                           value="<?php echo esc_attr($candidato['partido'] ?? ''); ?>"
+                           class="regular-text" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Link', 'pressao-plugin'); ?><br>
+                    <input type="url"
+                           name="pressao_candidatos[<?php echo esc_attr($index); ?>][link_url]"
+                           value="<?php echo esc_url($candidato['link_url'] ?? ''); ?>"
+                           class="regular-text" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Descrição', 'pressao-plugin'); ?><br>
+                    <textarea name="pressao_candidatos[<?php echo esc_attr($index); ?>][descricao]"
+                              rows="3"
+                              class="large-text"><?php echo esc_textarea($candidato['descricao'] ?? ''); ?></textarea>
+                </label>
+            </p>
+            <div class="pressao-candidato-image-field">
+                <input type="hidden"
+                       class="pressao-candidato-image-id"
+                       name="pressao_candidatos[<?php echo esc_attr($index); ?>][imagem_id]"
+                       value="<?php echo esc_attr($imagem_id); ?>" />
+                <div class="pressao-candidato-image-preview">
+                    <?php if ($imagem_url) : ?>
+                        <img src="<?php echo esc_url($imagem_url); ?>" alt="" style="max-width: 96px; height: auto;" />
+                    <?php endif; ?>
+                </div>
+                <button type="button" class="button pressao-select-candidato-image">
+                    <?php esc_html_e('Selecionar imagem', 'pressao-plugin'); ?>
+                </button>
+                <button type="button" class="button pressao-remove-candidato-image">
+                    <?php esc_html_e('Remover imagem', 'pressao-plugin'); ?>
+                </button>
+            </div>
+            <p>
+                <button type="button" class="button link-delete pressao-remove-candidato">
+                    <?php esc_html_e('Remover candidato', 'pressao-plugin'); ?>
+                </button>
+            </p>
+            <hr>
+        </div>
+        <?php
+    }
+
+    public function sanitize_candidatos($value) {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $sanitized = [];
+        foreach ($value as $candidato) {
+            if (!is_array($candidato)) {
+                continue;
+            }
+
+            $nome = sanitize_text_field($candidato['nome'] ?? '');
+            $cargo = sanitize_text_field($candidato['cargo'] ?? '');
+            $partido = sanitize_text_field($candidato['partido'] ?? '');
+            $descricao = sanitize_textarea_field($candidato['descricao'] ?? '');
+            $link_url = esc_url_raw($candidato['link_url'] ?? '');
+            $imagem_id = absint($candidato['imagem_id'] ?? 0);
+
+            if ($nome === '' && $cargo === '' && $partido === '' && $descricao === '' && !$imagem_id) {
+                continue;
+            }
+
+            $sanitized[] = [
+                'nome' => $nome,
+                'cargo' => $cargo,
+                'partido' => $partido,
+                'descricao' => $descricao,
+                'link_url' => $link_url,
+                'imagem_id' => $imagem_id,
+            ];
+        }
+
+        return $sanitized;
+    }
+
+    public function render_compartilhamento_field() {
+        $config = get_option('pressao_compartilhamento', []);
+        if (!is_array($config)) {
+            $config = [];
+        }
+        $imagens = isset($config['imagens']) && is_array($config['imagens']) ? $config['imagens'] : [];
+        if (empty($imagens)) {
+            $imagens = [[]];
+        }
+        $ativo = !empty($config['ativo']);
+        ?>
+        <div class="pressao-compartilhamento-admin">
+            <p>
+                <label>
+                    <input type="checkbox"
+                           name="pressao_compartilhamento[ativo]"
+                           value="1"
+                           <?php checked($ativo); ?> />
+                    <?php esc_html_e('Exibir botão de compartilhamento no final da lista de alvos', 'pressao-plugin'); ?>
+                </label>
+            </p>
+
+            <h4><?php esc_html_e('Botão na lista', 'pressao-plugin'); ?></h4>
+            <p>
+                <label>
+                    <?php esc_html_e('Título', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_compartilhamento[titulo]"
+                           value="<?php echo esc_attr($config['titulo'] ?? ''); ?>"
+                           class="regular-text"
+                           placeholder="<?php esc_attr_e('Compartilhar ação', 'pressao-plugin'); ?>" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Subtítulo', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_compartilhamento[subtitulo]"
+                           value="<?php echo esc_attr($config['subtitulo'] ?? ''); ?>"
+                           class="regular-text"
+                           placeholder="<?php esc_attr_e('Ajude a chegar em mais gente', 'pressao-plugin'); ?>" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Tempo estimado', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_compartilhamento[tempo]"
+                           value="<?php echo esc_attr($config['tempo'] ?? ''); ?>"
+                           class="small-text"
+                           placeholder="3 min" />
+                </label>
+            </p>
+
+            <h4><?php esc_html_e('Overlay', 'pressao-plugin'); ?></h4>
+            <p>
+                <label>
+                    <?php esc_html_e('Título do overlay', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_compartilhamento[overlay_titulo]"
+                           value="<?php echo esc_attr($config['overlay_titulo'] ?? ''); ?>"
+                           class="regular-text"
+                           placeholder="<?php esc_attr_e('Compartilhe e aumente o seu impacto', 'pressao-plugin'); ?>" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Link para compartilhar', 'pressao-plugin'); ?><br>
+                    <input type="url"
+                           name="pressao_compartilhamento[link]"
+                           value="<?php echo esc_url($config['link'] ?? ''); ?>"
+                           class="regular-text" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Mensagem pré-definida', 'pressao-plugin'); ?><br>
+                    <textarea name="pressao_compartilhamento[mensagem]"
+                              rows="3"
+                              class="large-text"><?php echo esc_textarea($config['mensagem'] ?? ''); ?></textarea>
+                </label>
+                <span class="description">
+                    <?php esc_html_e('Usada no WhatsApp (wa.me/?text=) quando a URL customizada estiver vazia.', 'pressao-plugin'); ?>
+                </span>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('URL WhatsApp (opcional)', 'pressao-plugin'); ?><br>
+                    <input type="url"
+                           name="pressao_compartilhamento[whatsapp_url]"
+                           value="<?php echo esc_url($config['whatsapp_url'] ?? ''); ?>"
+                           class="regular-text" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('URL Instagram', 'pressao-plugin'); ?><br>
+                    <input type="url"
+                           name="pressao_compartilhamento[instagram_url]"
+                           value="<?php echo esc_url($config['instagram_url'] ?? ''); ?>"
+                           class="regular-text" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('URL Messenger', 'pressao-plugin'); ?><br>
+                    <input type="url"
+                           name="pressao_compartilhamento[messenger_url]"
+                           value="<?php echo esc_url($config['messenger_url'] ?? ''); ?>"
+                           class="regular-text" />
+                </label>
+            </p>
+
+            <h4><?php esc_html_e('Imagens para postar', 'pressao-plugin'); ?></h4>
+            <p>
+                <label>
+                    <?php esc_html_e('Título do card', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_compartilhamento[imagens_titulo]"
+                           value="<?php echo esc_attr($config['imagens_titulo'] ?? ''); ?>"
+                           class="regular-text"
+                           placeholder="<?php esc_attr_e('Imagens para postar', 'pressao-plugin'); ?>" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Subtítulo do card', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_compartilhamento[imagens_subtitulo]"
+                           value="<?php echo esc_attr($config['imagens_subtitulo'] ?? ''); ?>"
+                           class="regular-text"
+                           placeholder="<?php esc_attr_e('baixe imagens prontas para postar nas redes', 'pressao-plugin'); ?>" />
+                </label>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('Instrução da tela de download', 'pressao-plugin'); ?><br>
+                    <textarea name="pressao_compartilhamento[imagens_instrucao]"
+                              rows="2"
+                              class="large-text"><?php echo esc_textarea($config['imagens_instrucao'] ?? ''); ?></textarea>
+                </label>
+            </p>
+
+            <div class="pressao-share-imagens-admin" data-next-index="<?php echo esc_attr(count($imagens)); ?>">
+                <div class="pressao-share-imagens-list">
+                    <?php foreach ($imagens as $index => $imagem) : ?>
+                        <?php $this->render_share_imagem_admin_item((int) $index, $imagem); ?>
+                    <?php endforeach; ?>
+                </div>
+                <button type="button" class="button pressao-add-share-imagem">
+                    <?php esc_html_e('Adicionar imagem', 'pressao-plugin'); ?>
+                </button>
+                <p class="description">
+                    <?php esc_html_e('As imagens usam a Biblioteca de Mídia do WordPress (attachment ID).', 'pressao-plugin'); ?>
+                </p>
+            </div>
+        </div>
+        <?php
+    }
+
+    private function render_share_imagem_admin_item($index, $imagem) {
+        $imagem = is_array($imagem) ? $imagem : [];
+        $imagem_id = absint($imagem['imagem_id'] ?? 0);
+        $imagem_url = $imagem_id ? wp_get_attachment_image_url($imagem_id, 'thumbnail') : '';
+        ?>
+        <div class="pressao-share-imagem-admin-item" data-index="<?php echo esc_attr($index); ?>">
+            <p>
+                <label>
+                    <?php esc_html_e('Rótulo', 'pressao-plugin'); ?><br>
+                    <input type="text"
+                           name="pressao_compartilhamento[imagens][<?php echo esc_attr($index); ?>][rotulo]"
+                           value="<?php echo esc_attr($imagem['rotulo'] ?? ''); ?>"
+                           class="regular-text"
+                           placeholder="<?php esc_attr_e('Story/Status', 'pressao-plugin'); ?>" />
+                </label>
+            </p>
+            <div class="pressao-share-imagem-field">
+                <input type="hidden"
+                       class="pressao-share-imagem-id"
+                       name="pressao_compartilhamento[imagens][<?php echo esc_attr($index); ?>][imagem_id]"
+                       value="<?php echo esc_attr($imagem_id); ?>" />
+                <div class="pressao-share-imagem-preview">
+                    <?php if ($imagem_url) : ?>
+                        <img src="<?php echo esc_url($imagem_url); ?>" alt="" style="max-width: 96px; height: auto;" />
+                    <?php endif; ?>
+                </div>
+                <button type="button" class="button pressao-select-share-imagem">
+                    <?php esc_html_e('Selecionar imagem', 'pressao-plugin'); ?>
+                </button>
+                <button type="button" class="button pressao-remove-share-imagem-file">
+                    <?php esc_html_e('Remover imagem', 'pressao-plugin'); ?>
+                </button>
+            </div>
+            <p>
+                <button type="button" class="button link-delete pressao-remove-share-imagem">
+                    <?php esc_html_e('Remover item', 'pressao-plugin'); ?>
+                </button>
+            </p>
+            <hr>
+        </div>
+        <?php
+    }
+
+    public function sanitize_compartilhamento($value) {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $imagens = [];
+        if (isset($value['imagens']) && is_array($value['imagens'])) {
+            foreach ($value['imagens'] as $imagem) {
+                if (!is_array($imagem)) {
+                    continue;
+                }
+                $rotulo = sanitize_text_field($imagem['rotulo'] ?? '');
+                $imagem_id = absint($imagem['imagem_id'] ?? 0);
+                if ($rotulo === '' && !$imagem_id) {
+                    continue;
+                }
+                $imagens[] = [
+                    'rotulo' => $rotulo,
+                    'imagem_id' => $imagem_id,
+                ];
+            }
+        }
+
+        return [
+            'ativo' => !empty($value['ativo']) ? 1 : 0,
+            'titulo' => sanitize_text_field($value['titulo'] ?? ''),
+            'subtitulo' => sanitize_text_field($value['subtitulo'] ?? ''),
+            'tempo' => sanitize_text_field($value['tempo'] ?? ''),
+            'overlay_titulo' => sanitize_text_field($value['overlay_titulo'] ?? ''),
+            'link' => esc_url_raw($value['link'] ?? ''),
+            'mensagem' => sanitize_textarea_field($value['mensagem'] ?? ''),
+            'whatsapp_url' => esc_url_raw($value['whatsapp_url'] ?? ''),
+            'instagram_url' => esc_url_raw($value['instagram_url'] ?? ''),
+            'messenger_url' => esc_url_raw($value['messenger_url'] ?? ''),
+            'imagens_titulo' => sanitize_text_field($value['imagens_titulo'] ?? ''),
+            'imagens_subtitulo' => sanitize_text_field($value['imagens_subtitulo'] ?? ''),
+            'imagens_instrucao' => sanitize_textarea_field($value['imagens_instrucao'] ?? ''),
+            'imagens' => $imagens,
+        ];
     }
 }
 
