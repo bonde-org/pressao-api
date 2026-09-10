@@ -22,6 +22,7 @@ class PressaoPlugin_Shortcode {
         add_shortcode('pressao_contador', [$this, 'render_contador']);
         add_shortcode('pressao_progresso', [$this, 'render_progresso']);
         add_shortcode('pressao_candidatos', [$this, 'render_candidatos']);
+        add_shortcode('pressao_fluxo', [$this, 'render_fluxo']);
     }
     
     /**
@@ -534,15 +535,18 @@ class PressaoPlugin_Shortcode {
     /**
      * Config pública de compartilhamento para SSR/JS, ou null se inativo/incompleto.
      */
-    private function get_compartilhamento_config_for_render() {
+    private function get_compartilhamento_config_for_render($require_ativo = true) {
         $config = get_option('pressao_compartilhamento', []);
-        if (!is_array($config) || empty($config['ativo'])) {
+        if (!is_array($config)) {
+            return null;
+        }
+        if ($require_ativo && empty($config['ativo'])) {
             return null;
         }
 
         $link = isset($config['link']) ? trim((string) $config['link']) : '';
         $mensagem = isset($config['mensagem']) ? trim((string) $config['mensagem']) : '';
-        if ($link === '' && $mensagem === '') {
+        if ($require_ativo && $link === '' && $mensagem === '') {
             return null;
         }
 
@@ -813,8 +817,14 @@ class PressaoPlugin_Shortcode {
                             <?php endif; ?>
 
                             <?php if ($link_url) : ?>
-                                <a class="pressao-candidato-link" href="<?php echo esc_url($link_url); ?>">
-                                    <?php esc_html_e('Saiba mais', 'pressao-plugin'); ?>
+                                <?php
+                                $instagram_path = ltrim($link_url, '@');
+                                $instagram_href = (strpos($link_url, 'http') === 0)
+                                    ? $link_url
+                                    : 'https://www.instagram.com/' . $instagram_path . '/';
+                                ?>
+                                <a class="pressao-candidato-link" href="<?php echo esc_url($instagram_href); ?>" target="_blank" rel="noopener noreferrer">
+                                    <?php echo esc_html($link_url); ?>
                                 </a>
                             <?php endif; ?>
                         </div>
@@ -835,6 +845,405 @@ class PressaoPlugin_Shortcode {
         }
         $actions = json_decode(stripslashes($_COOKIE['pressao_acoes_realizadas']), true);
         return is_array($actions) ? $actions : [];
+    }
+
+    /**
+     * Fluxo único sequencial por alvo/canal (v1: Instagram).
+     */
+    public function render_fluxo($atts) {
+        $atts = shortcode_atts([
+            'alvo_id' => '',
+            'canal' => 'instagram',
+            'campaign' => get_option('pressao_campaign_id', ''),
+            'template_id' => '',
+            'title' => __('Chame candidatos para fortalecer a pauta', 'pressao-plugin'),
+            'subtitle' => __('Cada voz ajuda! Marque quem ainda não se posicionou sobre a Tarifa Zero e convide para apoiar a pauta.', 'pressao-plugin'),
+            'class' => '',
+            'id' => 'pressao-fluxo-' . uniqid(),
+            'cache' => 300,
+        ], $atts, 'pressao_fluxo');
+
+        $alvo_id = sanitize_text_field($atts['alvo_id']);
+        $canal = strtolower(sanitize_text_field($atts['canal']));
+        $campanha_id = sanitize_text_field($atts['campaign']);
+        $template_id_att = sanitize_text_field($atts['template_id']);
+        $cache_time = intval($atts['cache']);
+
+        if ($alvo_id === '') {
+            return '<p class="pressao-error">' . esc_html__('Informe o alvo_id no shortcode [pressao_fluxo].', 'pressao-plugin') . '</p>';
+        }
+
+        if ($canal !== 'instagram') {
+            return '<p class="pressao-error">' . esc_html__('Neste lançamento o [pressao_fluxo] está disponível apenas para o canal Instagram.', 'pressao-plugin') . '</p>';
+        }
+
+        if ($campanha_id === '') {
+            return '<p class="pressao-error">' . esc_html__('ID da campanha não informado', 'pressao-plugin') . '</p>';
+        }
+
+        $result = $this->api->get_alvos_cached($campanha_id, ['canal' => $canal], $cache_time);
+        if (is_wp_error($result)) {
+            return '<p class="pressao-error">' . esc_html($result->get_error_message()) . '</p>';
+        }
+
+        $alvos = (!empty($result['success']) && !empty($result['data'])) ? $result['data'] : [];
+        if (!is_array($alvos)) {
+            $alvos = [];
+        }
+
+        $alvo = null;
+        foreach ($alvos as $item) {
+            if (!empty($item['id']) && (string) $item['id'] === (string) $alvo_id) {
+                $alvo = $item;
+                break;
+            }
+        }
+
+        if (!$alvo) {
+            $result_all = $this->api->get_alvos_cached($campanha_id, [], $cache_time);
+            if (!is_wp_error($result_all) && !empty($result_all['success']) && !empty($result_all['data'])) {
+                foreach ($result_all['data'] as $item) {
+                    if (!empty($item['id']) && (string) $item['id'] === (string) $alvo_id) {
+                        $alvo = $item;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!$alvo) {
+            return '<p class="pressao-error">' . esc_html__('Alvo não encontrado para esta campanha.', 'pressao-plugin') . '</p>';
+        }
+
+        $alvo_template = isset($alvo['template']) && is_array($alvo['template']) ? $alvo['template'] : null;
+        $template_id = $alvo_template && !empty($alvo_template['id'])
+            ? $alvo_template['id']
+            : $template_id_att;
+        $template_conteudo = $alvo_template && !empty($alvo_template['conteudo'])
+            ? wp_strip_all_tags($alvo_template['conteudo'])
+            : '';
+
+        $count_result = $this->api->get_acoes_confirmadas_count($campanha_id, 60);
+        $acoes_count = is_wp_error($count_result) ? 0 : (int) $count_result['count'];
+
+        $limite = (int) get_option('pressao_fluxo_limite_candidatos', 5);
+        if ($limite < 1) {
+            $limite = 5;
+        }
+
+        $ajuda = get_option('pressao_fluxo_ajuda', []);
+        if (!is_array($ajuda)) {
+            $ajuda = [];
+        }
+        $ajuda_titulo = !empty($ajuda['titulo'])
+            ? $ajuda['titulo']
+            : __('Ajuda', 'pressao-plugin');
+        $ajuda_conteudo = isset($ajuda['conteudo']) ? (string) $ajuda['conteudo'] : '';
+        $alvo_nome = isset($alvo['nome']) ? (string) $alvo['nome'] : '';
+
+        $candidatos_raw = get_option('pressao_candidatos', []);
+        $candidatos = [];
+        if (is_array($candidatos_raw)) {
+            foreach ($candidatos_raw as $index => $candidato) {
+                if (!is_array($candidato)) {
+                    continue;
+                }
+                $handle = isset($candidato['link_url']) ? trim((string) $candidato['link_url']) : '';
+                if ($handle !== '' && strpos($handle, '@') !== 0) {
+                    $handle = '@' . ltrim($handle, '@');
+                }
+                $imagem_id = absint($candidato['imagem_id'] ?? 0);
+                $imagem_url = $imagem_id ? wp_get_attachment_image_url($imagem_id, 'thumbnail') : '';
+                $candidatos[] = [
+                    'id' => 'c' . $index,
+                    'nome' => $candidato['nome'] ?? '',
+                    'cargo' => $candidato['cargo'] ?? '',
+                    'partido' => $candidato['partido'] ?? '',
+                    'instagram' => $handle,
+                    'imagem' => $imagem_url ? $imagem_url : '',
+                ];
+            }
+        }
+
+        $share_config = $this->get_compartilhamento_config_for_render(false);
+        if (!$share_config) {
+            $share_config = [
+                'overlay_titulo' => __('Convide mais pessoas', 'pressao-plugin'),
+                'link' => '',
+                'mensagem' => '',
+                'whatsapp_url' => '',
+                'instagram_url' => '',
+                'messenger_url' => '',
+                'imagens_titulo' => __('Imagens para postar', 'pressao-plugin'),
+                'imagens_subtitulo' => __('baixe imagens prontas para postar nas redes', 'pressao-plugin'),
+                'imagens_instrucao' => '',
+                'imagens' => [],
+            ];
+        }
+
+        $config = [
+            'alvo_id' => $alvo_id,
+            'campanha_id' => $campanha_id,
+            'canal' => $canal,
+            'template_id' => $template_id,
+            'template_conteudo' => $template_conteudo,
+            'contato_url' => $alvo['contato'] ?? '',
+            'limite_candidatos' => $limite,
+            'candidatos' => $candidatos,
+            'acoes_confirmadas' => $acoes_count,
+            'share' => $share_config,
+            'nonce' => wp_create_nonce('pressao_acao_nonce'),
+        ];
+
+        $total_candidatos = count($candidatos);
+        $max_avatars = 5;
+        $com_imagem = [];
+        $sem_imagem = [];
+        foreach ($candidatos as $candidato) {
+            if (!empty($candidato['imagem'])) {
+                $com_imagem[] = $candidato;
+            } else {
+                $sem_imagem[] = $candidato;
+            }
+        }
+        $avatares = array_slice(array_merge($com_imagem, $sem_imagem), 0, $max_avatars);
+        $avatars_exibidos = count($avatares);
+        $restante_candidatos = max(0, $total_candidatos - $avatars_exibidos);
+
+        ob_start();
+        ?>
+        <div id="<?php echo esc_attr($atts['id']); ?>"
+             class="pressao-fluxo <?php echo esc_attr($atts['class']); ?>"
+             data-campaign="<?php echo esc_attr($campanha_id); ?>"
+             data-nonce="<?php echo esc_attr($config['nonce']); ?>"
+             data-pressao-fluxo="<?php echo esc_attr(wp_json_encode($config)); ?>">
+
+            <div class="pressao-fluxo-card" data-fluxo-root>
+                <div class="pressao-fluxo-screen is-active" data-screen="inicio">
+                    <header class="pressao-fluxo-topbar">
+                        <span class="pressao-fluxo-brand"><?php echo esc_html($alvo_nome); ?></span>
+                        <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
+                    </header>
+                    <h2 class="pressao-fluxo-title"><?php echo esc_html($atts['title']); ?></h2>
+                    <p class="pressao-fluxo-subtitle"><?php echo esc_html($atts['subtitle']); ?></p>
+
+                    <button type="button" class="pressao-fluxo-candidatos-btn" data-fluxo-open-lista>
+                        <span class="pressao-fluxo-avatars" aria-hidden="true">
+                            <?php foreach ($avatares as $avatar) : ?>
+                                <span class="pressao-fluxo-avatar"<?php echo !empty($avatar['imagem']) ? ' style="background-image:url(\'' . esc_url($avatar['imagem']) . '\')"' : ''; ?>></span>
+                            <?php endforeach; ?>
+                        </span>
+                        <span class="pressao-fluxo-candidatos-label">
+                            <?php
+                            if ($restante_candidatos > 0) {
+                                echo esc_html(sprintf(
+                                    /* translators: %d: remaining candidates not shown as avatars */
+                                    __('+%d candidatos já apoiam a pauta', 'pressao-plugin'),
+                                    $restante_candidatos
+                                ));
+                            } else {
+                                echo esc_html(sprintf(
+                                    /* translators: %d: candidate count */
+                                    _n('%d candidato já apoia a pauta', '%d candidatos já apoiam a pauta', $total_candidatos, 'pressao-plugin'),
+                                    $total_candidatos
+                                ));
+                            }
+                            ?>
+                        </span>
+                        <span class="pressao-fluxo-candidatos-arrow" aria-hidden="true"></span>
+                    </button>
+
+                    <label class="pressao-fluxo-field-label" for="<?php echo esc_attr($atts['id']); ?>-select">
+                        <?php esc_html_e('Busque ou selecione candidatos', 'pressao-plugin'); ?>
+                    </label>
+                    <select id="<?php echo esc_attr($atts['id']); ?>-select"
+                            class="pressao-fluxo-select"
+                            multiple
+                            data-fluxo-select
+                            placeholder="<?php esc_attr_e('Digite o nome ou @ do Instagram', 'pressao-plugin'); ?>">
+                        <?php foreach ($candidatos as $candidato) : ?>
+                            <?php if (empty($candidato['instagram'])) { continue; } ?>
+                            <option value="<?php echo esc_attr($candidato['id']); ?>"
+                                    data-instagram="<?php echo esc_attr($candidato['instagram']); ?>"
+                                    data-imagem="<?php echo esc_attr($candidato['imagem']); ?>">
+                                <?php echo esc_html(trim(($candidato['nome'] ? $candidato['nome'] . ' ' : '') . $candidato['instagram'])); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="pressao-fluxo-limit-hint">
+                        <?php
+                        echo esc_html(sprintf(
+                            /* translators: %d: max candidates */
+                            __('Você pode marcar até %d candidatos por vez.', 'pressao-plugin'),
+                            $limite
+                        ));
+                        ?>
+                    </p>
+
+                    <div class="pressao-fluxo-counter pressao-acoes-counter" data-campaign="<?php echo esc_attr($campanha_id); ?>">
+                        <span class="pressao-fluxo-counter-raio" aria-hidden="true"></span>
+                        <span class="pressao-fluxo-counter-value">
+                            <span class="pressao-acoes-count" data-count="<?php echo esc_attr($acoes_count); ?>">
+                                <?php echo esc_html(number_format($acoes_count, 0, ',', '.')); ?>
+                            </span>
+                            <span class="pressao-fluxo-counter-label"><?php esc_html_e('pressões', 'pressao-plugin'); ?></span>
+                        </span>
+                    </div>
+
+                    <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-continuar>
+                        <?php esc_html_e('Continuar', 'pressao-plugin'); ?>
+                        <span class="pressao-fluxo-btn-arrow" aria-hidden="true">→</span>
+                    </button>
+                </div>
+
+                <div class="pressao-fluxo-screen" data-screen="acao" hidden>
+                    <header class="pressao-fluxo-nav">
+                        <button type="button" class="pressao-fluxo-back" data-fluxo-back-inicio aria-label="<?php esc_attr_e('Voltar', 'pressao-plugin'); ?>"></button>
+                        <h3 class="pressao-fluxo-nav-title"><?php esc_html_e('Publique seu comentário', 'pressao-plugin'); ?></h3>
+                        <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
+                    </header>
+                    <div class="pressao-fluxo-acao-body">
+                        <p class="pressao-fluxo-section-label"><?php esc_html_e('Candidatos selecionados', 'pressao-plugin'); ?></p>
+                        <div class="pressao-fluxo-chips" data-fluxo-chips></div>
+                        <hr class="pressao-fluxo-divider" />
+                        <p class="pressao-fluxo-section-label"><?php esc_html_e('Copie o texto', 'pressao-plugin'); ?></p>
+                        <p class="pressao-fluxo-hint"><?php esc_html_e('É só colar nos comentários da publicação da campanha no Instagram.', 'pressao-plugin'); ?></p>
+                        <div class="pressao-fluxo-message" data-fluxo-message></div>
+                        <p class="pressao-fluxo-footnote"><?php esc_html_e('O comentário será publicado com seu perfil do Instagram.', 'pressao-plugin'); ?></p>
+                    </div>
+                    <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-copiar>
+                        <?php esc_html_e('Copiar e abrir no Instagram', 'pressao-plugin'); ?>
+                        <span class="pressao-fluxo-btn-icon" aria-hidden="true"></span>
+                    </button>
+                </div>
+
+                <div class="pressao-fluxo-screen" data-screen="confirmacao" hidden>
+                    <header class="pressao-fluxo-nav">
+                        <button type="button" class="pressao-fluxo-back" data-fluxo-to-acao aria-label="<?php esc_attr_e('Voltar', 'pressao-plugin'); ?>"></button>
+                        <h3 class="pressao-fluxo-nav-title"><?php esc_html_e('Publique seu comentário', 'pressao-plugin'); ?></h3>
+                        <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
+                    </header>
+                    <div class="pressao-fluxo-confirm-body">
+                        <h2 class="pressao-fluxo-title"><?php esc_html_e('Conseguiu publicar o comentário?', 'pressao-plugin'); ?></h2>
+                        <p class="pressao-fluxo-subtitle"><?php esc_html_e('Ao confirmar seu comentário, contabilizamos a sua participação no movimento e acompanhamos o engajamento da pauta.', 'pressao-plugin'); ?></p>
+                    </div>
+                    <div class="pressao-fluxo-footer-actions">
+                        <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-sim-publiquei>
+                            <span class="pressao-fluxo-check" aria-hidden="true"></span>
+                            <?php esc_html_e('Sim, já publiquei!', 'pressao-plugin'); ?>
+                        </button>
+                        <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-secondary" data-fluxo-tentar-novamente>
+                            <?php esc_html_e('Não, tentar novamente', 'pressao-plugin'); ?>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pressao-fluxo-screen" data-screen="form" hidden>
+                    <header class="pressao-fluxo-topbar pressao-fluxo-topbar-form">
+                        <h2 class="pressao-fluxo-title pressao-fluxo-title-sm"><?php esc_html_e('Quer acompanhar os próximos passos?', 'pressao-plugin'); ?></h2>
+                        <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
+                    </header>
+                    <p class="pressao-fluxo-subtitle"><?php esc_html_e('Receba atualizações sobre a campanha e novas formas de pressionar pela Tarifa Zero.', 'pressao-plugin'); ?></p>
+                    <hr class="pressao-fluxo-divider" />
+                    <form class="pressao-fluxo-ativista-form" data-fluxo-form novalidate>
+                        <label class="pressao-fluxo-field-label">
+                            <?php esc_html_e('Nome', 'pressao-plugin'); ?> <span class="pressao-fluxo-required">*</span>
+                            <input type="text" name="nome" required placeholder="<?php esc_attr_e('Seu nome', 'pressao-plugin'); ?>" />
+                        </label>
+                        <label class="pressao-fluxo-field-label">
+                            <?php esc_html_e('Email', 'pressao-plugin'); ?> <span class="pressao-fluxo-required">*</span>
+                            <input type="email" name="email" required placeholder="<?php esc_attr_e('seu@email.com', 'pressao-plugin'); ?>" />
+                        </label>
+                        <label class="pressao-fluxo-field-label">
+                            <?php esc_html_e('Whatsapp (opcional)', 'pressao-plugin'); ?>
+                            <input type="tel" name="telefone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" data-fluxo-whatsapp />
+                        </label>
+                        <p class="pressao-fluxo-form-error" data-fluxo-form-error hidden></p>
+                        <div class="pressao-fluxo-footer-actions">
+                            <button type="submit" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-receber>
+                                <?php esc_html_e('Quero receber atualizações', 'pressao-plugin'); ?>
+                            </button>
+                            <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-secondary" data-fluxo-agora-nao>
+                                <?php esc_html_e('Agora não', 'pressao-plugin'); ?>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="pressao-fluxo-screen" data-screen="share" hidden>
+                    <div class="pressao-fluxo-share" data-fluxo-share></div>
+                </div>
+            </div>
+
+            <div class="pressao-fluxo-lista-overlay" data-fluxo-lista hidden>
+                <div class="pressao-fluxo-lista-backdrop" data-fluxo-lista-close></div>
+                <div class="pressao-fluxo-lista-panel" role="dialog" aria-modal="true" aria-labelledby="<?php echo esc_attr($atts['id']); ?>-lista-title">
+                    <header class="pressao-fluxo-lista-header">
+                        <div>
+                            <h3 id="<?php echo esc_attr($atts['id']); ?>-lista-title"><?php esc_html_e('Candidatos que já apoiam', 'pressao-plugin'); ?></h3>
+                            <p>
+                                <?php
+                                echo esc_html(sprintf(
+                                    /* translators: %d: candidate count */
+                                    __('%d candidatos já assumiram o compromisso com a Tarifa Zero', 'pressao-plugin'),
+                                    $total_candidatos
+                                ));
+                                ?>
+                            </p>
+                        </div>
+                        <button type="button" class="pressao-fluxo-lista-close" data-fluxo-lista-close aria-label="<?php esc_attr_e('Fechar', 'pressao-plugin'); ?>">×</button>
+                    </header>
+                    <ul class="pressao-fluxo-lista-items">
+                        <?php foreach ($candidatos as $candidato) : ?>
+                            <li class="pressao-fluxo-lista-item">
+                                <span class="pressao-fluxo-lista-avatar"<?php echo $candidato['imagem'] ? ' style="background-image:url(\'' . esc_url($candidato['imagem']) . '\')"' : ''; ?>></span>
+                                <span class="pressao-fluxo-lista-meta">
+                                    <strong><?php echo esc_html($candidato['nome'] ?: $candidato['instagram']); ?></strong>
+                                    <span>
+                                        <?php
+                                        $parts = array_filter([
+                                            $candidato['instagram'],
+                                            $candidato['cargo'],
+                                            $candidato['partido'],
+                                        ]);
+                                        echo esc_html(implode(' · ', $parts));
+                                        ?>
+                                    </span>
+                                </span>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="pressao-fluxo-help-overlay" data-fluxo-help hidden>
+                <div class="pressao-fluxo-help-backdrop" data-fluxo-help-close></div>
+                <div class="pressao-fluxo-help-panel" role="dialog" aria-modal="true" aria-labelledby="<?php echo esc_attr($atts['id']); ?>-help-title">
+                    <header class="pressao-fluxo-help-header">
+                        <h3 id="<?php echo esc_attr($atts['id']); ?>-help-title"><?php echo esc_html($ajuda_titulo); ?></h3>
+                        <button type="button" class="pressao-fluxo-lista-close" data-fluxo-help-close aria-label="<?php esc_attr_e('Fechar', 'pressao-plugin'); ?>">×</button>
+                    </header>
+                    <div class="pressao-fluxo-help-body">
+                        <?php
+                        if ($ajuda_conteudo !== '') {
+                            echo wp_kses_post($ajuda_conteudo);
+                        } else {
+                            echo '<p>' . esc_html__('Conteúdo de ajuda ainda não configurado.', 'pressao-plugin') . '</p>';
+                        }
+                        ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pressao-fluxo-toast" data-fluxo-toast hidden>
+                <div class="pressao-fluxo-toast-card">
+                    <strong data-fluxo-toast-title></strong>
+                    <p data-fluxo-toast-text></p>
+                </div>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 }
 
