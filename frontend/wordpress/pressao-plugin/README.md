@@ -80,12 +80,15 @@ pressao-plugin/
 │   └── class-ajax.php          # AJAX handlers
 ├── assets/
 │   ├── css/
-│   │   └── style.css           # Tokens, mask-image dos ícones, @font-face
+│   │   ├── style.css           # Tokens, mask-image dos ícones, @font-face
+│   │   └── fluxo.css           # UI do shortcode [pressao_fluxo]
 │   ├── fonts/                  # NeueHaasGroteskText.woff2/.woff (adicionar manualmente)
 │   ├── icons/                  # SVG de canais, compartilhar, copiar, download, seta e raio (via CSS mask-image)
+│   ├── vendor/tom-select/      # Autocomplete do fluxo único
 │   └── js/
 │       ├── admin.js            # Campos repetíveis (candidatos + imagens de compartilhamento) + Media Library
-│       └── widget.js           # UI, cookies, ações, compartilhamento e confirmações
+│       ├── widget.js           # UI, cookies, ações, compartilhamento e confirmações ([pressao_alvos])
+│       └── fluxo.js            # Wizard sequencial isolado ([pressao_fluxo])
 └── views/
     └── widget-template.php
 ```
@@ -116,7 +119,9 @@ Acesse Configurações > Pressão Plugin e preencha:
 | ID da Campanha | `pressao_campaign_id` | Campanha padrão dos shortcodes |
 | Título do Widget | `pressao_widget_title` | Título exibido em `[pressao_widget]` |
 | Duração da sessão | `pressao_session_duration` | TTL dos cookies em segundos (padrão `86400`) |
-| Candidatos | `pressao_candidatos` | Lista de candidatos exibida em `[pressao_candidatos]` |
+| Candidatos | `pressao_candidatos` | Lista de candidatos (`[pressao_candidatos]` e `[pressao_fluxo]`) |
+| Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Máximo de @ por mensagem no `[pressao_fluxo]` (padrão `5`) |
+| Ajuda do fluxo | `pressao_fluxo_ajuda` | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
 | Compartilhamento | `pressao_compartilhamento` | Textos, links, deep links e imagens do botão de compartilhar |
 
 ### Configuração compartilhada via wp-config.php (multisite)
@@ -143,10 +148,21 @@ Campos por candidato:
 - `cargo`
 - `partido`
 - `descricao`
-- `link_url`
+- `link_url` — **Instagram (@)** (handle; aceita `@user` ou URL de perfil; sanitizado no save)
 - `imagem_id`
 
 As imagens são selecionadas pela Biblioteca de Mídia do WordPress. O plugin armazena o `attachment ID` e renderiza com `wp_get_attachment_image()`, sem implementar upload próprio. Assim, se o WordPress passar a enviar mídias para S3 via offload/plugin de storage, o comportamento continua transparente para o Pressão Plugin.
+
+No `[pressao_fluxo]`, o handle em `link_url` entra na mensagem (`@a, @b …` + template do alvo). O limite de seleção vem de `pressao_fluxo_limite_candidatos`.
+
+### Ajuda do fluxo (`?`)
+
+Option `pressao_fluxo_ajuda`:
+
+- `titulo` — título do modal/drawer
+- `conteudo` — HTML sanitizado (`wp_kses_post`), editado com o editor do WordPress no admin
+
+O botão `?` em todas as telas do `[pressao_fluxo]` abre esse conteúdo. No topo da tela inicial é exibido o **nome do alvo** (`alvo.nome`), não o nome da campanha.
 
 ### Configuração de compartilhamento
 
@@ -271,6 +287,26 @@ Renderiza os candidatos cadastrados no painel do plugin.
 | `title` | `Candidatos` | Título do bloco |
 | `show_title` | `yes` | Exibe ou oculta o título |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
+
+### `[pressao_fluxo]` — fluxo único sequencial (Instagram v1)
+
+Wizard isolado de `[pressao_alvos]`: seleção de candidatos → copiar/abrir Instagram → confirmação humana → formulário de newsletter → compartilhar. **Cria e confirma a ação na API apenas na saída do formulário** (“Quero receber atualizações” com dados, ou “Agora não” sem ativista). Telas pós-Continuar são bloqueantes (sem dismiss por backdrop/Escape); a lista de candidatos fecha no X ou backdrop.
+
+```text
+[pressao_fluxo alvo_id="uuid-do-alvo" canal="instagram"]
+```
+
+| Atributo | Padrão | Descrição |
+|----------|--------|-----------|
+| `alvo_id` | — (**obrigatório**) | UUID do alvo Instagram na API |
+| `canal` | `instagram` | Canal do fluxo; v1 só implementa Instagram |
+| `campaign` | option | ID da campanha |
+| `template_id` | template do alvo | Fallback se a API não devolver template |
+| `title` / `subtitle` | copy do layout | Textos da tela inicial |
+| `cache` | `300` | TTL do cache de alvos |
+| `class` / `id` | — / gerado | Classe CSS extra e ID do container |
+
+Assets: `fluxo.js` + `fluxo.css` + Tom Select (só quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`.
 
 ### `[pressao_widget]` — widget principal
 

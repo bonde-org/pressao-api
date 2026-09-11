@@ -84,6 +84,11 @@ final class PressaoPlugin {
             'pressao_campaign_id' => '',
             'pressao_widget_title' => 'Pressão Widget',
             'pressao_candidatos' => [],
+            'pressao_fluxo_limite_candidatos' => 5,
+            'pressao_fluxo_ajuda' => [
+                'titulo' => '',
+                'conteudo' => '',
+            ],
             'pressao_compartilhamento' => [],
         ];
         
@@ -118,50 +123,98 @@ final class PressaoPlugin {
                          has_shortcode($post->post_content, 'pressao_alvos') ||
                          has_shortcode($post->post_content, 'pressao_contador') ||
                          has_shortcode($post->post_content, 'pressao_progresso') ||
-                         has_shortcode($post->post_content, 'pressao_candidatos');
+                         has_shortcode($post->post_content, 'pressao_candidatos') ||
+                         has_shortcode($post->post_content, 'pressao_fluxo');
+
+        $has_fluxo = has_shortcode($post->post_content, 'pressao_fluxo');
+        $has_legacy = has_shortcode($post->post_content, 'pressao_widget') ||
+                      has_shortcode($post->post_content, 'pressao_form') ||
+                      has_shortcode($post->post_content, 'pressao_list') ||
+                      has_shortcode($post->post_content, 'pressao_alvos') ||
+                      has_shortcode($post->post_content, 'pressao_contador') ||
+                      has_shortcode($post->post_content, 'pressao_progresso') ||
+                      has_shortcode($post->post_content, 'pressao_candidatos');
         
         if ($has_shortcode) {
-            wp_enqueue_style(
-                'pressao-plugin',
-                PRESSAO_PLUGIN_URL . 'assets/css/style.css',
-                [],
-                PRESSAO_PLUGIN_VERSION
-            );
-
             $icons_url = PRESSAO_PLUGIN_URL . 'assets/icons/';
             $icon_vars = sprintf(
                 ':root{--pressao-icon-instagram:url("%1$sinstagram.svg");--pressao-icon-tiktok:url("%1$stiktok.svg");--pressao-icon-email:url("%1$semail.svg");--pressao-icon-seta:url("%1$sseta.svg");--pressao-icon-raio:url("%1$sraio-barra-progresso.svg");--pressao-icon-compartilhar:url("%1$scompartilhar.svg");--pressao-icon-copiar:url("%1$scopiar.svg");--pressao-icon-download:url("%1$sdownload.svg");--pressao-icon-whatsapp:url("%1$swhatsapp.svg");--pressao-icon-messenger:url("%1$smessenger.svg");--pressao-icon-seta-circulo:url("%1$sseta-com-circulo.svg");}',
                 esc_url_raw($icons_url)
             );
-            wp_add_inline_style('pressao-plugin', $icon_vars);
-            
-            wp_enqueue_script(
-                'pressao-plugin',
-                PRESSAO_PLUGIN_URL . 'assets/js/widget.js',
-                [],
-                PRESSAO_PLUGIN_VERSION,
-                true
-            );
-            
-            wp_localize_script('pressao-plugin', 'pressaoData', [
-                'apiUrl' => get_option('pressao_api_url', ''),
-                'campaignId' => get_option('pressao_campaign_id', ''),
-                'nonce' => wp_create_nonce('pressao_acao_nonce'),
-                'ajaxUrl' => admin_url('admin-ajax.php'),
-                'iconsUrl' => $icons_url,
-                'localStorageKey' => 'pressao_acoes_realizadas',
-                'cookieUserIdKey' => 'pressao_usuario_id',
-                'cookieActionsKey' => 'pressao_acoes_realizadas',
-                // Ativista Config
-                'ativistaFormTitle' => get_option('pressao_ativista_form_title', __('Identifique-se', 'pressao-plugin')),
-                'ativistaFormMessage' => get_option('pressao_ativista_form_message', __('Preencha seus dados para continuar:', 'pressao-plugin')),
-                'ativistaNomeLabel' => get_option('pressao_ativista_nome_label', __('Nome', 'pressao-plugin')),
-                'ativistaEmailLabel' => get_option('pressao_ativista_email_label', __('Email', 'pressao-plugin')),
-                'ativistaTelefoneLabel' => get_option('pressao_ativista_telefone_label', __('Telefone', 'pressao-plugin')),
-                'ativistaSaveButton' => get_option('pressao_ativista_save_button', __('Salvar e continuar', 'pressao-plugin')),
-                'confirmInterval' => get_option('pressao_ativista_confirm_interval', 10),
-                'sessionDuration' => get_option('pressao_session_duration', '86400'),
-            ]);
+
+            if ($has_legacy || $has_fluxo) {
+                wp_enqueue_style(
+                    'pressao-plugin',
+                    PRESSAO_PLUGIN_URL . 'assets/css/style.css',
+                    [],
+                    PRESSAO_PLUGIN_VERSION
+                );
+                wp_add_inline_style('pressao-plugin', $icon_vars);
+            }
+
+            if ($has_legacy) {
+                wp_enqueue_script(
+                    'pressao-plugin',
+                    PRESSAO_PLUGIN_URL . 'assets/js/widget.js',
+                    [],
+                    PRESSAO_PLUGIN_VERSION,
+                    true
+                );
+
+                wp_localize_script('pressao-plugin', 'pressaoData', [
+                    'apiUrl' => get_option('pressao_api_url', ''),
+                    'campaignId' => get_option('pressao_campaign_id', ''),
+                    'nonce' => wp_create_nonce('pressao_acao_nonce'),
+                    'ajaxUrl' => admin_url('admin-ajax.php'),
+                    'iconsUrl' => $icons_url,
+                    'localStorageKey' => 'pressao_acoes_realizadas',
+                    'cookieUserIdKey' => 'pressao_usuario_id',
+                    'cookieActionsKey' => 'pressao_acoes_realizadas',
+                    'ativistaFormTitle' => get_option('pressao_ativista_form_title', __('Identifique-se', 'pressao-plugin')),
+                    'ativistaFormMessage' => get_option('pressao_ativista_form_message', __('Preencha seus dados para continuar:', 'pressao-plugin')),
+                    'ativistaNomeLabel' => get_option('pressao_ativista_nome_label', __('Nome', 'pressao-plugin')),
+                    'ativistaEmailLabel' => get_option('pressao_ativista_email_label', __('Email', 'pressao-plugin')),
+                    'ativistaTelefoneLabel' => get_option('pressao_ativista_telefone_label', __('Telefone', 'pressao-plugin')),
+                    'ativistaSaveButton' => get_option('pressao_ativista_save_button', __('Salvar e continuar', 'pressao-plugin')),
+                    'confirmInterval' => get_option('pressao_ativista_confirm_interval', 10),
+                    'sessionDuration' => get_option('pressao_session_duration', '86400'),
+                ]);
+            }
+
+            if ($has_fluxo) {
+                wp_enqueue_style(
+                    'tom-select',
+                    PRESSAO_PLUGIN_URL . 'assets/vendor/tom-select/tom-select.default.min.css',
+                    [],
+                    '2.3.1'
+                );
+                wp_enqueue_style(
+                    'pressao-fluxo',
+                    PRESSAO_PLUGIN_URL . 'assets/css/fluxo.css',
+                    ['tom-select', 'pressao-plugin'],
+                    PRESSAO_PLUGIN_VERSION
+                );
+                wp_enqueue_script(
+                    'tom-select',
+                    PRESSAO_PLUGIN_URL . 'assets/vendor/tom-select/tom-select.complete.min.js',
+                    [],
+                    '2.3.1',
+                    true
+                );
+                wp_enqueue_script(
+                    'pressao-fluxo',
+                    PRESSAO_PLUGIN_URL . 'assets/js/fluxo.js',
+                    ['tom-select'],
+                    PRESSAO_PLUGIN_VERSION,
+                    true
+                );
+                wp_localize_script('pressao-fluxo', 'pressaoFluxoData', [
+                    'ajaxUrl' => admin_url('admin-ajax.php'),
+                    'nonce' => wp_create_nonce('pressao_acao_nonce'),
+                    'sessionDuration' => get_option('pressao_session_duration', '86400'),
+                    'iconsUrl' => $icons_url,
+                ]);
+            }
         }
     }
     
