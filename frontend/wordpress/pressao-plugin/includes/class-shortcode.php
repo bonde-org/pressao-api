@@ -1096,82 +1096,87 @@ class PressaoPlugin_Shortcode {
                     </button>
                 </div>
 
-                <div class="pressao-fluxo-screen" data-screen="acao" hidden>
-                    <header class="pressao-fluxo-nav">
-                        <button type="button" class="pressao-fluxo-back" data-fluxo-back-inicio aria-label="<?php esc_attr_e('Voltar', 'pressao-plugin'); ?>"></button>
-                        <h3 class="pressao-fluxo-nav-title"><?php esc_html_e('Publique seu comentário', 'pressao-plugin'); ?></h3>
-                        <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
-                    </header>
-                    <div class="pressao-fluxo-acao-body">
-                        <p class="pressao-fluxo-section-label"><?php esc_html_e('Candidatos selecionados', 'pressao-plugin'); ?></p>
-                        <div class="pressao-fluxo-chips" data-fluxo-chips></div>
-                        <hr class="pressao-fluxo-divider" />
-                        <p class="pressao-fluxo-section-label"><?php esc_html_e('Copie o texto', 'pressao-plugin'); ?></p>
-                        <p class="pressao-fluxo-hint"><?php esc_html_e('É só colar nos comentários da publicação da campanha no Instagram.', 'pressao-plugin'); ?></p>
-                        <div class="pressao-fluxo-message" data-fluxo-message></div>
-                        <p class="pressao-fluxo-footnote"><?php esc_html_e('O comentário será publicado com seu perfil do Instagram.', 'pressao-plugin'); ?></p>
-                    </div>
-                    <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-copiar>
-                        <?php esc_html_e('Copiar e abrir no Instagram', 'pressao-plugin'); ?>
-                        <span class="pressao-fluxo-btn-icon" aria-hidden="true"></span>
-                    </button>
-                </div>
-
-                <div class="pressao-fluxo-screen" data-screen="confirmacao" hidden>
-                    <header class="pressao-fluxo-nav">
-                        <button type="button" class="pressao-fluxo-back" data-fluxo-to-acao aria-label="<?php esc_attr_e('Voltar', 'pressao-plugin'); ?>"></button>
-                        <h3 class="pressao-fluxo-nav-title"><?php esc_html_e('Publique seu comentário', 'pressao-plugin'); ?></h3>
-                        <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
-                    </header>
-                    <div class="pressao-fluxo-confirm-body">
-                        <h2 class="pressao-fluxo-title"><?php esc_html_e('Conseguiu publicar o comentário?', 'pressao-plugin'); ?></h2>
-                        <p class="pressao-fluxo-subtitle"><?php esc_html_e('Ao confirmar seu comentário, contabilizamos a sua participação no movimento e acompanhamos o engajamento da pauta.', 'pressao-plugin'); ?></p>
-                    </div>
-                    <div class="pressao-fluxo-footer-actions">
-                        <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-sim-publiquei>
-                            <span class="pressao-fluxo-check" aria-hidden="true"></span>
-                            <?php esc_html_e('Sim, já publiquei!', 'pressao-plugin'); ?>
-                        </button>
-                        <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-secondary" data-fluxo-tentar-novamente>
-                            <?php esc_html_e('Não, tentar novamente', 'pressao-plugin'); ?>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="pressao-fluxo-screen" data-screen="form" hidden>
-                    <header class="pressao-fluxo-topbar pressao-fluxo-topbar-form">
-                        <h2 class="pressao-fluxo-title pressao-fluxo-title-sm"><?php esc_html_e('Quer acompanhar os próximos passos?', 'pressao-plugin'); ?></h2>
-                        <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
-                    </header>
-                    <p class="pressao-fluxo-subtitle"><?php esc_html_e('Receba atualizações sobre a campanha e novas formas de pressionar pela Tarifa Zero.', 'pressao-plugin'); ?></p>
-                    <hr class="pressao-fluxo-divider" />
-                    <form class="pressao-fluxo-ativista-form" data-fluxo-form novalidate>
-                        <label class="pressao-fluxo-field-label">
-                            <?php esc_html_e('Nome', 'pressao-plugin'); ?> <span class="pressao-fluxo-required">*</span>
-                            <input type="text" name="nome" required placeholder="<?php esc_attr_e('Seu nome', 'pressao-plugin'); ?>" />
-                        </label>
-                        <label class="pressao-fluxo-field-label">
-                            <?php esc_html_e('Email', 'pressao-plugin'); ?> <span class="pressao-fluxo-required">*</span>
-                            <input type="email" name="email" required placeholder="<?php esc_attr_e('seu@email.com', 'pressao-plugin'); ?>" />
-                        </label>
-                        <label class="pressao-fluxo-field-label">
-                            <?php esc_html_e('Whatsapp (opcional)', 'pressao-plugin'); ?>
-                            <input type="tel" name="telefone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" data-fluxo-whatsapp />
-                        </label>
-                        <p class="pressao-fluxo-form-error" data-fluxo-form-error hidden></p>
-                        <div class="pressao-fluxo-footer-actions">
-                            <button type="submit" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-receber>
-                                <?php esc_html_e('Quero receber atualizações', 'pressao-plugin'); ?>
-                            </button>
-                            <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-secondary" data-fluxo-agora-nao>
-                                <?php esc_html_e('Agora não', 'pressao-plugin'); ?>
+                <div class="pressao-fluxo-seq-overlay" data-fluxo-seq hidden>
+                    <div class="pressao-fluxo-seq-backdrop" aria-hidden="true"></div>
+                    <div class="pressao-fluxo-seq-panel" role="dialog" aria-modal="true">
+                        <div class="pressao-fluxo-screen" data-screen="acao" hidden>
+                            <header class="pressao-fluxo-nav">
+                                <button type="button" class="pressao-fluxo-back" data-fluxo-back-inicio aria-label="<?php esc_attr_e('Voltar', 'pressao-plugin'); ?>"></button>
+                                <h3 class="pressao-fluxo-nav-title"><?php esc_html_e('Publique seu comentário', 'pressao-plugin'); ?></h3>
+                                <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
+                            </header>
+                            <div class="pressao-fluxo-acao-body">
+                                <p class="pressao-fluxo-section-label"><?php esc_html_e('Candidatos selecionados', 'pressao-plugin'); ?></p>
+                                <div class="pressao-fluxo-chips" data-fluxo-chips></div>
+                                <hr class="pressao-fluxo-divider" />
+                                <p class="pressao-fluxo-section-label"><?php esc_html_e('Copie o texto', 'pressao-plugin'); ?></p>
+                                <p class="pressao-fluxo-hint"><?php esc_html_e('É só colar nos comentários da publicação da campanha no Instagram.', 'pressao-plugin'); ?></p>
+                                <div class="pressao-fluxo-message" data-fluxo-message></div>
+                                <p class="pressao-fluxo-footnote"><?php esc_html_e('O comentário será publicado com seu perfil do Instagram.', 'pressao-plugin'); ?></p>
+                            </div>
+                            <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-copiar>
+                                <?php esc_html_e('Copiar e abrir no Instagram', 'pressao-plugin'); ?>
+                                <span class="pressao-fluxo-btn-icon" aria-hidden="true"></span>
                             </button>
                         </div>
-                    </form>
-                </div>
 
-                <div class="pressao-fluxo-screen" data-screen="share" hidden>
-                    <div class="pressao-fluxo-share" data-fluxo-share></div>
+                        <div class="pressao-fluxo-screen" data-screen="confirmacao" hidden>
+                            <header class="pressao-fluxo-nav">
+                                <button type="button" class="pressao-fluxo-back" data-fluxo-to-acao aria-label="<?php esc_attr_e('Voltar', 'pressao-plugin'); ?>"></button>
+                                <h3 class="pressao-fluxo-nav-title"><?php esc_html_e('Publique seu comentário', 'pressao-plugin'); ?></h3>
+                                <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
+                            </header>
+                            <div class="pressao-fluxo-confirm-body">
+                                <h2 class="pressao-fluxo-title"><?php esc_html_e('Conseguiu publicar o comentário?', 'pressao-plugin'); ?></h2>
+                                <p class="pressao-fluxo-subtitle"><?php esc_html_e('Ao confirmar seu comentário, contabilizamos a sua participação no movimento e acompanhamos o engajamento da pauta.', 'pressao-plugin'); ?></p>
+                            </div>
+                            <div class="pressao-fluxo-footer-actions">
+                                <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-sim-publiquei>
+                                    <span class="pressao-fluxo-check" aria-hidden="true"></span>
+                                    <?php esc_html_e('Sim, já publiquei!', 'pressao-plugin'); ?>
+                                </button>
+                                <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-secondary" data-fluxo-tentar-novamente>
+                                    <?php esc_html_e('Não, tentar novamente', 'pressao-plugin'); ?>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pressao-fluxo-screen" data-screen="form" hidden>
+                            <header class="pressao-fluxo-topbar pressao-fluxo-topbar-form">
+                                <h2 class="pressao-fluxo-title pressao-fluxo-title-sm"><?php esc_html_e('Quer acompanhar os próximos passos?', 'pressao-plugin'); ?></h2>
+                                <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
+                            </header>
+                            <p class="pressao-fluxo-subtitle"><?php esc_html_e('Receba atualizações sobre a campanha e novas formas de pressionar pela Tarifa Zero.', 'pressao-plugin'); ?></p>
+                            <hr class="pressao-fluxo-divider" />
+                            <form class="pressao-fluxo-ativista-form" data-fluxo-form novalidate>
+                                <label class="pressao-fluxo-field-label">
+                                    <?php esc_html_e('Nome', 'pressao-plugin'); ?> <span class="pressao-fluxo-required">*</span>
+                                    <input type="text" name="nome" required placeholder="<?php esc_attr_e('Seu nome', 'pressao-plugin'); ?>" />
+                                </label>
+                                <label class="pressao-fluxo-field-label">
+                                    <?php esc_html_e('Email', 'pressao-plugin'); ?> <span class="pressao-fluxo-required">*</span>
+                                    <input type="email" name="email" required placeholder="<?php esc_attr_e('seu@email.com', 'pressao-plugin'); ?>" />
+                                </label>
+                                <label class="pressao-fluxo-field-label">
+                                    <?php esc_html_e('Whatsapp (opcional)', 'pressao-plugin'); ?>
+                                    <input type="tel" name="telefone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" data-fluxo-whatsapp />
+                                </label>
+                                <p class="pressao-fluxo-form-error" data-fluxo-form-error hidden></p>
+                                <div class="pressao-fluxo-footer-actions">
+                                    <button type="submit" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-receber>
+                                        <?php esc_html_e('Quero receber atualizações', 'pressao-plugin'); ?>
+                                    </button>
+                                    <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-secondary" data-fluxo-agora-nao>
+                                        <?php esc_html_e('Agora não', 'pressao-plugin'); ?>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="pressao-fluxo-screen" data-screen="share" hidden>
+                            <div class="pressao-fluxo-share" data-fluxo-share></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

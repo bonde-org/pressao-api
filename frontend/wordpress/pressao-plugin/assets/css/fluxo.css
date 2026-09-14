@@ -58,6 +58,34 @@
   gap: 18px;
 }
 
+/* Sequência pós-Continuar: inline no desktop; drawer no mobile */
+.pressao-fluxo-seq-overlay {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.pressao-fluxo-seq-overlay:not([hidden]) {
+  display: flex;
+}
+
+.pressao-fluxo-seq-backdrop {
+  display: none;
+}
+
+.pressao-fluxo-seq-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--fluxo-bg);
+}
+
+.pressao-fluxo-seq-panel > .pressao-fluxo-screen.is-active {
+  flex: 1;
+}
+
 .pressao-fluxo-topbar,
 .pressao-fluxo-nav {
   display: flex;
@@ -991,6 +1019,84 @@
   background-color: #cfcfcf;
 }
 
+@media (max-width: 767px) {
+  /* Drawer tela cheia: entra da direita (igual overlay de ação em [pressao_alvos]).
+     Diferente do bottom sheet da lista de candidatos. */
+  .pressao-fluxo-seq-overlay:not([hidden]) {
+    position: fixed;
+    inset: 0;
+    z-index: 100040;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: stretch;
+    flex: initial;
+    min-height: 0;
+  }
+
+  .pressao-fluxo-seq-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: transparent;
+  }
+
+  .pressao-fluxo-seq-panel {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    flex: 1;
+    border-radius: 0;
+    padding: 24px 20px 28px;
+    box-sizing: border-box;
+    box-shadow: none;
+    overflow: auto;
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+
+  .pressao-fluxo-seq-overlay.is-open .pressao-fluxo-seq-panel {
+    transform: translateX(0);
+    opacity: 1;
+    animation: pressao-fluxo-drawer-in 0.28s ease;
+  }
+
+  .pressao-fluxo-seq-overlay.is-closing .pressao-fluxo-seq-panel {
+    animation: pressao-fluxo-drawer-out 0.28s ease forwards;
+  }
+
+  /* Início permanece montado atrás do drawer */
+  .pressao-fluxo.is-seq-open .pressao-fluxo-screen[data-screen="inicio"] {
+    display: flex;
+  }
+}
+
+@keyframes pressao-fluxo-drawer-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pressao-fluxo-drawer-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+}
+
 @media (min-width: 768px) {
   .pressao-fluxo-lista-overlay,
   .pressao-fluxo-help-overlay {
@@ -1001,5 +1107,14 @@
   .pressao-fluxo-help-panel {
     border-radius: 20px;
     max-height: 70vh;
+  }
+
+  /* Desktop: sequência substitui o conteúdo do card (sem drawer) */
+  .pressao-fluxo.is-seq-open .pressao-fluxo-screen[data-screen="inicio"] {
+    display: none !important;
+  }
+
+  .pressao-fluxo-seq-overlay:not([hidden]) {
+    flex: 1;
   }
 }
