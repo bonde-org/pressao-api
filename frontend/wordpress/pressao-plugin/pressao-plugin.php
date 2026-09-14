@@ -48,6 +48,7 @@ final class PressaoPlugin {
     private function load_dependencies() {
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-main.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-admin.php';
+        require_once PRESSAO_PLUGIN_DIR . 'includes/class-candidatos-import.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-api.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-shortcode.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-ajax.php'; // NOVO
@@ -84,6 +85,7 @@ final class PressaoPlugin {
             'pressao_campaign_id' => '',
             'pressao_widget_title' => 'Pressão Widget',
             'pressao_candidatos' => [],
+            'pressao_candidatos_apoiadores' => [],
             'pressao_fluxo_limite_candidatos' => 5,
             'pressao_fluxo_ajuda' => [
                 'titulo' => '',
@@ -225,12 +227,26 @@ final class PressaoPlugin {
 
         wp_enqueue_media();
 
+        wp_enqueue_style(
+            'tom-select',
+            PRESSAO_PLUGIN_URL . 'assets/vendor/tom-select/tom-select.default.min.css',
+            [],
+            '2.3.1'
+        );
+        wp_enqueue_script(
+            'tom-select',
+            PRESSAO_PLUGIN_URL . 'assets/vendor/tom-select/tom-select.complete.min.js',
+            [],
+            '2.3.1',
+            true
+        );
+
         $admin_css = PRESSAO_PLUGIN_DIR . 'assets/css/admin.css';
         if (file_exists($admin_css)) {
             wp_enqueue_style(
                 'pressao-admin',
                 PRESSAO_PLUGIN_URL . 'assets/css/admin.css',
-                [],
+                ['tom-select'],
                 PRESSAO_PLUGIN_VERSION
             );
         }
@@ -238,7 +254,7 @@ final class PressaoPlugin {
         wp_enqueue_script(
             'pressao-admin',
             PRESSAO_PLUGIN_URL . 'assets/js/admin.js',
-            ['jquery'],
+            ['jquery', 'tom-select'],
             PRESSAO_PLUGIN_VERSION,
             true
         );
@@ -247,6 +263,7 @@ final class PressaoPlugin {
             'selectCandidateImage' => __('Selecionar imagem do candidato', 'pressao-plugin'),
             'selectShareImage' => __('Selecionar imagem para postar', 'pressao-plugin'),
             'useThisImage' => __('Usar esta imagem', 'pressao-plugin'),
+            'removeConfirm' => __('Remover os candidatos selecionados da base de apoiadores?', 'pressao-plugin'),
         ]);
     }
 }

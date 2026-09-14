@@ -764,9 +764,9 @@ class PressaoPlugin_Shortcode {
             'id' => 'pressao-candidatos-' . uniqid(),
         ], $atts, 'pressao_candidatos');
 
-        $candidatos = get_option('pressao_candidatos', []);
+        $candidatos = get_option('pressao_candidatos_apoiadores', []);
         if (!is_array($candidatos) || empty($candidatos)) {
-            return '<p class="pressao-empty">' . esc_html__('Nenhum candidato configurado.', 'pressao-plugin') . '</p>';
+            return '<p class="pressao-empty">' . esc_html__('Nenhum candidato apoiador configurado.', 'pressao-plugin') . '</p>';
         }
 
         ob_start();
@@ -942,28 +942,10 @@ class PressaoPlugin_Shortcode {
         $alvo_nome = isset($alvo['nome']) ? (string) $alvo['nome'] : '';
 
         $candidatos_raw = get_option('pressao_candidatos', []);
-        $candidatos = [];
-        if (is_array($candidatos_raw)) {
-            foreach ($candidatos_raw as $index => $candidato) {
-                if (!is_array($candidato)) {
-                    continue;
-                }
-                $handle = isset($candidato['link_url']) ? trim((string) $candidato['link_url']) : '';
-                if ($handle !== '' && strpos($handle, '@') !== 0) {
-                    $handle = '@' . ltrim($handle, '@');
-                }
-                $imagem_id = absint($candidato['imagem_id'] ?? 0);
-                $imagem_url = $imagem_id ? wp_get_attachment_image_url($imagem_id, 'thumbnail') : '';
-                $candidatos[] = [
-                    'id' => 'c' . $index,
-                    'nome' => $candidato['nome'] ?? '',
-                    'cargo' => $candidato['cargo'] ?? '',
-                    'partido' => $candidato['partido'] ?? '',
-                    'instagram' => $handle,
-                    'imagem' => $imagem_url ? $imagem_url : '',
-                ];
-            }
-        }
+        $candidatos = $this->normalize_candidatos_for_fluxo($candidatos_raw, 'c');
+
+        $apoiadores_raw = get_option('pressao_candidatos_apoiadores', []);
+        $apoiadores = $this->normalize_candidatos_for_fluxo($apoiadores_raw, 'a');
 
         $share_config = $this->get_compartilhamento_config_for_render(false);
         if (!$share_config) {
@@ -990,16 +972,17 @@ class PressaoPlugin_Shortcode {
             'contato_url' => $alvo['contato'] ?? '',
             'limite_candidatos' => $limite,
             'candidatos' => $candidatos,
+            'apoiadores' => $apoiadores,
             'acoes_confirmadas' => $acoes_count,
             'share' => $share_config,
             'nonce' => wp_create_nonce('pressao_acao_nonce'),
         ];
 
-        $total_candidatos = count($candidatos);
+        $total_candidatos = count($apoiadores);
         $max_avatars = 5;
         $com_imagem = [];
         $sem_imagem = [];
-        foreach ($candidatos as $candidato) {
+        foreach ($apoiadores as $candidato) {
             if (!empty($candidato['imagem'])) {
                 $com_imagem[] = $candidato;
             } else {
@@ -1199,7 +1182,7 @@ class PressaoPlugin_Shortcode {
                         <button type="button" class="pressao-fluxo-lista-close" data-fluxo-lista-close aria-label="<?php esc_attr_e('Fechar', 'pressao-plugin'); ?>">×</button>
                     </header>
                     <ul class="pressao-fluxo-lista-items">
-                        <?php foreach ($candidatos as $candidato) : ?>
+                        <?php foreach ($apoiadores as $candidato) : ?>
                             <li class="pressao-fluxo-lista-item">
                                 <span class="pressao-fluxo-lista-avatar"<?php echo $candidato['imagem'] ? ' style="background-image:url(\'' . esc_url($candidato['imagem']) . '\')"' : ''; ?>></span>
                                 <span class="pressao-fluxo-lista-meta">
@@ -1249,6 +1232,45 @@ class PressaoPlugin_Shortcode {
         </div>
         <?php
         return ob_get_clean();
+    }
+
+    /**
+     * Normaliza option de candidatos para o config JS do [pressao_fluxo].
+     *
+     * @param mixed  $raw
+     * @param string $id_prefix
+     * @return array<int, array<string, string>>
+     */
+    private function normalize_candidatos_for_fluxo($raw, $id_prefix = 'c') {
+        $out = [];
+        if (!is_array($raw)) {
+            return $out;
+        }
+
+        foreach ($raw as $index => $candidato) {
+            if (!is_array($candidato)) {
+                continue;
+            }
+            $handle = isset($candidato['link_url']) ? trim((string) $candidato['link_url']) : '';
+            if ($handle !== '' && strpos($handle, '@') !== 0) {
+                $handle = '@' . ltrim($handle, '@');
+            }
+            if ($handle === '') {
+                continue;
+            }
+            $imagem_id = absint($candidato['imagem_id'] ?? 0);
+            $imagem_url = $imagem_id ? wp_get_attachment_image_url($imagem_id, 'thumbnail') : '';
+            $out[] = [
+                'id' => $id_prefix . $index,
+                'nome' => $candidato['nome'] ?? '',
+                'cargo' => $candidato['cargo'] ?? '',
+                'partido' => $candidato['partido'] ?? '',
+                'instagram' => $handle,
+                'imagem' => $imagem_url ? $imagem_url : '',
+            ];
+        }
+
+        return $out;
     }
 }
 
