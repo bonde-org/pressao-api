@@ -1,8 +1,14 @@
 (function($) {
-    function renameCandidateFields($item, index) {
+    function optionNameFromContainer($container) {
+        const name = $container.attr('data-option') || 'pressao_candidatos';
+        return name.replace(/[^a-z0-9_]/g, '');
+    }
+
+    function renameCandidateFields($item, index, optionName) {
         $item.attr('data-index', index);
+        const re = new RegExp(optionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\[\\d+\\]');
         $item.find('[name]').each(function() {
-            this.name = this.name.replace(/pressao_candidatos\[\d+\]/, 'pressao_candidatos[' + index + ']');
+            this.name = this.name.replace(re, optionName + '[' + index + ']');
         });
     }
 
@@ -32,6 +38,7 @@
         e.preventDefault();
 
         const $container = $(this).closest('.pressao-candidatos-admin');
+        const optionName = optionNameFromContainer($container);
         const $list = $container.find('.pressao-candidatos-list');
         const nextIndex = parseInt($container.attr('data-next-index'), 10) || 0;
         const $first = $list.find('.pressao-candidato-admin-item').first();
@@ -41,7 +48,7 @@
         }
 
         const $newItem = $first.clone();
-        renameCandidateFields($newItem, nextIndex);
+        renameCandidateFields($newItem, nextIndex, optionName);
         clearCandidate($newItem);
         $list.append($newItem);
         $container.attr('data-next-index', nextIndex + 1);
@@ -160,5 +167,31 @@
         const $field = $(this).closest('.pressao-share-imagem-field');
         $field.find('.pressao-share-imagem-id').val('');
         $field.find('.pressao-share-imagem-preview').empty();
+    });
+
+    $(function() {
+        const $removeSelect = $('#pressao-apoiadores-remove-select');
+        if ($removeSelect.length && typeof TomSelect !== 'undefined') {
+            new TomSelect('#pressao-apoiadores-remove-select', {
+                plugins: ['remove_button'],
+                maxItems: null,
+                maxOptions: null,
+                placeholder: $removeSelect.attr('placeholder') || 'Digite nome ou @',
+                searchField: ['text']
+            });
+        }
+
+        $('.pressao-apoiadores-remove-form').on('submit', function(e) {
+            const labels = window.pressaoAdminData || {};
+            const selected = $removeSelect.val();
+            if (!selected || !selected.length) {
+                e.preventDefault();
+                return;
+            }
+            const msg = labels.removeConfirm || 'Remover os candidatos selecionados da base de apoiadores?';
+            if (!window.confirm(msg)) {
+                e.preventDefault();
+            }
+        });
     });
 })(jQuery);

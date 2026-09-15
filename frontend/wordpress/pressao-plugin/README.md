@@ -75,17 +75,22 @@ pressao-plugin/
 ├── includes/
 │   ├── class-main.php          # Funcionalidades gerais
 │   ├── class-admin.php         # Página de configurações
+│   ├── class-candidatos-import.php  # CSV apoiadores + remoção
 │   ├── class-api.php           # Cliente HTTP: Keycloak + API Pressão
 │   ├── class-shortcode.php     # Shortcodes e renderização SSR
 │   └── class-ajax.php          # AJAX handlers
 ├── assets/
 │   ├── css/
-│   │   └── style.css           # Tokens, mask-image dos ícones, @font-face
+│   │   ├── style.css           # Tokens, mask-image dos ícones, @font-face
+│   │   └── fluxo.css           # UI do shortcode [pressao_fluxo]
 │   ├── fonts/                  # NeueHaasGroteskText.woff2/.woff (adicionar manualmente)
 │   ├── icons/                  # SVG de canais, compartilhar, copiar, download, seta e raio (via CSS mask-image)
+│   ├── vendor/tom-select/      # Autocomplete do fluxo único (+ remoção no admin)
+│   ├── examples/               # CSV de exemplo (apoiadores)
 │   └── js/
-│       ├── admin.js            # Campos repetíveis (candidatos + imagens de compartilhamento) + Media Library
-│       └── widget.js           # UI, cookies, ações, compartilhamento e confirmações
+│       ├── admin.js            # Campos repetíveis, CSV/remoção apoiadores, Media Library
+│       ├── widget.js           # UI, cookies, ações, compartilhamento e confirmações ([pressao_alvos])
+│       └── fluxo.js            # Wizard sequencial isolado ([pressao_fluxo])
 └── views/
     └── widget-template.php
 ```
@@ -116,7 +121,10 @@ Acesse Configurações > Pressão Plugin e preencha:
 | ID da Campanha | `pressao_campaign_id` | Campanha padrão dos shortcodes |
 | Título do Widget | `pressao_widget_title` | Título exibido em `[pressao_widget]` |
 | Duração da sessão | `pressao_session_duration` | TTL dos cookies em segundos (padrão `86400`) |
-| Candidatos | `pressao_candidatos` | Lista de candidatos exibida em `[pressao_candidatos]` |
+| Candidatos a pressionar | `pressao_candidatos` | Busca/seleção do `[pressao_fluxo]` |
+| Candidatos apoiadores | `pressao_candidatos_apoiadores` | Botão/lista “já apoiam”, `[pressao_candidatos]`, import CSV |
+| Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Máximo de @ por mensagem no `[pressao_fluxo]` (padrão `5`) |
+| Ajuda do fluxo | `pressao_fluxo_ajuda` | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
 | Compartilhamento | `pressao_compartilhamento` | Textos, links, deep links e imagens do botão de compartilhar |
 
 ### Configuração compartilhada via wp-config.php (multisite)
@@ -135,18 +143,47 @@ define('PRESSAO_API_URL', 'https://pressao-api.bonde.cloud');
 
 ### Configuração de candidatos
 
-O painel possui uma seção "Configurações de Candidatos" para cadastrar os dados renderizados pelo shortcode `[pressao_candidatos]`.
+Há **duas bases** no WordPress:
 
-Campos por candidato:
+| Base | Option | Uso |
+|------|--------|-----|
+| A pressionar | `pressao_candidatos` | Busca/seleção (Tom Select) no `[pressao_fluxo]` |
+| Apoiadores | `pressao_candidatos_apoiadores` | Botão “já apoiam”, overlay da lista, shortcode `[pressao_candidatos]` |
+
+Campos por candidato (iguais nas duas):
 
 - `nome`
 - `cargo`
 - `partido`
 - `descricao`
-- `link_url`
+- `link_url` — **Instagram (@)** (handle; aceita `@user` ou URL de perfil; sanitizado no save)
 - `imagem_id`
 
-As imagens são selecionadas pela Biblioteca de Mídia do WordPress. O plugin armazena o `attachment ID` e renderiza com `wp_get_attachment_image()`, sem implementar upload próprio. Assim, se o WordPress passar a enviar mídias para S3 via offload/plugin de storage, o comportamento continua transparente para o Pressão Plugin.
+As imagens manuais usam a Biblioteca de Mídia do WordPress (`attachment ID` + `wp_get_attachment_image()`).
+
+No `[pressao_fluxo]`, os handles da base **a pressionar** entram na mensagem (`@a, @b …` + template do alvo). O limite de seleção vem de `pressao_fluxo_limite_candidatos`. Contagens do botão/lista usam a base **apoiadores**.
+
+#### Import CSV (apoiadores)
+
+Na página de configurações, abaixo do formulário principal: upload CSV com upsert **incremental** por `@`:
+
+- Colunas: `nome`, `cargo`, `partido`, `descricao`, `instagram` (ou `link_url`), `imagem_url` (opcional)
+- Botão **Baixar CSV de exemplo** ao lado de Importar CSV (`assets/examples/candidatos-apoiadores-exemplo.csv`)
+- `@` novo → adiciona; `@` existente → atualiza; ausente no CSV → permanece
+- `imagem_url` http(s) → download + sideload em `uploads/…/candidatos/`; falha de imagem não aborta o lote
+
+#### Remover apoiadores
+
+Select com autocomplete (nome/`@`), seleção múltipla e botão **Remover da base**. Não apaga attachments da Media Library.
+
+### Ajuda do fluxo (`?`)
+
+Option `pressao_fluxo_ajuda`:
+
+- `titulo` — título do modal/drawer
+- `conteudo` — HTML sanitizado (`wp_kses_post`), editado com o editor do WordPress no admin
+
+O botão `?` em todas as telas do `[pressao_fluxo]` abre esse conteúdo. No topo da tela inicial é exibido o **nome do alvo** (`alvo.nome`), não o nome da campanha.
 
 ### Configuração de compartilhamento
 
@@ -187,7 +224,7 @@ docker compose exec wordpress php -l wp-content/plugins/pressao-plugin/includes/
 
 ## Uso
 
-Os shortcodes ligados à campanha aceitam `campaign` e caem em `pressao_campaign_id` quando o atributo é omitido. O shortcode `[pressao_candidatos]` é editorial e usa os dados cadastrados no admin do plugin.
+Os shortcodes ligados à campanha aceitam `campaign` e caem em `pressao_campaign_id` quando o atributo é omitido. O shortcode `[pressao_candidatos]` é editorial e usa a base **apoiadores** (`pressao_candidatos_apoiadores`).
 
 ### `[pressao_alvos]` — lista de alvos com botão de ação
 
@@ -258,9 +295,9 @@ Barra `done / total` de alvos baseada no cookie `pressao_acoes_realizadas`. Cont
 | `label` | `seu progresso` | Texto da barra |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
 
-### `[pressao_candidatos]` — bloco de candidatos
+### `[pressao_candidatos]` — bloco de candidatos apoiadores
 
-Renderiza os candidatos cadastrados no painel do plugin.
+Renderiza os candidatos da option `pressao_candidatos_apoiadores` (já apoiam a pauta).
 
 ```text
 [pressao_candidatos title="Conheça os candidatos"]
@@ -271,6 +308,26 @@ Renderiza os candidatos cadastrados no painel do plugin.
 | `title` | `Candidatos` | Título do bloco |
 | `show_title` | `yes` | Exibe ou oculta o título |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
+
+### `[pressao_fluxo]` — fluxo único sequencial (Instagram v1)
+
+Wizard isolado de `[pressao_alvos]`: seleção de candidatos → copiar/abrir Instagram → confirmação humana → formulário de newsletter → compartilhar. **Cria e confirma a ação na API apenas na saída do formulário** (“Quero receber atualizações” com dados, ou “Agora não” sem ativista). Telas pós-Continuar são bloqueantes (sem dismiss por backdrop/Escape); no **mobile** abrem como **drawer tela cheia** (entra da direita, como o overlay de ação — distinto do bottom sheet da lista de candidatos); no desktop a troca continua inline no card. A lista de candidatos fecha no X ou backdrop.
+
+```text
+[pressao_fluxo alvo_id="uuid-do-alvo" canal="instagram"]
+```
+
+| Atributo | Padrão | Descrição |
+|----------|--------|-----------|
+| `alvo_id` | — (**obrigatório**) | UUID do alvo Instagram na API |
+| `canal` | `instagram` | Canal do fluxo; v1 só implementa Instagram |
+| `campaign` | option | ID da campanha |
+| `template_id` | template do alvo | Fallback se a API não devolver template |
+| `title` / `subtitle` | copy do layout | Textos da tela inicial |
+| `cache` | `300` | TTL do cache de alvos |
+| `class` / `id` | — / gerado | Classe CSS extra e ID do container |
+
+Assets: `fluxo.js` + `fluxo.css` + Tom Select (só quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`.
 
 ### `[pressao_widget]` — widget principal
 
