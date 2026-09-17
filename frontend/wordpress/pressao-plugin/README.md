@@ -83,7 +83,10 @@ pressao-plugin/
 │   ├── css/
 │   │   ├── style.css           # Tokens, mask-image dos ícones, @font-face
 │   │   └── fluxo.css           # UI do shortcode [pressao_fluxo]
-│   ├── fonts/                  # NeueHaasGroteskText.woff2/.woff (adicionar manualmente)
+│   ├── fonts/                  # Anton + Host_Grotesk (fluxo); NeueHaas*.woff* opcional p/ alvos
+│   │   ├── Anton/
+│   │   ├── Host_Grotesk/
+│   │   └── Funnel_Display/     # presente; não usada no [pressao_fluxo]
 │   ├── icons/                  # SVG de canais, compartilhar, copiar, download, seta e raio (via CSS mask-image)
 │   ├── vendor/tom-select/      # Autocomplete do fluxo único (+ remoção no admin)
 │   ├── examples/               # CSV de exemplo (apoiadores)
@@ -183,7 +186,7 @@ Option `pressao_fluxo_ajuda`:
 - `titulo` — título do modal/drawer
 - `conteudo` — HTML sanitizado (`wp_kses_post`), editado com o editor do WordPress no admin
 
-O botão `?` em todas as telas do `[pressao_fluxo]` abre esse conteúdo. No topo da tela inicial é exibido o **nome do alvo** (`alvo.nome`), não o nome da campanha.
+O botão `?` em todas as telas do `[pressao_fluxo]` abre esse conteúdo. No topo da tela inicial o badge segue o Figma (“Faça sua parte pelo Instagram!”); `alvo.nome` permanece no config JS para uso futuro.
 
 ### Configuração de compartilhamento
 

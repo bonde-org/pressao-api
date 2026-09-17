@@ -140,7 +140,7 @@ final class PressaoPlugin {
         if ($has_shortcode) {
             $icons_url = PRESSAO_PLUGIN_URL . 'assets/icons/';
             $icon_vars = sprintf(
-                ':root{--pressao-icon-instagram:url("%1$sinstagram.svg");--pressao-icon-tiktok:url("%1$stiktok.svg");--pressao-icon-email:url("%1$semail.svg");--pressao-icon-seta:url("%1$sseta.svg");--pressao-icon-raio:url("%1$sraio-barra-progresso.svg");--pressao-icon-compartilhar:url("%1$scompartilhar.svg");--pressao-icon-copiar:url("%1$scopiar.svg");--pressao-icon-download:url("%1$sdownload.svg");--pressao-icon-whatsapp:url("%1$swhatsapp.svg");--pressao-icon-messenger:url("%1$smessenger.svg");--pressao-icon-seta-circulo:url("%1$sseta-com-circulo.svg");}',
+                ':root{--pressao-icon-instagram:url("%1$sinstagram.svg");--pressao-icon-tiktok:url("%1$stiktok.svg");--pressao-icon-email:url("%1$semail.svg");--pressao-icon-seta:url("%1$sseta.svg");--pressao-icon-seta-direita:url("%1$sseta-direita.svg");--pressao-icon-abrir-externo:url("%1$sabrir-externo.svg");--pressao-icon-check-circulo:url("%1$scheck-circulo.svg");--pressao-icon-raio:url("%1$sraio-barra-progresso.svg");--pressao-icon-compartilhar:url("%1$scompartilhar.svg");--pressao-icon-copiar:url("%1$scopiar.svg");--pressao-icon-download:url("%1$sdownload.svg");--pressao-icon-whatsapp:url("%1$swhatsapp.svg");--pressao-icon-messenger:url("%1$smessenger.svg");--pressao-icon-seta-circulo:url("%1$sseta-com-circulo.svg");}',
                 esc_url_raw($icons_url)
             );
 
