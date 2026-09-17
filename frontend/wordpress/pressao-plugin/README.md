@@ -127,6 +127,7 @@ Acesse Configurações > Pressão Plugin e preencha:
 | Candidatos a pressionar | `pressao_candidatos` | Busca/seleção do `[pressao_fluxo]` |
 | Candidatos apoiadores | `pressao_candidatos_apoiadores` | Botão/lista “já apoiam”, `[pressao_candidatos]`, import CSV |
 | Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Máximo de @ por mensagem no `[pressao_fluxo]` (padrão `5`) |
+| Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Se ligado: toast 5s antes de abrir o Instagram; se desligado (padrão): abre no clique sem toast |
 | Ajuda do fluxo | `pressao_fluxo_ajuda` | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
 | Compartilhamento | `pressao_compartilhamento` | Textos, links, deep links e imagens do botão de compartilhar |
 

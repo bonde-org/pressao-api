@@ -8,6 +8,7 @@
     var SESSAO_COOKIE = 'pressao_sessao_id';
     var COOKIE_ACTIONS = 'pressao_acoes_realizadas';
     var TOAST_MS = 2800;
+    var REDIRECT_COUNTDOWN_S = 5;
 
     function data() {
         return window.pressaoFluxoData || {};
@@ -405,6 +406,42 @@
             });
         }
 
+        function hideToast() {
+            if (!toastEl) {
+                return;
+            }
+            toastEl.classList.remove('is-visible');
+            toastEl.hidden = true;
+        }
+
+        /**
+         * Exibe toast e atualiza o texto a cada segundo até zerar.
+         * Não esconde o toast ao resolver — o caller controla o dismiss.
+         */
+        function showToastCountdown(title, buildTextFn, seconds) {
+            return new Promise(function (resolve) {
+                if (!toastEl) {
+                    resolve();
+                    return;
+                }
+                var remaining = seconds;
+                toastTitle.textContent = title || '';
+                toastText.textContent = typeof buildTextFn === 'function' ? buildTextFn(remaining) : '';
+                toastEl.hidden = false;
+                toastEl.classList.add('is-visible');
+
+                var timer = setInterval(function () {
+                    remaining -= 1;
+                    if (remaining <= 0) {
+                        clearInterval(timer);
+                        resolve();
+                        return;
+                    }
+                    toastText.textContent = typeof buildTextFn === 'function' ? buildTextFn(remaining) : '';
+                }, 1000);
+            });
+        }
+
         function selectedCandidatos() {
             return state.selectedIds
                 .map(function (id) {
@@ -681,17 +718,43 @@
         function copiarEAbrir() {
             var texto = buildMessage();
             var url = config.contato_url || '';
-            var afterCopy = function () {
+            var useCountdown = !!config.countdown_abrir;
+            var copiarBtns = root.querySelectorAll('[data-fluxo-copiar]');
+
+            var setCopiarDisabled = function (disabled) {
+                copiarBtns.forEach(function (btn) {
+                    btn.disabled = disabled;
+                });
+            };
+
+            var openUrl = function () {
                 if (url) {
                     window.open(url, '_blank', 'noopener,noreferrer');
                 }
-                showToast(
-                    'Mensagem copiada, abrindo Instagram',
-                    'Agora é só colar nos comentários da publicação.'
-                ).then(function () {
+            };
+
+            var afterCopy = function () {
+                if (!useCountdown) {
+                    openUrl();
                     showScreen('confirmacao');
+                    return;
+                }
+
+                setCopiarDisabled(true);
+                showToastCountdown(
+                    'Mensagem copiada! Abrindo o Instagram…',
+                    function (n) {
+                        return 'Abrindo em ' + n + '… Agora é só colar nos comentários da publicação.';
+                    },
+                    REDIRECT_COUNTDOWN_S
+                ).then(function () {
+                    openUrl();
+                    hideToast();
+                    showScreen('confirmacao');
+                    setCopiarDisabled(false);
                 });
             };
+
             if (texto && navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(texto).then(afterCopy).catch(afterCopy);
             } else {

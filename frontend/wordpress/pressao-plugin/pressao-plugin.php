@@ -87,6 +87,7 @@ final class PressaoPlugin {
             'pressao_candidatos' => [],
             'pressao_candidatos_apoiadores' => [],
             'pressao_fluxo_limite_candidatos' => 5,
+            'pressao_fluxo_countdown_abrir' => 0,
             'pressao_fluxo_ajuda' => [
                 'titulo' => '',
                 'conteudo' => '',

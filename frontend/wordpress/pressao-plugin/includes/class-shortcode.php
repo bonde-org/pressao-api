@@ -971,6 +971,7 @@ class PressaoPlugin_Shortcode {
             'template_conteudo' => $template_conteudo,
             'contato_url' => $alvo['contato'] ?? '',
             'limite_candidatos' => $limite,
+            'countdown_abrir' => (bool) get_option('pressao_fluxo_countdown_abrir', 0),
             'candidatos' => $candidatos,
             'apoiadores' => $apoiadores,
             'acoes_confirmadas' => $acoes_count,
@@ -1173,6 +1174,7 @@ class PressaoPlugin_Shortcode {
                                 <p class="pressao-fluxo-form-error" data-fluxo-form-error hidden></p>
                                 <div class="pressao-fluxo-footer-actions">
                                     <button type="submit" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-receber>
+                                        <span class="pressao-fluxo-check" aria-hidden="true"></span>
                                         <?php esc_html_e('Quero receber atualizações', 'pressao-plugin'); ?>
                                     </button>
                                     <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-secondary" data-fluxo-agora-nao>
