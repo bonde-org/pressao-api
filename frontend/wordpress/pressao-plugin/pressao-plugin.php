@@ -21,6 +21,21 @@ define('PRESSAO_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PRESSAO_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('PRESSAO_PLUGIN_BASENAME', plugin_basename(__FILE__));
 
+/**
+ * Versão pra cache-busting de um asset. Usa a data de modificação do
+ * arquivo (sempre muda quando o conteúdo muda, forçando o navegador a
+ * buscar a versão nova) em vez da PRESSAO_PLUGIN_VERSION fixa — sem isso,
+ * qualquer alteração em CSS/JS fica presa no cache do navegador de quem
+ * já visitou o site antes, mesmo o servidor já servindo o conteúdo certo.
+ *
+ * @param string $relative_path Caminho relativo à raiz do plugin (ex: 'assets/css/fluxo.css').
+ * @return string
+ */
+function pressao_plugin_asset_version($relative_path) {
+    $path = PRESSAO_PLUGIN_DIR . $relative_path;
+    return is_readable($path) ? (string) filemtime($path) : PRESSAO_PLUGIN_VERSION;
+}
+
 // Classe principal
 final class PressaoPlugin {
     
@@ -120,23 +135,25 @@ final class PressaoPlugin {
             return;
         }
         
-        $has_shortcode = has_shortcode($post->post_content, 'pressao_widget') ||
-                         has_shortcode($post->post_content, 'pressao_form') ||
-                         has_shortcode($post->post_content, 'pressao_list') ||
-                         has_shortcode($post->post_content, 'pressao_alvos') ||
-                         has_shortcode($post->post_content, 'pressao_contador') ||
-                         has_shortcode($post->post_content, 'pressao_progresso') ||
-                         has_shortcode($post->post_content, 'pressao_candidatos') ||
-                         has_shortcode($post->post_content, 'pressao_fluxo');
+        $content = $post->post_content . ' ' . $this->decode_vc_raw_html_shortcodes($post->post_content);
 
-        $has_fluxo = has_shortcode($post->post_content, 'pressao_fluxo');
-        $has_legacy = has_shortcode($post->post_content, 'pressao_widget') ||
-                      has_shortcode($post->post_content, 'pressao_form') ||
-                      has_shortcode($post->post_content, 'pressao_list') ||
-                      has_shortcode($post->post_content, 'pressao_alvos') ||
-                      has_shortcode($post->post_content, 'pressao_contador') ||
-                      has_shortcode($post->post_content, 'pressao_progresso') ||
-                      has_shortcode($post->post_content, 'pressao_candidatos');
+        $has_shortcode = has_shortcode($content, 'pressao_widget') ||
+                         has_shortcode($content, 'pressao_form') ||
+                         has_shortcode($content, 'pressao_list') ||
+                         has_shortcode($content, 'pressao_alvos') ||
+                         has_shortcode($content, 'pressao_contador') ||
+                         has_shortcode($content, 'pressao_progresso') ||
+                         has_shortcode($content, 'pressao_candidatos') ||
+                         has_shortcode($content, 'pressao_fluxo');
+
+        $has_fluxo = has_shortcode($content, 'pressao_fluxo');
+        $has_legacy = has_shortcode($content, 'pressao_widget') ||
+                      has_shortcode($content, 'pressao_form') ||
+                      has_shortcode($content, 'pressao_list') ||
+                      has_shortcode($content, 'pressao_alvos') ||
+                      has_shortcode($content, 'pressao_contador') ||
+                      has_shortcode($content, 'pressao_progresso') ||
+                      has_shortcode($content, 'pressao_candidatos');
         
         if ($has_shortcode) {
             $icons_url = PRESSAO_PLUGIN_URL . 'assets/icons/';
@@ -150,7 +167,7 @@ final class PressaoPlugin {
                     'pressao-plugin',
                     PRESSAO_PLUGIN_URL . 'assets/css/style.css',
                     [],
-                    PRESSAO_PLUGIN_VERSION
+                    pressao_plugin_asset_version('assets/css/style.css')
                 );
                 wp_add_inline_style('pressao-plugin', $icon_vars);
             }
@@ -160,7 +177,7 @@ final class PressaoPlugin {
                     'pressao-plugin',
                     PRESSAO_PLUGIN_URL . 'assets/js/widget.js',
                     [],
-                    PRESSAO_PLUGIN_VERSION,
+                    pressao_plugin_asset_version('assets/js/widget.js'),
                     true
                 );
 
@@ -195,7 +212,7 @@ final class PressaoPlugin {
                     'pressao-fluxo',
                     PRESSAO_PLUGIN_URL . 'assets/css/fluxo.css',
                     ['tom-select', 'pressao-plugin'],
-                    PRESSAO_PLUGIN_VERSION
+                    pressao_plugin_asset_version('assets/css/fluxo.css')
                 );
                 wp_enqueue_script(
                     'tom-select',
@@ -208,7 +225,7 @@ final class PressaoPlugin {
                     'pressao-fluxo',
                     PRESSAO_PLUGIN_URL . 'assets/js/fluxo.js',
                     ['tom-select'],
-                    PRESSAO_PLUGIN_VERSION,
+                    pressao_plugin_asset_version('assets/js/fluxo.js'),
                     true
                 );
                 wp_localize_script('pressao-fluxo', 'pressaoFluxoData', [
@@ -220,7 +237,39 @@ final class PressaoPlugin {
             }
         }
     }
-    
+
+    /**
+     * Page builders como o WPBakery (js_composer) guardam o conteúdo de
+     * elementos "Raw HTML" ([vc_raw_html]) em base64+urlencode no
+     * post_content, pra escapar do wpautop. Isso esconde qualquer
+     * shortcode nosso colado lá dentro (ex: [pressao_fluxo ...] inserido
+     * via elemento Raw HTML) de checagens simples de texto como
+     * has_shortcode(), mesmo o WPBakery decodificando e executando esse
+     * shortcode normalmente no render — resultado: o widget aparece na
+     * página, mas sem o CSS/JS carregado. Decodifica esses blocos aqui só
+     * pra fins de detecção (não altera o post_content de verdade).
+     *
+     * @param string $content
+     * @return string
+     */
+    private function decode_vc_raw_html_shortcodes($content) {
+        if (strpos($content, 'vc_raw_html') === false) {
+            return '';
+        }
+
+        $decoded = '';
+        if (preg_match_all('/\[vc_raw_html[^\]]*\](.*?)\[\/vc_raw_html\]/s', $content, $matches)) {
+            foreach ($matches[1] as $encoded) {
+                $raw = base64_decode($encoded, true);
+                if ($raw !== false) {
+                    $decoded .= ' ' . urldecode($raw);
+                }
+            }
+        }
+
+        return $decoded;
+    }
+
     public function enqueue_admin_assets($hook) {
         if (strpos($hook, 'pressao-settings') === false) {
             return;
@@ -248,7 +297,7 @@ final class PressaoPlugin {
                 'pressao-admin',
                 PRESSAO_PLUGIN_URL . 'assets/css/admin.css',
                 ['tom-select'],
-                PRESSAO_PLUGIN_VERSION
+                pressao_plugin_asset_version('assets/css/admin.css')
             );
         }
 
@@ -256,7 +305,7 @@ final class PressaoPlugin {
             'pressao-admin',
             PRESSAO_PLUGIN_URL . 'assets/js/admin.js',
             ['jquery', 'tom-select'],
-            PRESSAO_PLUGIN_VERSION,
+            pressao_plugin_asset_version('assets/js/admin.js'),
             true
         );
 

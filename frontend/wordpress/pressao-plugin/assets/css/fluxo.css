@@ -16,7 +16,13 @@
   font-display: swap;
 }
 
-.pressao-fluxo {
+/* Declaradas em :root (não só em .pressao-fluxo) porque os overlays de
+   tela cheia (lista/help/seq/toast) são movidos via JS pra filhos diretos
+   do <body> — pra escapar do contexto de empilhamento em que o tema prende
+   o conteúdo da página (ver comentário sobre `.pressao-fluxo header`
+   abaixo). Se essas variáveis só existissem em .pressao-fluxo, os overlays
+   portados perderiam a herança delas ao sair de dentro do widget. */
+:root {
   --fluxo-bg: #ffffff;
   --fluxo-text: #262626;
   --fluxo-muted: #737373;
@@ -45,6 +51,9 @@
   --pressao-icon-whatsapp: url("../icons/whatsapp.svg");
   --pressao-icon-messenger: url("../icons/messenger.svg");
   --pressao-icon-download: url("../icons/download.svg");
+}
+
+.pressao-fluxo {
   font-family: var(--fluxo-font);
   color: var(--fluxo-text);
   max-width: 420px;
@@ -76,6 +85,26 @@
   flex-direction: column;
   min-height: 560px;
   overflow: hidden;
+}
+
+/* O tema aplica `header { position: fixed; top: 0; left: 0; ... }`
+   globalmente (seletor de tag, sem escopo), pensado pro header do site.
+   O widget usa <header> pros seus próprios topbars/navs internos, e como
+   esses headers não declaravam `position`, essa regra do tema vencia por
+   padrão e arrancava o elemento pro canto da tela. Seletor por classe (não
+   por ancestral `.pressao-fluxo header`) de propósito — os overlays de
+   modal são movidos via JS pra filhos diretos do <body> (fora de
+   .pressao-fluxo), então uma regra dependente de ancestralidade pararia de
+   valer pra eles depois do portal. */
+.pressao-fluxo-topbar,
+.pressao-fluxo-nav,
+.pressao-fluxo-lista-header,
+.pressao-fluxo-help-header {
+  position: static;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  width: auto;
 }
 
 .pressao-fluxo-screen {
@@ -269,6 +298,13 @@
 
 .pressao-fluxo-left .pressao-fluxo-subtitle {
   color: var(--fluxo-muted-2);
+}
+
+/* O texto vem de esc_html() (sem tags), mas quebras de linha ("\n") no
+   atributo `subtitle` do shortcode sobrevivem ao esc_html() intactas —
+   só precisam ser respeitadas visualmente aqui. */
+.pressao-fluxo-subtitle {
+  white-space: pre-line;
 }
 
 .pressao-fluxo-section-label,
@@ -1443,7 +1479,7 @@
     font-size: 16px;
     line-height: 24px;
     color: var(--fluxo-muted);
-    margin-top: 20px;
+    margin-top: -24px;
   }
 
   .pressao-fluxo-left .pressao-fluxo-topbar + .pressao-fluxo-title {
@@ -1488,12 +1524,13 @@
     flex-direction: column;
     align-items: flex-start;
     justify-content: flex-start;
-    gap: 8px;
+    gap: 0;
   }
 
   .pressao-fluxo-counter--desktop .pressao-fluxo-counter-raio {
     width: 38px;
     height: 38px;
+    margin-bottom: 8px;
   }
 
   .pressao-fluxo-counter--desktop .pressao-fluxo-counter-value {

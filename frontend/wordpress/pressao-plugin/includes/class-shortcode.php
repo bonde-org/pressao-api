@@ -856,11 +856,18 @@ class PressaoPlugin_Shortcode {
             'canal' => 'instagram',
             'campaign' => get_option('pressao_campaign_id', ''),
             'template_id' => '',
-            'title' => __('Pressione os candidatos pela Tarifa Zero', 'pressao-plugin'),
-            'subtitle' => __('Marque quem ainda não se comprometeu e ajude a fortalecer o movimento.', 'pressao-plugin'),
+            'title' => __('Seu candidato já se comprometeu com a Tarifa Zero?', 'pressao-plugin'),
+            'subtitle' => __("As eleições estão chegando. É hora de perguntar aos candidatos à Câmara e Senado: vocês estão do lado de quem precisa se deslocar todos os dias?\n\nEscolha até 5 candidatos e peça que ele declare publicamente seu compromisso.", 'pressao-plugin'),
             'class' => '',
             'id' => 'pressao-fluxo-' . uniqid(),
-            'cache' => 300,
+            // O widget de fluxo monta a mensagem a partir de um template
+            // sorteado pela API (services/templates.py, random.choice). Cache
+            // > 0 aqui prende o mesmo sorteio por até `cache` segundos pra
+            // TODOS os visitantes (mesma mensagem pra todo mundo dentro da
+            // janela), não só pra quem recarrega a página. 0 = sem cache,
+            // sorteio novo a cada visita — desligue via atributo cache="300"
+            // (ou outro valor) se algum dia precisar aliviar carga na API.
+            'cache' => 0,
         ], $atts, 'pressao_fluxo');
 
         $alvo_id = sanitize_text_field($atts['alvo_id']);
@@ -1009,7 +1016,7 @@ class PressaoPlugin_Shortcode {
                         <header class="pressao-fluxo-topbar">
                             <span class="pressao-fluxo-channel-badge">
                                 <span class="pressao-fluxo-channel-badge-icon" aria-hidden="true"></span>
-                                <?php esc_html_e('Faça sua parte pelo Instagram!', 'pressao-plugin'); ?>
+                                <?php esc_html_e('Faça sua parte no Instagram!', 'pressao-plugin'); ?>
                             </span>
                             <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
                         </header>

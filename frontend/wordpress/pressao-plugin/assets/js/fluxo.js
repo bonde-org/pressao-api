@@ -8,7 +8,7 @@
     var SESSAO_COOKIE = 'pressao_sessao_id';
     var COOKIE_ACTIONS = 'pressao_acoes_realizadas';
     var TOAST_MS = 2800;
-    var REDIRECT_COUNTDOWN_S = 5;
+    var REDIRECT_COUNTDOWN_S = 3;
 
     function data() {
         return window.pressaoFluxoData || {};
@@ -242,6 +242,35 @@
         var seqCloseTimer = null;
         var bodyScrollLocked = false;
 
+        // No desktop, .pressao-fluxo-seq-overlay é um item flex inline
+        // dentro de .pressao-fluxo-card (flex:1, ocupa o espaço ao lado do
+        // painel esquerdo) — só vira overlay de tela cheia (position:fixed)
+        // no breakpoint mobile (ver @media max-width:767px no CSS). Por
+        // isso, ao contrário de lista/help/toast (que são sempre fixed, em
+        // qualquer largura, e por isso portados sem condição lá embaixo),
+        // este só pode ser movido pro <body> quando realmente vai renderizar
+        // como drawer mobile — mover sempre quebraria o layout desktop.
+        // Guardamos um comentário-âncora no lugar original pra devolver o
+        // elemento certinho ali quando a tela crescer.
+        var seqOverlayAnchor = null;
+        if (seqOverlay && seqOverlay.parentNode) {
+            seqOverlayAnchor = document.createComment('pressao-fluxo-seq-overlay-anchor');
+            seqOverlay.parentNode.insertBefore(seqOverlayAnchor, seqOverlay);
+        }
+
+        function syncSeqOverlayPortal() {
+            if (!seqOverlay || !seqOverlayAnchor) {
+                return;
+            }
+            if (isMobileDrawer()) {
+                if (seqOverlay.parentElement !== document.body) {
+                    document.body.appendChild(seqOverlay);
+                }
+            } else if (seqOverlay.parentElement === document.body) {
+                seqOverlayAnchor.parentNode.insertBefore(seqOverlay, seqOverlayAnchor.nextSibling);
+            }
+        }
+
         if (listaOverlay) {
             listaOverlay.hidden = true;
             listaOverlay.classList.remove('is-open', 'is-closing');
@@ -257,6 +286,24 @@
         if (toastEl) {
             toastEl.hidden = true;
             toastEl.classList.remove('is-visible');
+        }
+
+        // Buscas dinâmicas, refeitas a cada interação (screens do passo 2+,
+        // botão "copiar", chips, mensagem, share, form...), todas dentro de
+        // seqOverlay, que é portado pra fora de `root` mais abaixo (ver
+        // comentário perto do fim desta função). queryAll()/queryOne() somam
+        // root + seqOverlay pra continuar encontrando esses elementos depois
+        // do portal.
+        function queryAll(selector) {
+            var results = Array.prototype.slice.call(root.querySelectorAll(selector));
+            if (seqOverlay) {
+                results = results.concat(Array.prototype.slice.call(seqOverlay.querySelectorAll(selector)));
+            }
+            return results;
+        }
+
+        function queryOne(selector) {
+            return root.querySelector(selector) || (seqOverlay ? seqOverlay.querySelector(selector) : null);
         }
 
         (config.candidatos || []).forEach(function (c) {
@@ -293,6 +340,7 @@
                 clearTimeout(seqCloseTimer);
                 seqCloseTimer = null;
             }
+            syncSeqOverlayPortal();
             seqOverlay.hidden = false;
             seqOverlay.classList.remove('is-closing');
             root.classList.add('is-seq-open');
@@ -348,7 +396,7 @@
                 openSeq();
             }
 
-            root.querySelectorAll('.pressao-fluxo-screen').forEach(function (screen) {
+            queryAll('.pressao-fluxo-screen').forEach(function (screen) {
                 var screenName = screen.getAttribute('data-screen');
                 var active = screenName === name;
 
@@ -418,7 +466,7 @@
          * Exibe toast e atualiza o texto a cada segundo até zerar.
          * Não esconde o toast ao resolver — o caller controla o dismiss.
          */
-        function showToastCountdown(title, buildTextFn, seconds) {
+        function showToastCountdown(title, buildTextFn, seconds, onTick) {
             return new Promise(function (resolve) {
                 if (!toastEl) {
                     resolve();
@@ -429,6 +477,9 @@
                 toastText.textContent = typeof buildTextFn === 'function' ? buildTextFn(remaining) : '';
                 toastEl.hidden = false;
                 toastEl.classList.add('is-visible');
+                if (typeof onTick === 'function') {
+                    onTick(remaining);
+                }
 
                 var timer = setInterval(function () {
                     remaining -= 1;
@@ -438,6 +489,9 @@
                         return;
                     }
                     toastText.textContent = typeof buildTextFn === 'function' ? buildTextFn(remaining) : '';
+                    if (typeof onTick === 'function') {
+                        onTick(remaining);
+                    }
                 }, 1000);
             });
         }
@@ -465,7 +519,7 @@
         }
 
         function renderChips() {
-            var wrap = root.querySelector('[data-fluxo-chips]');
+            var wrap = queryOne('[data-fluxo-chips]');
             if (!wrap) {
                 return;
             }
@@ -489,14 +543,14 @@
         }
 
         function renderMessage() {
-            var el = root.querySelector('[data-fluxo-message]');
+            var el = queryOne('[data-fluxo-message]');
             if (el) {
                 el.textContent = buildMessage();
             }
         }
 
         function renderShare() {
-            var mount = root.querySelector('[data-fluxo-share]');
+            var mount = queryOne('[data-fluxo-share]');
             if (!mount) {
                 return;
             }
@@ -715,11 +769,21 @@
             showScreen('acao');
         }
 
+        // Só navegadores mobile (Safari/iOS em especial, Chrome Android
+        // também) bloqueiam window.open() chamado fora do gesto síncrono de
+        // clique — desktop tolera a chamada atrasada normalmente. Detecção
+        // por user agent (não por largura de tela) porque o comportamento é
+        // do navegador/dispositivo, não do layout responsivo.
+        function isMobileBrowser() {
+            return /Android|iPhone|iPad|iPod|Mobile|IEMobile|BlackBerry/i.test(navigator.userAgent || '');
+        }
+
         function copiarEAbrir() {
             var texto = buildMessage();
             var url = config.contato_url || '';
             var useCountdown = !!config.countdown_abrir;
-            var copiarBtns = root.querySelectorAll('[data-fluxo-copiar]');
+            var copiarBtns = queryAll('[data-fluxo-copiar]');
+            var mobile = isMobileBrowser();
 
             var setCopiarDisabled = function (disabled) {
                 copiarBtns.forEach(function (btn) {
@@ -727,8 +791,60 @@
                 });
             };
 
+            // Como o resto do fluxo é assíncrono (clipboard + contador de
+            // alguns segundos), no mobile abrimos a aba em branco JÁ, aqui,
+            // e só preenchemos a URL de destino depois — preserva a
+            // permissão do navegador em vez de deixar o window.open
+            // "atrasado" ser bloqueado silenciosamente. No desktop mantemos
+            // o comportamento original (window.open direto em openUrl()).
+            // Importante: sem "noopener" aqui, de propósito — com "noopener"
+            // window.open() retorna null por especificação, e perderíamos a
+            // referência pra redirecionar depois. Zeramos `opener`
+            // manualmente logo abaixo pra manter a mesma proteção contra
+            // reverse tabnabbing.
+            var pendingWindow = (mobile && url) ? window.open('', '_blank') : null;
+            if (pendingWindow) {
+                try {
+                    pendingWindow.opener = null;
+                } catch (e) {}
+                // Enquanto espera o clipboard + contador, a aba fica em
+                // branco — o que parece quebrado pro usuário. Escreve uma
+                // tela de espera simples em vez de deixar about:blank.
+                try {
+                    pendingWindow.document.write(
+                        '<!doctype html><html><head><meta charset="utf-8">' +
+                        '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+                        '<title>Abrindo o Instagram…</title>' +
+                        '<style>html,body{height:100%;margin:0;display:flex;align-items:center;justify-content:center;' +
+                        'background:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
+                        'color:#666;font-size:16px;text-align:center;padding:24px;box-sizing:border-box;}</style>' +
+                        '</head><body><p id="pressao-fluxo-popup-msg">Abrindo o Instagram…</p></body></html>'
+                    );
+                    pendingWindow.document.close();
+                } catch (e) {}
+            }
+
+            var updatePendingWindowCountdown = function (n) {
+                if (!pendingWindow || pendingWindow.closed) {
+                    return;
+                }
+                try {
+                    var el = pendingWindow.document.getElementById('pressao-fluxo-popup-msg');
+                    if (el) {
+                        el.textContent = n > 0
+                            ? 'Abrindo o Instagram em ' + n + '…'
+                            : 'Abrindo o Instagram…';
+                    }
+                } catch (e) {}
+            };
+
             var openUrl = function () {
-                if (url) {
+                if (!url) {
+                    return;
+                }
+                if (pendingWindow && !pendingWindow.closed) {
+                    pendingWindow.location.href = url;
+                } else {
                     window.open(url, '_blank', 'noopener,noreferrer');
                 }
             };
@@ -746,7 +862,8 @@
                     function (n) {
                         return 'Abrindo em ' + n + '… Agora é só colar nos comentários da publicação.';
                     },
-                    REDIRECT_COUNTDOWN_S
+                    REDIRECT_COUNTDOWN_S,
+                    updatePendingWindowCountdown
                 ).then(function () {
                     openUrl();
                     hideToast();
@@ -777,7 +894,7 @@
 
         function setFormBusy(busy) {
             state.submitting = busy;
-            root.querySelectorAll('[data-fluxo-receber], [data-fluxo-agora-nao]').forEach(function (btn) {
+            queryAll('[data-fluxo-receber], [data-fluxo-agora-nao]').forEach(function (btn) {
                 btn.disabled = busy;
             });
         }
@@ -899,7 +1016,7 @@
             if (tom) {
                 tom.clear(true);
             }
-            var form = root.querySelector('[data-fluxo-form]');
+            var form = queryOne('[data-fluxo-form]');
             if (form) {
                 form.reset();
             }
@@ -1067,6 +1184,7 @@
                 return;
             }
             var inicio = root.querySelector('.pressao-fluxo-screen[data-screen="inicio"]');
+            syncSeqOverlayPortal();
             if (mobileMq.matches) {
                 lockBodyScroll();
                 if (inicio) {
@@ -1089,6 +1207,29 @@
         } else if (typeof mobileMq.addListener === 'function') {
             mobileMq.addListener(onViewportChange);
         }
+
+        // O tema envolve o conteúdo da página em `#content`/.miolo-site com
+        // `position: relative; z-index: 2;`, o que cria um novo contexto de
+        // empilhamento — nenhum z-index daqui de dentro (nem 100050) compete
+        // com o que fica FORA dessa seção. O header do site é irmão dessa
+        // seção, fixo, com z-index:99, e sempre vence essa comparação
+        // externa, cobrindo os overlays de tela cheia do widget. Corrigir
+        // aumentando o z-index aqui não resolveria — o único jeito é escapar
+        // desse contexto preso, movendo os overlays pra filhos diretos do
+        // <body>. Só lista/help/toast entram aqui, incondicionalmente,
+        // porque são sempre position:fixed (qualquer largura de tela) — o
+        // seqOverlay é tratado à parte, via syncSeqOverlayPortal(), porque no
+        // desktop ele é um item flex inline dentro do card, não um overlay.
+        // Feito só aqui, no fim da inicialização — de propósito, depois de
+        // TODOS os binds de evento acima (que fazem root.querySelectorAll
+        // pra achar os botões/campos de dentro desses overlays); mover antes
+        // faria essas buscas não encontrarem mais nada, já que os elementos
+        // já teriam saído de dentro de `root`.
+        [listaOverlay, helpOverlay, toastEl].forEach(function (el) {
+            if (el && el.parentElement !== document.body) {
+                document.body.appendChild(el);
+            }
+        });
     }
 
     function boot() {
