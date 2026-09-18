@@ -856,8 +856,8 @@ class PressaoPlugin_Shortcode {
             'canal' => 'instagram',
             'campaign' => get_option('pressao_campaign_id', ''),
             'template_id' => '',
-            'title' => __('Chame candidatos para fortalecer a pauta', 'pressao-plugin'),
-            'subtitle' => __('Cada voz ajuda! Marque quem ainda não se posicionou sobre a Tarifa Zero e convide para apoiar a pauta.', 'pressao-plugin'),
+            'title' => __('Pressione os candidatos pela Tarifa Zero', 'pressao-plugin'),
+            'subtitle' => __('Marque quem ainda não se comprometeu e ajude a fortalecer o movimento.', 'pressao-plugin'),
             'class' => '',
             'id' => 'pressao-fluxo-' . uniqid(),
             'cache' => 300,
@@ -971,9 +971,11 @@ class PressaoPlugin_Shortcode {
             'template_conteudo' => $template_conteudo,
             'contato_url' => $alvo['contato'] ?? '',
             'limite_candidatos' => $limite,
+            'countdown_abrir' => (bool) get_option('pressao_fluxo_countdown_abrir', 0),
             'candidatos' => $candidatos,
             'apoiadores' => $apoiadores,
             'acoes_confirmadas' => $acoes_count,
+            'alvo_nome' => $alvo_nome,
             'share' => $share_config,
             'nonce' => wp_create_nonce('pressao_acao_nonce'),
         ];
@@ -1003,80 +1005,106 @@ class PressaoPlugin_Shortcode {
 
             <div class="pressao-fluxo-card" data-fluxo-root>
                 <div class="pressao-fluxo-screen is-active" data-screen="inicio">
-                    <header class="pressao-fluxo-topbar">
-                        <span class="pressao-fluxo-brand"><?php echo esc_html($alvo_nome); ?></span>
-                        <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
-                    </header>
-                    <h2 class="pressao-fluxo-title"><?php echo esc_html($atts['title']); ?></h2>
-                    <p class="pressao-fluxo-subtitle"><?php echo esc_html($atts['subtitle']); ?></p>
-
-                    <button type="button" class="pressao-fluxo-candidatos-btn" data-fluxo-open-lista>
-                        <span class="pressao-fluxo-avatars" aria-hidden="true">
-                            <?php foreach ($avatares as $avatar) : ?>
-                                <span class="pressao-fluxo-avatar"<?php echo !empty($avatar['imagem']) ? ' style="background-image:url(\'' . esc_url($avatar['imagem']) . '\')"' : ''; ?>></span>
-                            <?php endforeach; ?>
-                        </span>
-                        <span class="pressao-fluxo-candidatos-label">
-                            <?php
-                            if ($restante_candidatos > 0) {
-                                echo esc_html(sprintf(
-                                    /* translators: %d: remaining candidates not shown as avatars */
-                                    __('+%d candidatos já apoiam a pauta', 'pressao-plugin'),
-                                    $restante_candidatos
-                                ));
-                            } else {
-                                echo esc_html(sprintf(
-                                    /* translators: %d: candidate count */
-                                    _n('%d candidato já apoia a pauta', '%d candidatos já apoiam a pauta', $total_candidatos, 'pressao-plugin'),
-                                    $total_candidatos
-                                ));
-                            }
-                            ?>
-                        </span>
-                        <span class="pressao-fluxo-candidatos-arrow" aria-hidden="true"></span>
-                    </button>
-
-                    <label class="pressao-fluxo-field-label" for="<?php echo esc_attr($atts['id']); ?>-select">
-                        <?php esc_html_e('Busque ou selecione candidatos', 'pressao-plugin'); ?>
-                    </label>
-                    <select id="<?php echo esc_attr($atts['id']); ?>-select"
-                            class="pressao-fluxo-select"
-                            multiple
-                            data-fluxo-select
-                            placeholder="<?php esc_attr_e('Digite o nome ou @ do Instagram', 'pressao-plugin'); ?>">
-                        <?php foreach ($candidatos as $candidato) : ?>
-                            <?php if (empty($candidato['instagram'])) { continue; } ?>
-                            <option value="<?php echo esc_attr($candidato['id']); ?>"
-                                    data-instagram="<?php echo esc_attr($candidato['instagram']); ?>"
-                                    data-imagem="<?php echo esc_attr($candidato['imagem']); ?>">
-                                <?php echo esc_html(trim(($candidato['nome'] ? $candidato['nome'] . ' ' : '') . $candidato['instagram'])); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <p class="pressao-fluxo-limit-hint">
-                        <?php
-                        echo esc_html(sprintf(
-                            /* translators: %d: max candidates */
-                            __('Você pode marcar até %d candidatos por vez.', 'pressao-plugin'),
-                            $limite
-                        ));
-                        ?>
-                    </p>
-
-                    <div class="pressao-fluxo-counter pressao-acoes-counter" data-campaign="<?php echo esc_attr($campanha_id); ?>">
-                        <span class="pressao-fluxo-counter-raio" aria-hidden="true"></span>
-                        <span class="pressao-fluxo-counter-value">
-                            <span class="pressao-acoes-count" data-count="<?php echo esc_attr($acoes_count); ?>">
-                                <?php echo esc_html(number_format($acoes_count, 0, ',', '.')); ?>
+                    <div class="pressao-fluxo-left">
+                        <header class="pressao-fluxo-topbar">
+                            <span class="pressao-fluxo-channel-badge">
+                                <span class="pressao-fluxo-channel-badge-icon" aria-hidden="true"></span>
+                                <?php esc_html_e('Faça sua parte pelo Instagram!', 'pressao-plugin'); ?>
                             </span>
-                            <span class="pressao-fluxo-counter-label"><?php esc_html_e('pressões', 'pressao-plugin'); ?></span>
-                        </span>
+                            <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
+                        </header>
+                        <h2 class="pressao-fluxo-title"><?php echo esc_html($atts['title']); ?></h2>
+                        <p class="pressao-fluxo-subtitle"><?php echo esc_html($atts['subtitle']); ?></p>
+
+                        <div class="pressao-fluxo-proof">
+                            <button type="button" class="pressao-fluxo-candidatos-btn" data-fluxo-open-lista>
+                                <span class="pressao-fluxo-avatars" aria-hidden="true">
+                                    <?php foreach ($avatares as $avatar) : ?>
+                                        <span class="pressao-fluxo-avatar"<?php echo !empty($avatar['imagem']) ? ' style="background-image:url(\'' . esc_url($avatar['imagem']) . '\')"' : ''; ?>></span>
+                                    <?php endforeach; ?>
+                                </span>
+                                <span class="pressao-fluxo-candidatos-copy">
+                                    <span class="pressao-fluxo-candidatos-count">
+                                        <?php
+                                        if ($restante_candidatos > 0) {
+                                            echo esc_html(sprintf(
+                                                /* translators: %d: remaining candidates not shown as avatars */
+                                                __('+%d candidatos', 'pressao-plugin'),
+                                                $restante_candidatos
+                                            ));
+                                        } else {
+                                            echo esc_html(sprintf(
+                                                /* translators: %d: candidate count */
+                                                _n('%d candidato', '%d candidatos', $total_candidatos, 'pressao-plugin'),
+                                                $total_candidatos
+                                            ));
+                                        }
+                                        ?>
+                                        <span class="pressao-fluxo-candidatos-arrow" aria-hidden="true"></span>
+                                    </span>
+                                    <span class="pressao-fluxo-candidatos-caption"><?php esc_html_e('já apoiam essa pauta', 'pressao-plugin'); ?></span>
+                                </span>
+                            </button>
+
+                            <div class="pressao-fluxo-counter pressao-fluxo-counter--desktop pressao-acoes-counter" data-campaign="<?php echo esc_attr($campanha_id); ?>">
+                                <span class="pressao-fluxo-counter-raio" aria-hidden="true"></span>
+                                <span class="pressao-fluxo-counter-value">
+                                    <span class="pressao-acoes-count" data-count="<?php echo esc_attr($acoes_count); ?>">
+                                        <?php echo esc_html(number_format($acoes_count, 0, ',', '.')); ?>
+                                    </span>
+                                    <span class="pressao-fluxo-counter-label"><?php esc_html_e('pressões', 'pressao-plugin'); ?></span>
+                                </span>
+                                <span class="pressao-fluxo-counter-caption"><?php esc_html_e('até o momento', 'pressao-plugin'); ?></span>
+                            </div>
+                        </div>
                     </div>
 
-                    <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-continuar>
-                        <?php esc_html_e('Continuar', 'pressao-plugin'); ?>
-                        <span class="pressao-fluxo-btn-arrow" aria-hidden="true">→</span>
-                    </button>
+                    <div class="pressao-fluxo-right">
+                        <div class="pressao-fluxo-search-block">
+                            <label class="pressao-fluxo-field-label" for="<?php echo esc_attr($atts['id']); ?>-select">
+                                <?php esc_html_e('Busque ou selecione candidatos', 'pressao-plugin'); ?>
+                            </label>
+                            <select id="<?php echo esc_attr($atts['id']); ?>-select"
+                                    class="pressao-fluxo-select"
+                                    multiple
+                                    data-fluxo-select
+                                    placeholder="<?php esc_attr_e('Nome do candidato ou @ do Instagram', 'pressao-plugin'); ?>">
+                                <?php foreach ($candidatos as $candidato) : ?>
+                                    <?php if (empty($candidato['instagram'])) { continue; } ?>
+                                    <option value="<?php echo esc_attr($candidato['id']); ?>"
+                                            data-instagram="<?php echo esc_attr($candidato['instagram']); ?>"
+                                            data-imagem="<?php echo esc_attr($candidato['imagem']); ?>">
+                                        <?php echo esc_html(trim(($candidato['nome'] ? $candidato['nome'] . ' ' : '') . $candidato['instagram'])); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="pressao-fluxo-limit-hint">
+                                <span class="pressao-fluxo-limit-hint-icon" aria-hidden="true"></span>
+                                <?php
+                                echo esc_html(sprintf(
+                                    /* translators: %d: max candidates */
+                                    __('Você pode selecionar até %d candidatos por vez', 'pressao-plugin'),
+                                    $limite
+                                ));
+                                ?>
+                            </p>
+                        </div>
+
+                        <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-continuar>
+                            <?php esc_html_e('Continuar', 'pressao-plugin'); ?>
+                            <span class="pressao-fluxo-btn-arrow" aria-hidden="true"></span>
+                        </button>
+
+                        <div class="pressao-fluxo-counter pressao-fluxo-counter--mobile pressao-acoes-counter" data-campaign="<?php echo esc_attr($campanha_id); ?>">
+                            <span class="pressao-fluxo-counter-raio" aria-hidden="true"></span>
+                            <span class="pressao-fluxo-counter-value">
+                                <span class="pressao-acoes-count" data-count="<?php echo esc_attr($acoes_count); ?>">
+                                    <?php echo esc_html(number_format($acoes_count, 0, ',', '.')); ?>
+                                </span>
+                                <span class="pressao-fluxo-counter-label"><?php esc_html_e('pressões até o momento', 'pressao-plugin'); ?></span>
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="pressao-fluxo-seq-overlay" data-fluxo-seq hidden>
@@ -1086,7 +1114,7 @@ class PressaoPlugin_Shortcode {
                             <header class="pressao-fluxo-nav">
                                 <button type="button" class="pressao-fluxo-back" data-fluxo-back-inicio aria-label="<?php esc_attr_e('Voltar', 'pressao-plugin'); ?>"></button>
                                 <h3 class="pressao-fluxo-nav-title"><?php esc_html_e('Publique seu comentário', 'pressao-plugin'); ?></h3>
-                                <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
+                                <button type="button" class="pressao-fluxo-help pressao-fluxo-help--acao" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
                             </header>
                             <div class="pressao-fluxo-acao-body">
                                 <p class="pressao-fluxo-section-label"><?php esc_html_e('Candidatos selecionados', 'pressao-plugin'); ?></p>
@@ -1130,7 +1158,6 @@ class PressaoPlugin_Shortcode {
                                 <button type="button" class="pressao-fluxo-help" data-fluxo-open-help aria-label="<?php esc_attr_e('Ajuda', 'pressao-plugin'); ?>">?</button>
                             </header>
                             <p class="pressao-fluxo-subtitle"><?php esc_html_e('Receba atualizações sobre a campanha e novas formas de pressionar pela Tarifa Zero.', 'pressao-plugin'); ?></p>
-                            <hr class="pressao-fluxo-divider" />
                             <form class="pressao-fluxo-ativista-form" data-fluxo-form novalidate>
                                 <label class="pressao-fluxo-field-label">
                                     <?php esc_html_e('Nome', 'pressao-plugin'); ?> <span class="pressao-fluxo-required">*</span>
@@ -1147,6 +1174,7 @@ class PressaoPlugin_Shortcode {
                                 <p class="pressao-fluxo-form-error" data-fluxo-form-error hidden></p>
                                 <div class="pressao-fluxo-footer-actions">
                                     <button type="submit" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-receber>
+                                        <span class="pressao-fluxo-check" aria-hidden="true"></span>
                                         <?php esc_html_e('Quero receber atualizações', 'pressao-plugin'); ?>
                                     </button>
                                     <button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-secondary" data-fluxo-agora-nao>

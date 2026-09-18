@@ -48,6 +48,11 @@ class PressaoPlugin_Admin {
             'sanitize_callback' => [$this, 'sanitize_fluxo_limite_candidatos'],
             'default' => 5,
         ]);
+        register_setting('pressao_settings_group', 'pressao_fluxo_countdown_abrir', [
+            'type' => 'boolean',
+            'sanitize_callback' => [$this, 'sanitize_fluxo_countdown_abrir'],
+            'default' => 0,
+        ]);
         register_setting('pressao_settings_group', 'pressao_fluxo_ajuda', [
             'sanitize_callback' => [$this, 'sanitize_fluxo_ajuda'],
             'default' => [
@@ -201,6 +206,14 @@ class PressaoPlugin_Admin {
             'pressao_fluxo_limite_candidatos',
             __('Limite de candidatos por marcação (fluxo)', 'pressao-plugin'),
             [$this, 'render_fluxo_limite_field'],
+            'pressao-settings',
+            'pressao_candidatos_section'
+        );
+
+        add_settings_field(
+            'pressao_fluxo_countdown_abrir',
+            __('Contador antes de abrir Instagram', 'pressao-plugin'),
+            [$this, 'render_fluxo_countdown_abrir_field'],
             'pressao-settings',
             'pressao_candidatos_section'
         );
@@ -670,6 +683,27 @@ class PressaoPlugin_Admin {
                class="small-text" />
         <p class="description">
             <?php esc_html_e('Máximo de candidatos que o ativista pode marcar na mensagem do [pressao_fluxo].', 'pressao-plugin'); ?>
+        </p>
+        <?php
+    }
+
+    public function sanitize_fluxo_countdown_abrir($value) {
+        return !empty($value) ? 1 : 0;
+    }
+
+    public function render_fluxo_countdown_abrir_field() {
+        $value = (int) get_option('pressao_fluxo_countdown_abrir', 0);
+        ?>
+        <input type="hidden" name="pressao_fluxo_countdown_abrir" value="0" />
+        <label>
+            <input type="checkbox"
+                   name="pressao_fluxo_countdown_abrir"
+                   value="1"
+                   <?php checked($value, 1); ?> />
+            <?php esc_html_e('Aguardar contador (5s) e mostrar aviso antes de abrir o Instagram', 'pressao-plugin'); ?>
+        </label>
+        <p class="description">
+            <?php esc_html_e('Desligado (padrão): abre o link no clique, sem toast. Ligado: toast com countdown e só então abre — em alguns navegadores o popup pode ser bloqueado.', 'pressao-plugin'); ?>
         </p>
         <?php
     }

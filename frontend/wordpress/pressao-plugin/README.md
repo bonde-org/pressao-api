@@ -83,7 +83,10 @@ pressao-plugin/
 │   ├── css/
 │   │   ├── style.css           # Tokens, mask-image dos ícones, @font-face
 │   │   └── fluxo.css           # UI do shortcode [pressao_fluxo]
-│   ├── fonts/                  # NeueHaasGroteskText.woff2/.woff (adicionar manualmente)
+│   ├── fonts/                  # Anton + Host_Grotesk (fluxo); NeueHaas*.woff* opcional p/ alvos
+│   │   ├── Anton/
+│   │   ├── Host_Grotesk/
+│   │   └── Funnel_Display/     # presente; não usada no [pressao_fluxo]
 │   ├── icons/                  # SVG de canais, compartilhar, copiar, download, seta e raio (via CSS mask-image)
 │   ├── vendor/tom-select/      # Autocomplete do fluxo único (+ remoção no admin)
 │   ├── examples/               # CSV de exemplo (apoiadores)
@@ -124,6 +127,7 @@ Acesse Configurações > Pressão Plugin e preencha:
 | Candidatos a pressionar | `pressao_candidatos` | Busca/seleção do `[pressao_fluxo]` |
 | Candidatos apoiadores | `pressao_candidatos_apoiadores` | Botão/lista “já apoiam”, `[pressao_candidatos]`, import CSV |
 | Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Máximo de @ por mensagem no `[pressao_fluxo]` (padrão `5`) |
+| Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Se ligado: toast 5s antes de abrir o Instagram; se desligado (padrão): abre no clique sem toast |
 | Ajuda do fluxo | `pressao_fluxo_ajuda` | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
 | Compartilhamento | `pressao_compartilhamento` | Textos, links, deep links e imagens do botão de compartilhar |
 
@@ -183,7 +187,7 @@ Option `pressao_fluxo_ajuda`:
 - `titulo` — título do modal/drawer
 - `conteudo` — HTML sanitizado (`wp_kses_post`), editado com o editor do WordPress no admin
 
-O botão `?` em todas as telas do `[pressao_fluxo]` abre esse conteúdo. No topo da tela inicial é exibido o **nome do alvo** (`alvo.nome`), não o nome da campanha.
+O botão `?` em todas as telas do `[pressao_fluxo]` abre esse conteúdo. No topo da tela inicial o badge segue o Figma (“Faça sua parte pelo Instagram!”); `alvo.nome` permanece no config JS para uso futuro.
 
 ### Configuração de compartilhamento
 

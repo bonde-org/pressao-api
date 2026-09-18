@@ -8,6 +8,7 @@
     var SESSAO_COOKIE = 'pressao_sessao_id';
     var COOKIE_ACTIONS = 'pressao_acoes_realizadas';
     var TOAST_MS = 2800;
+    var REDIRECT_COUNTDOWN_S = 5;
 
     function data() {
         return window.pressaoFluxoData || {};
@@ -351,8 +352,8 @@
                 var screenName = screen.getAttribute('data-screen');
                 var active = screenName === name;
 
-                if (!isInicio && screenName === 'inicio' && mobile) {
-                    // Mantém a tela inicial montada atrás do drawer no mobile.
+                if (!isInicio && screenName === 'inicio') {
+                    // Mantém a tela inicial: atrás do drawer (mobile) ou left-panel (desktop).
                     screen.hidden = false;
                     screen.classList.add('is-active');
                     return;
@@ -405,6 +406,42 @@
             });
         }
 
+        function hideToast() {
+            if (!toastEl) {
+                return;
+            }
+            toastEl.classList.remove('is-visible');
+            toastEl.hidden = true;
+        }
+
+        /**
+         * Exibe toast e atualiza o texto a cada segundo até zerar.
+         * Não esconde o toast ao resolver — o caller controla o dismiss.
+         */
+        function showToastCountdown(title, buildTextFn, seconds) {
+            return new Promise(function (resolve) {
+                if (!toastEl) {
+                    resolve();
+                    return;
+                }
+                var remaining = seconds;
+                toastTitle.textContent = title || '';
+                toastText.textContent = typeof buildTextFn === 'function' ? buildTextFn(remaining) : '';
+                toastEl.hidden = false;
+                toastEl.classList.add('is-visible');
+
+                var timer = setInterval(function () {
+                    remaining -= 1;
+                    if (remaining <= 0) {
+                        clearInterval(timer);
+                        resolve();
+                        return;
+                    }
+                    toastText.textContent = typeof buildTextFn === 'function' ? buildTextFn(remaining) : '';
+                }, 1000);
+            });
+        }
+
         function selectedCandidatos() {
             return state.selectedIds
                 .map(function (id) {
@@ -433,8 +470,14 @@
                 return;
             }
             var list = selectedCandidatos();
-            var visible = list.slice(0, 2);
+            var visible = list.slice(0, 3);
             var extra = list.length - visible.length;
+            var moreLabel = '';
+            if (extra > 0) {
+                moreLabel = window.matchMedia('(min-width: 768px)').matches
+                    ? 'Mostrar +' + extra
+                    : '+' + extra;
+            }
             wrap.innerHTML = visible
                 .map(function (c) {
                     var img = c.imagem
@@ -442,7 +485,7 @@
                         : '<span class="pressao-fluxo-chip-avatar is-empty"></span>';
                     return '<span class="pressao-fluxo-chip">' + img + '<span>' + escapeHtml(c.instagram) + '</span></span>';
                 })
-                .join('') + (extra > 0 ? '<span class="pressao-fluxo-chip-more">+' + extra + '</span>' : '');
+                .join('') + (extra > 0 ? '<span class="pressao-fluxo-chip-more">' + moreLabel + '</span>' : '');
         }
 
         function renderMessage() {
@@ -510,6 +553,7 @@
                 .map(function (img, index) {
                     return (
                         '<div class="pressao-fluxo-image-item">' +
+                        '<div class="pressao-fluxo-image-thumb-wrap">' +
                         '<span class="pressao-fluxo-image-thumb" style="background-image:url(\'' +
                         escapeAttr(img.thumb || img.url) +
                         '\')"></span>' +
@@ -518,12 +562,19 @@
                         '" download="' +
                         escapeAttr(img.filename || 'imagem-' + index) +
                         '" target="_blank" rel="noopener noreferrer">BAIXAR</a>' +
+                        '</div>' +
                         '<span class="pressao-fluxo-image-rotulo">' +
                         escapeHtml(img.rotulo || '') +
                         '</span></div>'
                     );
                 })
                 .join('');
+
+            var downloadAllBtn = imagens.length
+                ? '<button type="button" class="pressao-fluxo-btn pressao-fluxo-btn-primary" data-fluxo-download-all>' +
+                  'Baixar todas as imagens' +
+                  '<span class="pressao-fluxo-btn-download" aria-hidden="true"></span></button>'
+                : '';
 
             mount.innerHTML =
                 '<div class="pressao-fluxo-share-main" data-fluxo-share-main>' +
@@ -556,12 +607,14 @@
                 '<p class="pressao-fluxo-subtitle">' +
                 escapeHtml(
                     share.imagens_instrucao ||
-                        'Utilize nossas imagens nas suas redes para que outras pessoas conheçam a campanha.'
+                        'Utilize nossas imagens nas suas redes para que outras pessoas conheçam a campanha:'
                 ) +
                 '</p>' +
                 '<div class="pressao-fluxo-images-grid">' +
                 imagesItems +
-                '</div></div>';
+                '</div>' +
+                downloadAllBtn +
+                '</div>';
 
             function setCopiedState(isCopied) {
                 var btn = mount.querySelector('[data-fluxo-copy-btn]');
@@ -634,6 +687,17 @@
             if (resetBtn) {
                 resetBtn.addEventListener('click', resetFluxo);
             }
+
+            var downloadAll = mount.querySelector('[data-fluxo-download-all]');
+            if (downloadAll) {
+                downloadAll.addEventListener('click', function () {
+                    mount.querySelectorAll('.pressao-fluxo-image-download').forEach(function (link, i) {
+                        setTimeout(function () {
+                            link.click();
+                        }, i * 150);
+                    });
+                });
+            }
         }
 
         function syncSelectedFromTom() {
@@ -654,17 +718,43 @@
         function copiarEAbrir() {
             var texto = buildMessage();
             var url = config.contato_url || '';
-            var afterCopy = function () {
+            var useCountdown = !!config.countdown_abrir;
+            var copiarBtns = root.querySelectorAll('[data-fluxo-copiar]');
+
+            var setCopiarDisabled = function (disabled) {
+                copiarBtns.forEach(function (btn) {
+                    btn.disabled = disabled;
+                });
+            };
+
+            var openUrl = function () {
                 if (url) {
                     window.open(url, '_blank', 'noopener,noreferrer');
                 }
-                showToast(
-                    'Mensagem copiada, abrindo Instagram',
-                    'Agora é só colar nos comentários da publicação.'
-                ).then(function () {
+            };
+
+            var afterCopy = function () {
+                if (!useCountdown) {
+                    openUrl();
                     showScreen('confirmacao');
+                    return;
+                }
+
+                setCopiarDisabled(true);
+                showToastCountdown(
+                    'Mensagem copiada! Abrindo o Instagram…',
+                    function (n) {
+                        return 'Abrindo em ' + n + '… Agora é só colar nos comentários da publicação.';
+                    },
+                    REDIRECT_COUNTDOWN_S
+                ).then(function () {
+                    openUrl();
+                    hideToast();
+                    showScreen('confirmacao');
+                    setCopiarDisabled(false);
                 });
             };
+
             if (texto && navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(texto).then(afterCopy).catch(afterCopy);
             } else {
@@ -989,8 +1079,8 @@
             } else {
                 unlockBodyScroll();
                 if (inicio) {
-                    inicio.hidden = true;
-                    inicio.classList.remove('is-active');
+                    inicio.hidden = false;
+                    inicio.classList.add('is-active');
                 }
             }
         };
