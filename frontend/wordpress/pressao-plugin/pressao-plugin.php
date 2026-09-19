@@ -64,6 +64,7 @@ final class PressaoPlugin {
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-main.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-admin.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-candidatos-import.php';
+        require_once PRESSAO_PLUGIN_DIR . 'includes/class-candidatos-rest.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-api.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-shortcode.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-ajax.php'; // NOVO
