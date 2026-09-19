@@ -999,8 +999,6 @@ class PressaoPlugin_Shortcode {
             }
         }
         $avatares = array_slice(array_merge($com_imagem, $sem_imagem), 0, $max_avatars);
-        $avatars_exibidos = count($avatares);
-        $restante_candidatos = max(0, $total_candidatos - $avatars_exibidos);
 
         ob_start();
         ?>
@@ -1033,19 +1031,11 @@ class PressaoPlugin_Shortcode {
                                 <span class="pressao-fluxo-candidatos-copy">
                                     <span class="pressao-fluxo-candidatos-count">
                                         <?php
-                                        if ($restante_candidatos > 0) {
-                                            echo esc_html(sprintf(
-                                                /* translators: %d: remaining candidates not shown as avatars */
-                                                __('+%d candidatos', 'pressao-plugin'),
-                                                $restante_candidatos
-                                            ));
-                                        } else {
-                                            echo esc_html(sprintf(
-                                                /* translators: %d: candidate count */
-                                                _n('%d candidato', '%d candidatos', $total_candidatos, 'pressao-plugin'),
-                                                $total_candidatos
-                                            ));
-                                        }
+                                        echo esc_html(sprintf(
+                                            /* translators: %d: total candidate count */
+                                            _n('%d candidato', '%d candidatos', $total_candidatos, 'pressao-plugin'),
+                                            $total_candidatos
+                                        ));
                                         ?>
                                         <span class="pressao-fluxo-candidatos-arrow" aria-hidden="true"></span>
                                     </span>
