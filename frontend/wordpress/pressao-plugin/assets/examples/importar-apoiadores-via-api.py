@@ -30,8 +30,7 @@ import urllib.error
 import urllib.request
 from base64 import b64encode
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
+from typing import Any
 
 HEADER_ALIASES = {
     "nome": ("nome", "name"),
@@ -51,9 +50,9 @@ def detect_delimiter(header_line: str) -> str:
     return ";" if header_line.count(";") > header_line.count(",") else ","
 
 
-def map_columns(headers: List[str]) -> Dict[str, int]:
+def map_columns(headers: list[str]) -> dict[str, int]:
     norm = [normalize_header(h) for h in headers]
-    col: Dict[str, int] = {}
+    col: dict[str, int] = {}
     for key, aliases in HEADER_ALIASES.items():
         for alias in aliases:
             if alias in norm:
@@ -62,7 +61,7 @@ def map_columns(headers: List[str]) -> Dict[str, int]:
     return col
 
 
-def cell(row: List[str], col: Dict[str, int], key: str) -> str:
+def cell(row: list[str], col: dict[str, int], key: str) -> str:
     if key not in col:
         return ""
     idx = col[key]
@@ -72,7 +71,7 @@ def cell(row: List[str], col: Dict[str, int], key: str) -> str:
 
 
 def basic_auth(user: str, password: str) -> str:
-    token = b64encode(f"{user}:{password}".encode("utf-8")).decode("ascii")
+    token = b64encode(f"{user}:{password}".encode()).decode("ascii")
     return f"Basic {token}"
 
 
@@ -80,9 +79,9 @@ def api_request(
     method: str,
     url: str,
     auth_header: str,
-    body: Optional[Dict[str, Any]] = None,
+    body: dict[str, Any] | None = None,
     timeout: float = 60.0,
-) -> Tuple[int, Any]:
+) -> tuple[int, Any]:
     data = None
     headers = {
         "Authorization": auth_header,
@@ -161,7 +160,7 @@ def main() -> int:
             fail += 1
             continue
 
-        body: Dict[str, Any] = {"instagram": instagram}
+        body: dict[str, Any] = {"instagram": instagram}
         for key in ("nome", "cargo", "partido", "descricao"):
             val = cell(row, col, key)
             if val != "":
