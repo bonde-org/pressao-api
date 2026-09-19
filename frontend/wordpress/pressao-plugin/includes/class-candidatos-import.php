@@ -38,7 +38,7 @@ class PressaoPlugin_Candidatos_Import {
             return '';
         }
 
-        if (preg_match('#instagram\.com/([^/?#]+)#i', $value, $matches)) {
+        if (preg_match('~instagram\.com/([^/?#]+)~i', $value, $matches)) {
             $value = $matches[1];
         }
 
@@ -196,7 +196,7 @@ class PressaoPlugin_Candidatos_Import {
             }
 
             if ($imagem_url !== '') {
-                $sideload = $this->sideload_image($imagem_url, $nome !== '' ? $nome : $handle);
+                $sideload = self::sideload_image($imagem_url, $nome !== '' ? $nome : $handle);
                 if (is_wp_error($sideload)) {
                     $errors[] = sprintf(
                         /* translators: 1: row number, 2: error message */
@@ -356,9 +356,11 @@ class PressaoPlugin_Candidatos_Import {
     }
 
     /**
+     * Download + sideload de imagem pública para Media Library em uploads/…/candidatos/.
+     *
      * @return int|WP_Error attachment ID
      */
-    private function sideload_image($url, $title) {
+    public static function sideload_image($url, $title) {
         $url = esc_url_raw($url);
         if ($url === '' || !preg_match('#^https?://#i', $url)) {
             return new WP_Error('invalid_url', __('URL de imagem inválida.', 'pressao-plugin'));
@@ -389,9 +391,9 @@ class PressaoPlugin_Candidatos_Import {
             'tmp_name' => $tmp,
         ];
 
-        add_filter('upload_dir', [$this, 'filter_upload_dir_candidatos']);
+        add_filter('upload_dir', [__CLASS__, 'filter_upload_dir_candidatos']);
         $attachment_id = media_handle_sideload($file_array, 0, $title);
-        remove_filter('upload_dir', [$this, 'filter_upload_dir_candidatos']);
+        remove_filter('upload_dir', [__CLASS__, 'filter_upload_dir_candidatos']);
 
         if (is_wp_error($attachment_id)) {
             @unlink($tmp);
@@ -401,7 +403,7 @@ class PressaoPlugin_Candidatos_Import {
         return (int) $attachment_id;
     }
 
-    public function filter_upload_dir_candidatos($uploads) {
+    public static function filter_upload_dir_candidatos($uploads) {
         $subdir = '/candidatos';
         $uploads['subdir'] = $subdir . ($uploads['subdir'] ?? '');
         $uploads['path'] = ($uploads['basedir'] ?? '') . $uploads['subdir'];

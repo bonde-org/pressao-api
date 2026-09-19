@@ -35,6 +35,11 @@ define('SECURE_AUTH_SALT', 'put your unique phrase here');
 define('LOGGED_IN_SALT',   'put your unique phrase here');
 define('NONCE_SALT',       'put your unique phrase here');
 
+// Ambiente local (Docker): Application Passwords funcionam em HTTP
+if (!defined('WP_ENVIRONMENT_TYPE')) {
+    define('WP_ENVIRONMENT_TYPE', 'local');
+}
+
 // Desativa edição de plugins pelo admin (recomendado)
 define('DISALLOW_FILE_EDIT', true);
 

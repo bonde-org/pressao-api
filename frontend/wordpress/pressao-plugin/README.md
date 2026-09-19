@@ -76,6 +76,7 @@ pressao-plugin/
 │   ├── class-main.php          # Funcionalidades gerais
 │   ├── class-admin.php         # Página de configurações
 │   ├── class-candidatos-import.php  # CSV apoiadores + remoção
+│   ├── class-candidatos-rest.php    # REST pressao/v1/candidatos-apoiadores
 │   ├── class-api.php           # Cliente HTTP: Keycloak + API Pressão
 │   ├── class-shortcode.php     # Shortcodes e renderização SSR
 │   └── class-ajax.php          # AJAX handlers
@@ -89,7 +90,7 @@ pressao-plugin/
 │   │   └── Funnel_Display/     # presente; não usada no [pressao_fluxo]
 │   ├── icons/                  # SVG de canais, compartilhar, copiar, download, seta e raio (via CSS mask-image)
 │   ├── vendor/tom-select/      # Autocomplete do fluxo único (+ remoção no admin)
-│   ├── examples/               # CSV de exemplo (apoiadores)
+│   ├── examples/               # CSV + scripts REST (apoiadores)
 │   └── js/
 │       ├── admin.js            # Campos repetíveis, CSV/remoção apoiadores, Media Library
 │       ├── widget.js           # UI, cookies, ações, compartilhamento e confirmações ([pressao_alvos])
@@ -125,7 +126,7 @@ Acesse Configurações > Pressão Plugin e preencha:
 | Título do Widget | `pressao_widget_title` | Título exibido em `[pressao_widget]` |
 | Duração da sessão | `pressao_session_duration` | TTL dos cookies em segundos (padrão `86400`) |
 | Candidatos a pressionar | `pressao_candidatos` | Busca/seleção do `[pressao_fluxo]` |
-| Candidatos apoiadores | `pressao_candidatos_apoiadores` | Botão/lista “já apoiam”, `[pressao_candidatos]`, import CSV |
+| Candidatos apoiadores | `pressao_candidatos_apoiadores` | Botão/lista “já apoiam”, `[pressao_candidatos]`, import CSV / REST |
 | Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Máximo de @ por mensagem no `[pressao_fluxo]` (padrão `5`) |
 | Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Se ligado: toast 5s antes de abrir o Instagram; se desligado (padrão): abre no clique sem toast |
 | Ajuda do fluxo | `pressao_fluxo_ajuda` | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
@@ -176,9 +177,54 @@ Na página de configurações, abaixo do formulário principal: upload CSV com u
 - `@` novo → adiciona; `@` existente → atualiza; ausente no CSV → permanece
 - `imagem_url` http(s) → download + sideload em `uploads/…/candidatos/`; falha de imagem não aborta o lote
 
+Para bases grandes (~milhares de linhas), prefira a [API REST](#api-rest-apoiadores) (um registro por request, debug por linha).
+
+#### API REST (apoiadores)
+
+Namespace: `pressao/v1`. Auth: **Application Password** de um usuário com `manage_options` (Usuários → Perfil). Em produção o site precisa de **HTTPS** (requisito do WordPress); em Docker local (`WP_ENVIRONMENT_TYPE=local`) funciona em HTTP.
+
+| Método | Rota | Função |
+|--------|------|--------|
+| `GET` | `/wp-json/pressao/v1/candidatos-apoiadores` | Lista |
+| `GET` | `/wp-json/pressao/v1/candidatos-apoiadores/{handle}` | Um por `@` (ex.: `fulana` ou `%40fulana`) |
+| `PUT` | `/wp-json/pressao/v1/candidatos-apoiadores` | Upsert **um** registro |
+| `DELETE` | `/wp-json/pressao/v1/candidatos-apoiadores/{handle}` | Remove um |
+
+Body do `PUT` (JSON):
+
+- Obrigatório: `instagram` ou `link_url`
+- Opcionais: `nome`, `cargo`, `partido`, `descricao`
+- Imagem (nenhuma obrigatória): `imagem_id` (attachment na Media Library) **ou** `imagem_url` (http(s) → sideload)
+- Campos omitidos em update preservam o valor atual; falha de imagem grava o candidato e devolve `warning`
+
+```bash
+# (opcional) upload de foto local
+curl -u 'admin:xxxx xxxx ...' \
+  -F "file=@foto.jpg" \
+  "https://SITE/wp-json/wp/v2/media"
+# → usar .id como imagem_id
+
+# upsert sem imagem
+curl -u 'admin:xxxx xxxx ...' \
+  -H 'Content-Type: application/json' \
+  -X PUT "https://SITE/wp-json/pressao/v1/candidatos-apoiadores" \
+  -d '{"nome":"Fulana","instagram":"@fulana"}'
+
+# upsert com imagem_id
+curl -u 'admin:xxxx xxxx ...' \
+  -H 'Content-Type: application/json' \
+  -X PUT "https://SITE/wp-json/pressao/v1/candidatos-apoiadores" \
+  -d '{"nome":"Fulana","instagram":"@fulana","imagem_id":123}'
+```
+
+Exemplos no plugin:
+
+- `assets/examples/upsert-candidato-apoiador.sh` — um candidato (env `WP_URL`, `WP_USER`, `WP_APP_PASSWORD`)
+- `assets/examples/importar-apoiadores-via-api.py` — CSV linha a linha (mesmo formato do admin)
+
 #### Remover apoiadores
 
-Select com autocomplete (nome/`@`), seleção múltipla e botão **Remover da base**. Não apaga attachments da Media Library.
+Select com autocomplete (nome/`@`), seleção múltipla e botão **Remover da base**. Não apaga attachments da Media Library. Também disponível via `DELETE` na REST acima.
 
 ### Ajuda do fluxo (`?`)
 
@@ -406,7 +452,7 @@ Todos registrados nas variantes logada e `nopriv`:
 
 ## 📏 Regras de manutenção
 
-1. **Atualize este README** a cada alteração no plugin: shortcode ou atributo novo, mudança de default, cookie, handler AJAX ou contrato consumido da API.
+1. **Atualize este README** a cada alteração no plugin: shortcode ou atributo novo, mudança de default, cookie, handler AJAX, rota REST ou contrato consumido da API.
 2. **Nunca** use `echo`, `print_r`, `var_dump`, `dd()` ou `die()` em handler AJAX ou no cliente da API. O `widget.js` faz `response.json()`; qualquer HTML no meio quebra com `SyntaxError: Unexpected token '<'`. Resposta de AJAX é só `wp_send_json_success` / `wp_send_json_error`.
 3. **Três camadas por operação:** função JS → `wp_ajax_*` + `wp_ajax_nopriv_*` → método em `PressaoPlugin_API`. Faltar uma ponta gera botão que não faz nada.
 4. **Use os nomes reais dos campos da API** (`acao_id`, `status_atual`, `proximo_passo`), conforme `src/pressao_api/schemas/`. Erros da FastAPI vêm em `detail`, não `message`.
