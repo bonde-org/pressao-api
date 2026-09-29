@@ -111,7 +111,9 @@ def main() -> int:
     parser.add_argument("csv_path", type=Path, help="Caminho do CSV")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--sleep", type=float, default=0.0, help="Pausa entre PUTs (s)")
-    parser.add_argument("--start", type=int, default=1, help="Primeira linha de dados (1-based após header)")
+    parser.add_argument(
+        "--start", type=int, default=1, help="Primeira linha de dados (1-based após header)"
+    )
     args = parser.parse_args()
 
     wp_url = os.environ.get("WP_URL", "").rstrip("/")
@@ -170,7 +172,9 @@ def main() -> int:
             body["imagem_url"] = imagem_url
 
         if args.dry_run:
-            print(f"Linha {row_num}: OK (dry-run) {instagram} {json.dumps(body, ensure_ascii=False)}")
+            print(
+                f"Linha {row_num}: OK (dry-run) {instagram} {json.dumps(body, ensure_ascii=False)}"
+            )
             ok += 1
             continue
 
