@@ -74,7 +74,8 @@ pressao-plugin/
 ├── pressao-plugin.php          # Bootstrap (singleton) + enqueue de assets
 ├── includes/
 │   ├── class-main.php          # Funcionalidades gerais
-│   ├── class-admin.php         # Página de configurações
+│   ├── class-admin.php         # Página de configurações (abas)
+│   ├── class-candidatos-admin-list.php  # Tabela/expand/busca/paginação + AJAX
 │   ├── class-candidatos-import.php  # CSV apoiadores + remoção
 │   ├── class-candidatos-rest.php    # REST pressao/v1/candidatos-apoiadores
 │   ├── class-api.php           # Cliente HTTP: Keycloak + API Pressão
@@ -82,6 +83,7 @@ pressao-plugin/
 │   └── class-ajax.php          # AJAX handlers
 ├── assets/
 │   ├── css/
+│   │   ├── admin.css           # Tabs, cards de ferramentas, callout LGPD
 │   │   ├── style.css           # Tokens, mask-image dos ícones, @font-face
 │   │   └── fluxo.css           # UI do shortcode [pressao_fluxo]
 │   ├── fonts/                  # Anton + Host_Grotesk (fluxo); NeueHaas*.woff* opcional p/ alvos
@@ -93,6 +95,7 @@ pressao-plugin/
 │   ├── examples/               # CSV + scripts REST (apoiadores)
 │   └── js/
 │       ├── admin.js            # Campos repetíveis, CSV/remoção apoiadores, Media Library
+│       ├── share-images.js     # Download blob / Web Share das “Imagens para postar”
 │       ├── widget.js           # UI, cookies, ações, compartilhamento e confirmações ([pressao_alvos])
 │       └── fluxo.js            # Wizard sequencial isolado ([pressao_fluxo])
 └── views/
@@ -113,24 +116,37 @@ docker compose exec wordpress wp plugin activate pressao-plugin
 
 ### Configurando
 
-Acesse Configurações > Pressão Plugin e preencha:
+Acesse **Configurações → Pressão Plugin**. A página usa abas:
 
-| Campo | Option WP | Descrição |
-|-------|-----------|-----------|
-| URL do Keycloak | `pressao_keycloak_url` | Endereço do servidor Keycloak |
-| Realm | `pressao_realm` | Realm do Keycloak |
-| Client ID | `pressao_client_id` | ID do client configurado |
-| Client Secret | `pressao_client_secret` | Secret do client |
-| URL da API | `pressao_api_url` | Endereço da API Pressão |
-| ID da Campanha | `pressao_campaign_id` | Campanha padrão dos shortcodes |
-| Título do Widget | `pressao_widget_title` | Título exibido em `[pressao_widget]` |
-| Duração da sessão | `pressao_session_duration` | TTL dos cookies em segundos (padrão `86400`) |
-| Candidatos a pressionar | `pressao_candidatos` | Busca/seleção do `[pressao_fluxo]` |
-| Candidatos apoiadores | `pressao_candidatos_apoiadores` | Botão/lista “já apoiam”, `[pressao_candidatos]`, import CSV / REST |
-| Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Máximo de @ por mensagem no `[pressao_fluxo]` (padrão `5`) |
-| Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Se ligado: toast 5s antes de abrir o Instagram; se desligado (padrão): abre no clique sem toast |
-| Ajuda do fluxo | `pressao_fluxo_ajuda` | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
-| Compartilhamento | `pressao_compartilhamento` | Textos, links, deep links e imagens do botão de compartilhar |
+| Aba | Conteúdo |
+|-----|----------|
+| **Conexão** | Keycloak + URL da API |
+| **Geral** | ID da campanha, título do widget, sessão/identificação do ativista |
+| **Candidatos** | Lista a pressionar + limite / countdown / ajuda do `[pressao_fluxo]` |
+| **Apoiadores** | Lista “já apoiam” + import/remover CSV |
+| **Compartilhamento** | Botão e overlay de compartilhar em `[pressao_alvos]` |
+| **Documentação** | Shortcodes (“Como usar”) e nota sobre LGPD |
+
+Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não sobrescrever as demais. As listas de **Candidatos** e **Apoiadores** não passam pelo `options.php`: usam tabela com busca/paginação e CRUD via `admin-ajax` (`class-candidatos-admin-list.php`). **Alvos** e **Templates** da API ainda são geridos fora do painel; no futuro entram como abas de primeiro nível (não dentro de Geral).
+
+| Campo | Option WP | Aba | Descrição |
+|-------|-----------|-----|-----------|
+| URL do Keycloak | `pressao_keycloak_url` | Conexão | Endereço do servidor Keycloak |
+| Realm | `pressao_realm` | Conexão | Realm do Keycloak |
+| Client ID | `pressao_client_id` | Conexão | ID do client configurado |
+| Client Secret | `pressao_client_secret` | Conexão | Secret do client |
+| URL da API | `pressao_api_url` | Conexão | Endereço da API Pressão |
+| ID da Campanha | `pressao_campaign_id` | Geral | Campanha padrão dos shortcodes |
+| Título do Widget | `pressao_widget_title` | Geral | Título exibido em `[pressao_widget]` |
+| Intervalo confirmar identidade | `pressao_ativista_confirm_interval` | Geral | Minutos até perguntar de novo (padrão `10`) |
+| Título do formulário | `pressao_ativista_form_title` | Geral | Título do formulário de identificação |
+| Duração da sessão | `pressao_session_duration` | Geral | TTL dos cookies em segundos (padrão `86400`) |
+| Candidatos a pressionar | `pressao_candidatos` | Candidatos | Lista AJAX (busca/paginação); usada na busca do `[pressao_fluxo]` |
+| Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Candidatos | Máximo de @ por mensagem (padrão `5`) — salvo pelo botão Salvar da aba |
+| Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Candidatos | Se ligado: toast com countdown antes de abrir; se desligado (padrão): abre no clique. Mobile tenta o app; desktop abre nova aba |
+| Ajuda do fluxo | `pressao_fluxo_ajuda` | Candidatos | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
+| Candidatos apoiadores | `pressao_candidatos_apoiadores` | Apoiadores | Lista AJAX + import/remover CSV; botão/lista “já apoiam”, `[pressao_candidatos]` |
+| Compartilhamento | `pressao_compartilhamento` | Compartilhamento | Textos, links, deep links e imagens do botão de compartilhar |
 
 ### Configuração compartilhada via wp-config.php (multisite)
 
@@ -155,6 +171,13 @@ Há **duas bases** no WordPress:
 | A pressionar | `pressao_candidatos` | Busca/seleção (Tom Select) no `[pressao_fluxo]` |
 | Apoiadores | `pressao_candidatos_apoiadores` | Botão “já apoiam”, overlay da lista, shortcode `[pressao_candidatos]` |
 
+No admin, as duas listas usam o **mesmo padrão de listagem** (`PressaoPlugin_Candidatos_Admin_List`):
+
+- Tabela com colunas: foto, nome, cargo, partido, Instagram
+- Clique / **Editar** expande o formulário na linha; **Salvar item** grava via AJAX
+- Busca (`cs`) e paginação (`cpage`, 20 por página) no servidor
+- Actions: `pressao_candidato_save`, `pressao_candidato_delete`, `pressao_candidato_add`
+
 Campos por candidato (iguais nas duas):
 
 - `nome`
@@ -170,7 +193,7 @@ No `[pressao_fluxo]`, os handles da base **a pressionar** entram na mensagem (`@
 
 #### Import CSV (apoiadores)
 
-Na página de configurações, abaixo do formulário principal: upload CSV com upsert **incremental** por `@`:
+Na aba **Apoiadores**, abaixo da listagem: upload CSV com upsert **incremental** por `@`:
 
 - Colunas: `nome`, `cargo`, `partido`, `descricao`, `instagram` (ou `link_url`), `imagem_url` (opcional)
 - Botão **Baixar CSV de exemplo** ao lado de Importar CSV (`assets/examples/candidatos-apoiadores-exemplo.csv`)
@@ -237,7 +260,7 @@ O botão `?` em todas as telas do `[pressao_fluxo]` abre esse conteúdo. No topo
 
 ### Configuração de compartilhamento
 
-A seção "Configurações de Compartilhamento" controla o botão exibido **sempre por último** em `[pressao_alvos]`.
+A seção **Compartilhamento** (aba homônima no admin) controla o botão exibido **sempre por último** em `[pressao_alvos]`.
 
 Campos principais da option `pressao_compartilhamento`:
 
@@ -250,6 +273,13 @@ Campos principais da option `pressao_compartilhamento`:
 - `imagens[]` — repetível com `imagem_id` (Media Library) + `rotulo`
 
 Não cria ação na API. Ao copiar o link ou abrir WhatsApp/Instagram/Messenger, grava a chave sintética `__compartilhar` no cookie `pressao_acoes_realizadas` para o estado “já realizei”. Essa chave **não** entra no `done/total` de `[pressao_progresso]`. Depois de realizado, a linha mostra só o check verde e continua clicável para reabrir o overlay na mesma sessão.
+
+**Imagens para postar** (overlay e tela do `[pressao_fluxo]`): helper compartilhado `share-images.js` (`window.PressaoShareImages`), dependência de `widget.js` e `fluxo.js`.
+
+- **Desktop:** `fetch` → blob → download forçado (`<a download>` com revoke atrasado).
+- **Mobile** (UA mobile + `navigator.canShare({ files })`): abre a folha nativa de compartilhar com o arquivo da imagem.
+- Prefetch dos blobs ao abrir a tela; clique na imagem ou em “Baixar todas as imagens”.
+- Download/share de imagem **não** marca `__compartilhar`.
 
 ### Debug
 
@@ -287,7 +317,7 @@ nome do perfil a comentar e `contato` é a **URL da postagem/vídeo**. O overlay
 abre esse link; a confirmação segue via `PATCH /api/v1/acoes/{id}/confirmar`.
 
 **Compartilhamento:** item editorial no fim da lista (configurado no admin). Overlay com copiar link,
-deep links WhatsApp/Instagram/Messenger e download de imagens. Sem `POST /acoes`.
+deep links WhatsApp/Instagram/Messenger e download/share de imagens (`share-images.js`). Sem `POST /acoes`.
 
 ```text
 [pressao_alvos campaign="uuid" show_ativista_form="yes" show_template="yes" cache="0" action_label="Pressionar por E-mail" ordem="instagram,tiktok,email" tempo_instagram="2 min" tempo_tiktok="2 min" tempo_email="1 min"]
@@ -363,6 +393,8 @@ Renderiza os candidatos da option `pressao_candidatos_apoiadores` (já apoiam a 
 
 Wizard isolado de `[pressao_alvos]`: seleção de candidatos → copiar/abrir Instagram → confirmação humana → formulário de newsletter → compartilhar. **Cria e confirma a ação na API apenas na saída do formulário** (“Quero receber atualizações” com dados, ou “Agora não” sem ativista). Telas pós-Continuar são bloqueantes (sem dismiss por backdrop/Escape); no **mobile** abrem como **drawer tela cheia** (entra da direita, como o overlay de ação — distinto do bottom sheet da lista de candidatos); no desktop a troca continua inline no card. A lista de candidatos fecha no X ou backdrop.
 
+**Abrir Instagram:** no mobile, “Copiar e abrir” tenta o **app** (Android Intent / iOS Universal Link) **sem nova aba**, para o X/voltar do app devolver à tela de confirmação do fluxo; no desktop abre a URL HTTPS em nova aba. A option `pressao_fluxo_countdown_abrir` (toast antes de abrir) permanece opcional.
+
 ```text
 [pressao_fluxo alvo_id="uuid-do-alvo" canal="instagram"]
 ```
@@ -377,7 +409,7 @@ Wizard isolado de `[pressao_alvos]`: seleção de candidatos → copiar/abrir In
 | `cache` | `300` | TTL do cache de alvos |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
 
-Assets: `fluxo.js` + `fluxo.css` + Tom Select (só quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`.
+Assets: `fluxo.js` + `fluxo.css` + `share-images.js` + Tom Select (só quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`.
 
 ### `[pressao_widget]` — widget principal
 

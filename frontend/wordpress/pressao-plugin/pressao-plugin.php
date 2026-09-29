@@ -63,6 +63,7 @@ final class PressaoPlugin {
     private function load_dependencies() {
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-main.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-admin.php';
+        require_once PRESSAO_PLUGIN_DIR . 'includes/class-candidatos-admin-list.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-candidatos-import.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-candidatos-rest.php';
         require_once PRESSAO_PLUGIN_DIR . 'includes/class-api.php';
@@ -173,11 +174,21 @@ final class PressaoPlugin {
                 wp_add_inline_style('pressao-plugin', $icon_vars);
             }
 
+            if ($has_legacy || $has_fluxo) {
+                wp_enqueue_script(
+                    'pressao-share-images',
+                    PRESSAO_PLUGIN_URL . 'assets/js/share-images.js',
+                    [],
+                    pressao_plugin_asset_version('assets/js/share-images.js'),
+                    true
+                );
+            }
+
             if ($has_legacy) {
                 wp_enqueue_script(
                     'pressao-plugin',
                     PRESSAO_PLUGIN_URL . 'assets/js/widget.js',
-                    [],
+                    ['pressao-share-images'],
                     pressao_plugin_asset_version('assets/js/widget.js'),
                     true
                 );
@@ -225,7 +236,7 @@ final class PressaoPlugin {
                 wp_enqueue_script(
                     'pressao-fluxo',
                     PRESSAO_PLUGIN_URL . 'assets/js/fluxo.js',
-                    ['tom-select'],
+                    ['tom-select', 'pressao-share-images'],
                     pressao_plugin_asset_version('assets/js/fluxo.js'),
                     true
                 );
@@ -311,10 +322,17 @@ final class PressaoPlugin {
         );
 
         wp_localize_script('pressao-admin', 'pressaoAdminData', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
             'selectCandidateImage' => __('Selecionar imagem do candidato', 'pressao-plugin'),
             'selectShareImage' => __('Selecionar imagem para postar', 'pressao-plugin'),
             'useThisImage' => __('Usar esta imagem', 'pressao-plugin'),
             'removeConfirm' => __('Remover os candidatos selecionados da base de apoiadores?', 'pressao-plugin'),
+            'removeItemConfirm' => __('Remover este candidato da lista?', 'pressao-plugin'),
+            'saveError' => __('Não foi possível salvar o candidato.', 'pressao-plugin'),
+            'deleteError' => __('Não foi possível remover o candidato.', 'pressao-plugin'),
+            'addError' => __('Não foi possível adicionar o candidato.', 'pressao-plugin'),
+            'saving' => __('Salvando…', 'pressao-plugin'),
+            'saved' => __('Salvo.', 'pressao-plugin'),
         ]);
     }
 }

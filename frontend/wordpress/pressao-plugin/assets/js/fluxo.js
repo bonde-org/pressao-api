@@ -606,16 +606,16 @@
             var imagesItems = imagens
                 .map(function (img, index) {
                     return (
-                        '<div class="pressao-fluxo-image-item">' +
+                        '<div class="pressao-fluxo-image-item" data-index="' +
+                        index +
+                        '">' +
                         '<div class="pressao-fluxo-image-thumb-wrap">' +
                         '<span class="pressao-fluxo-image-thumb" style="background-image:url(\'' +
                         escapeAttr(img.thumb || img.url) +
                         '\')"></span>' +
-                        '<a class="pressao-fluxo-image-download" href="' +
-                        escapeAttr(img.url) +
-                        '" download="' +
-                        escapeAttr(img.filename || 'imagem-' + index) +
-                        '" target="_blank" rel="noopener noreferrer">BAIXAR</a>' +
+                        '<button type="button" class="pressao-fluxo-image-download" data-index="' +
+                        index +
+                        '">BAIXAR</button>' +
                         '</div>' +
                         '<span class="pressao-fluxo-image-rotulo">' +
                         escapeHtml(img.rotulo || '') +
@@ -726,6 +726,9 @@
                     mainScr.hidden = true;
                     imagesScr.hidden = false;
                     imagesScr.classList.add('is-entering');
+                    if (window.PressaoShareImages && typeof window.PressaoShareImages.prefetch === 'function') {
+                        window.PressaoShareImages.prefetch(imagens);
+                    }
                 });
             }
             var backImages = mount.querySelector('[data-fluxo-images-back]');
@@ -742,14 +745,29 @@
                 resetBtn.addEventListener('click', resetFluxo);
             }
 
+            function handleFluxoImageAction(index) {
+                if (isNaN(index) || !imagens[index]) {
+                    return;
+                }
+                if (window.PressaoShareImages && typeof window.PressaoShareImages.downloadOrShareOne === 'function') {
+                    window.PressaoShareImages.downloadOrShareOne(imagens[index], index);
+                }
+            }
+
+            mount.querySelectorAll('.pressao-fluxo-image-item').forEach(function (item) {
+                item.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var index = parseInt(item.getAttribute('data-index'), 10);
+                    handleFluxoImageAction(index);
+                });
+            });
+
             var downloadAll = mount.querySelector('[data-fluxo-download-all]');
             if (downloadAll) {
                 downloadAll.addEventListener('click', function () {
-                    mount.querySelectorAll('.pressao-fluxo-image-download').forEach(function (link, i) {
-                        setTimeout(function () {
-                            link.click();
-                        }, i * 150);
-                    });
+                    if (window.PressaoShareImages && typeof window.PressaoShareImages.downloadOrShareAll === 'function') {
+                        window.PressaoShareImages.downloadOrShareAll(imagens);
+                    }
                 });
             }
         }
@@ -769,13 +787,52 @@
             showScreen('acao');
         }
 
-        // Só navegadores mobile (Safari/iOS em especial, Chrome Android
-        // também) bloqueiam window.open() chamado fora do gesto síncrono de
-        // clique — desktop tolera a chamada atrasada normalmente. Detecção
-        // por user agent (não por largura de tela) porque o comportamento é
-        // do navegador/dispositivo, não do layout responsivo.
+        // Detecção por user agent (não por largura): comportamento de deep link
+        // / Intent é do dispositivo, não do layout responsivo.
         function isMobileBrowser() {
             return /Android|iPhone|iPad|iPod|Mobile|IEMobile|BlackBerry/i.test(navigator.userAgent || '');
+        }
+
+        function isAndroidBrowser() {
+            return /Android/i.test(navigator.userAgent || '');
+        }
+
+        /**
+         * Mobile: tenta abrir o app Instagram sem nova aba do browser, para o
+         * X/voltar do app devolver à página do fluxo (já em confirmação).
+         * Android usa Intent; iOS dispara Universal Link via <a> sem target.
+         * Desktop: window.open em nova aba.
+         */
+        function openInstagramApp(webUrl) {
+            if (!webUrl) {
+                return;
+            }
+
+            if (!isMobileBrowser()) {
+                window.open(webUrl, '_blank', 'noopener,noreferrer');
+                return;
+            }
+
+            if (isAndroidBrowser()) {
+                var path = webUrl.replace(/^https?:\/\//i, '');
+                var intentUrl =
+                    'intent://' +
+                    path +
+                    '#Intent;scheme=https;package=com.instagram.android;S.browser_fallback_url=' +
+                    encodeURIComponent(webUrl) +
+                    ';end';
+                window.location.href = intentUrl;
+                return;
+            }
+
+            // iOS e demais mobile: Universal Links costumam abrir o app e
+            // deixar o Safari/Chrome na página; sem target=_blank.
+            var anchor = document.createElement('a');
+            anchor.href = webUrl;
+            anchor.rel = 'noopener noreferrer';
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
         }
 
         function copiarEAbrir() {
@@ -783,7 +840,6 @@
             var url = config.contato_url || '';
             var useCountdown = !!config.countdown_abrir;
             var copiarBtns = queryAll('[data-fluxo-copiar]');
-            var mobile = isMobileBrowser();
 
             var setCopiarDisabled = function (disabled) {
                 copiarBtns.forEach(function (btn) {
@@ -791,62 +847,8 @@
                 });
             };
 
-            // Como o resto do fluxo é assíncrono (clipboard + contador de
-            // alguns segundos), no mobile abrimos a aba em branco JÁ, aqui,
-            // e só preenchemos a URL de destino depois — preserva a
-            // permissão do navegador em vez de deixar o window.open
-            // "atrasado" ser bloqueado silenciosamente. No desktop mantemos
-            // o comportamento original (window.open direto em openUrl()).
-            // Importante: sem "noopener" aqui, de propósito — com "noopener"
-            // window.open() retorna null por especificação, e perderíamos a
-            // referência pra redirecionar depois. Zeramos `opener`
-            // manualmente logo abaixo pra manter a mesma proteção contra
-            // reverse tabnabbing.
-            var pendingWindow = (mobile && url) ? window.open('', '_blank') : null;
-            if (pendingWindow) {
-                try {
-                    pendingWindow.opener = null;
-                } catch (e) {}
-                // Enquanto espera o clipboard + contador, a aba fica em
-                // branco — o que parece quebrado pro usuário. Escreve uma
-                // tela de espera simples em vez de deixar about:blank.
-                try {
-                    pendingWindow.document.write(
-                        '<!doctype html><html><head><meta charset="utf-8">' +
-                        '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-                        '<title>Abrindo o Instagram…</title>' +
-                        '<style>html,body{height:100%;margin:0;display:flex;align-items:center;justify-content:center;' +
-                        'background:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
-                        'color:#666;font-size:16px;text-align:center;padding:24px;box-sizing:border-box;}</style>' +
-                        '</head><body><p id="pressao-fluxo-popup-msg">Abrindo o Instagram…</p></body></html>'
-                    );
-                    pendingWindow.document.close();
-                } catch (e) {}
-            }
-
-            var updatePendingWindowCountdown = function (n) {
-                if (!pendingWindow || pendingWindow.closed) {
-                    return;
-                }
-                try {
-                    var el = pendingWindow.document.getElementById('pressao-fluxo-popup-msg');
-                    if (el) {
-                        el.textContent = n > 0
-                            ? 'Abrindo o Instagram em ' + n + '…'
-                            : 'Abrindo o Instagram…';
-                    }
-                } catch (e) {}
-            };
-
             var openUrl = function () {
-                if (!url) {
-                    return;
-                }
-                if (pendingWindow && !pendingWindow.closed) {
-                    pendingWindow.location.href = url;
-                } else {
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                }
+                openInstagramApp(url);
             };
 
             var afterCopy = function () {
@@ -862,8 +864,7 @@
                     function (n) {
                         return 'Abrindo em ' + n + '… Agora é só colar nos comentários da publicação.';
                     },
-                    REDIRECT_COUNTDOWN_S,
-                    updatePendingWindowCountdown
+                    REDIRECT_COUNTDOWN_S
                 ).then(function () {
                     openUrl();
                     hideToast();
@@ -1032,6 +1033,9 @@
                 searchField: ['text'],
                 placeholder: selectEl.getAttribute('placeholder') || 'Digite o nome ou @ do Instagram',
                 render: {
+                    no_results: function () {
+                        return '<div class="no-results">Não encontramos resultados para sua busca</div>';
+                    },
                     option: function (data, escape) {
                         var opt = selectEl.querySelector('option[value="' + data.value + '"]');
                         var img = opt ? opt.getAttribute('data-imagem') : '';
@@ -1040,9 +1044,11 @@
                             ? '<span class="pressao-fluxo-ts-avatar" style="background-image:url(\'' +
                               escape(img) +
                               '\')"></span>'
-                            : '<span class="pressao-fluxo-ts-avatar is-empty"></span>';
+                            : '';
                         return (
-                            '<div class="pressao-fluxo-ts-option">' +
+                            '<div class="pressao-fluxo-ts-option' +
+                            (img ? '' : ' is-text-only') +
+                            '">' +
                             avatar +
                             '<span>' +
                             escape(data.text) +
@@ -1058,9 +1064,11 @@
                             ? '<span class="pressao-fluxo-ts-avatar" style="background-image:url(\'' +
                               escape(img) +
                               '\')"></span>'
-                            : '<span class="pressao-fluxo-ts-avatar is-empty"></span>';
+                            : '';
                         return (
-                            '<div class="pressao-fluxo-ts-item">' +
+                            '<div class="pressao-fluxo-ts-item' +
+                            (img ? '' : ' is-text-only') +
+                            '">' +
                             avatar +
                             '<span>' +
                             escape(handle) +
