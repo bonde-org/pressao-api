@@ -291,7 +291,8 @@ Campos principais da option `pressao_compartilhamento`:
 - `titulo`, `subtitulo`, `tempo` — textos do item na lista
 - `overlay_titulo`, `link`, `mensagem` — overlay principal
 - `whatsapp_url` (opcional; se vazio, monta `https://wa.me/?text=` com `mensagem`)
-- `instagram_url`, `messenger_url` — deep links completos definidos no admin
+- `x_url` (opcional; se vazio, monta `https://twitter.com/intent/tweet?text=` com `mensagem`)
+- `instagram_url`, `facebook_url` — links completos definidos no admin (sem geração automática; no `[pressao_fluxo]` e no `[pressao_multicanal]` a rede sem link não aparece / fica desabilitada)
 - `imagens_titulo`, `imagens_subtitulo`, `imagens_instrucao`
 - `imagens[]` — repetível com `imagem_id` (Media Library) + `rotulo`
 

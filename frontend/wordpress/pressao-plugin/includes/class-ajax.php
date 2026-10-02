@@ -227,7 +227,7 @@ class PressaoPlugin_Ajax {
         // Busca ações realizadas (local ou DB)
         $acoes = [];
         foreach ($alvos as $alvo_id) {
-            $acoes[$alvo_id] = $this->get_alvo_action_state($alvo_id);
+            $acoes[$alvo_id] = PressaoPlugin_Render_Helpers::acao_state($alvo_id);
         }
         
         wp_send_json_success($acoes);
@@ -269,7 +269,7 @@ class PressaoPlugin_Ajax {
         $termo_lower = mb_strtolower($termo);
         $max_resultados = $estado !== '' ? 500 : 20;
 
-        // Filtra ANTES de normalizar — normalize_candidatos_for_fluxo()
+        // Filtra ANTES de normalizar — PressaoPlugin_Render_Helpers::normalize_candidatos()
         // resolve a URL da imagem (wp_get_attachment_image_url) pra cada
         // linha, e com a base grande (6 mil+) rodar isso pra tudo antes de
         // filtrar deixava a busca levando vários segundos por tecla. Aqui só
@@ -301,7 +301,7 @@ class PressaoPlugin_Ajax {
             }
         }
 
-        $candidatos = PressaoPlugin_Shortcode::normalize_candidatos_for_fluxo($matched_raw, 'c');
+        $candidatos = PressaoPlugin_Render_Helpers::normalize_candidatos($matched_raw, 'c');
         $resultados = [];
         foreach ($candidatos as $candidato) {
             if (empty($candidato['instagram'])) {
