@@ -306,9 +306,13 @@
             return root.querySelector(selector) || (seqOverlay ? seqOverlay.querySelector(selector) : null);
         }
 
-        (config.candidatos || []).forEach(function (c) {
-            candidatosById[c.id] = c;
-        });
+        // candidatosById não é mais pré-populado a partir de config.candidatos
+        // (a lista pode ter milhares de linhas — não é mais embutida na
+        // página). É preenchido sob demanda conforme a busca do TomSelect
+        // (ver `load` na inicialização do TomSelect abaixo) retorna
+        // resultados — cobre tudo que selectedCandidatos()/buildMessage()/
+        // renderChips() precisam, já que eles só leem ids que o usuário
+        // efetivamente selecionou (sempre vindos de um resultado de busca).
 
         function isMobileDrawer() {
             return window.matchMedia('(max-width: 767px)').matches;
@@ -555,34 +559,37 @@
                 return;
             }
             var share = config.share || {};
-            // Layout do fluxo sempre exibe os 3 canais; link opcional (admin).
+            // WhatsApp e X têm link de compartilhamento com texto
+            // pré-preenchido (fallback automático no PHP se a URL não for
+            // configurada). Instagram e Facebook não têm esse mecanismo via
+            // web — o botão só abre o link configurado manualmente no admin
+            // (ex.: a publicação da campanha), sem fallback.
             var social = [
                 { canal: 'whatsapp', url: share.whatsapp_url || '', label: 'WhatsApp' },
+                { canal: 'x', url: share.x_url || '', label: 'X' },
                 { canal: 'instagram', url: share.instagram_url || '', label: 'Instagram' },
-                { canal: 'messenger', url: share.messenger_url || '', label: 'Messenger' }
+                { canal: 'facebook', url: share.facebook_url || '', label: 'Facebook' }
             ];
+            // Sem link configurado, o botão nem aparece — nada de mostrar
+            // desabilitado (era só ruído visual pra um canal que ninguém
+            // configurou ainda).
             var socialHtml = social
+                .filter(function (btn) {
+                    return !!btn.url;
+                })
                 .map(function (btn) {
-                    var hasUrl = !!btn.url;
-                    var tagOpen = hasUrl
-                        ? '<a class="pressao-fluxo-share-social" data-canal="' +
-                          escapeAttr(btn.canal) +
-                          '" href="' +
-                          escapeAttr(btn.url) +
-                          '" target="_blank" rel="noopener noreferrer">'
-                        : '<span class="pressao-fluxo-share-social is-disabled" data-canal="' +
-                          escapeAttr(btn.canal) +
-                          '" aria-disabled="true" title="Configure o link em Compartilhamento">';
-                    var tagClose = hasUrl ? '</a>' : '</span>';
                     return (
-                        tagOpen +
+                        '<a class="pressao-fluxo-share-social" data-canal="' +
+                        escapeAttr(btn.canal) +
+                        '" href="' +
+                        escapeAttr(btn.url) +
+                        '" target="_blank" rel="noopener noreferrer">' +
                         '<span class="pressao-fluxo-share-social-icon" data-canal="' +
                         escapeAttr(btn.canal) +
                         '" aria-hidden="true"></span>' +
                         '<span class="pressao-fluxo-share-social-label">' +
                         escapeHtml(btn.label) +
-                        '</span>' +
-                        tagClose
+                        '</span></a>'
                     );
                 })
                 .join('');
@@ -632,6 +639,9 @@
 
             mount.innerHTML =
                 '<div class="pressao-fluxo-share-main" data-fluxo-share-main>' +
+                '<header class="pressao-fluxo-nav">' +
+                '<button type="button" class="pressao-fluxo-back" data-fluxo-share-back aria-label="Voltar"></button>' +
+                '</header>' +
                 '<h2 class="pressao-fluxo-title">' +
                 escapeHtml('Convide mais pessoas') +
                 '</h2>' +
@@ -708,6 +718,13 @@
                 } else {
                     done();
                 }
+            }
+
+            var shareBack = mount.querySelector('[data-fluxo-share-back]');
+            if (shareBack) {
+                shareBack.addEventListener('click', function () {
+                    showScreen('form');
+                });
             }
 
             var copyRow = mount.querySelector('[data-fluxo-copy-link]');
@@ -1030,16 +1047,40 @@
                 plugins: ['remove_button'],
                 maxItems: config.limite_candidatos || 5,
                 maxOptions: null,
+                valueField: 'id',
+                labelField: 'text',
                 searchField: ['text'],
                 placeholder: selectEl.getAttribute('placeholder') || 'Digite o nome ou @ do Instagram',
+                // A base de candidatos pode ter milhares de linhas — não dá
+                // pra carregar tudo no navegador. `load` busca no servidor
+                // (PressaoPlugin_Ajax::ajax_buscar_candidatos) conforme o
+                // usuário digita; `loadThrottle` evita 1 requisição por
+                // tecla, `shouldLoad` evita buscar com 0-1 caractere.
+                shouldLoad: function (input) {
+                    return input.length >= 2;
+                },
+                loadThrottle: 300,
+                load: function (query, callback) {
+                    postAjax({
+                        action: 'pressao_buscar_candidatos',
+                        nonce: config.nonce,
+                        q: query
+                    }).then(function (res) {
+                        var results = (res && res.success && res.data && res.data.results) || [];
+                        results.forEach(function (r) {
+                            candidatosById[r.id] = r;
+                        });
+                        callback(results);
+                    }).catch(function () {
+                        callback();
+                    });
+                },
                 render: {
                     no_results: function () {
                         return '<div class="no-results">Não encontramos resultados para sua busca</div>';
                     },
                     option: function (data, escape) {
-                        var opt = selectEl.querySelector('option[value="' + data.value + '"]');
-                        var img = opt ? opt.getAttribute('data-imagem') : '';
-                        var handle = opt ? opt.getAttribute('data-instagram') : '';
+                        var img = data.imagem || '';
                         var avatar = img
                             ? '<span class="pressao-fluxo-ts-avatar" style="background-image:url(\'' +
                               escape(img) +
@@ -1052,14 +1093,12 @@
                             avatar +
                             '<span>' +
                             escape(data.text) +
-                            (handle ? '' : '') +
                             '</span></div>'
                         );
                     },
                     item: function (data, escape) {
-                        var opt = selectEl.querySelector('option[value="' + data.value + '"]');
-                        var img = opt ? opt.getAttribute('data-imagem') : '';
-                        var handle = opt ? opt.getAttribute('data-instagram') : data.text;
+                        var img = data.imagem || '';
+                        var handle = data.instagram || data.text;
                         var avatar = img
                             ? '<span class="pressao-fluxo-ts-avatar" style="background-image:url(\'' +
                               escape(img) +

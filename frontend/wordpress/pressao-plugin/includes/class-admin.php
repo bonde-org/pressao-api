@@ -847,6 +847,21 @@ class PressaoPlugin_Admin {
                            value="<?php echo esc_url($config['whatsapp_url'] ?? ''); ?>"
                            class="regular-text" />
                 </label>
+                <span class="description">
+                    <?php esc_html_e('Se vazio, o link é gerado automaticamente a partir da Mensagem.', 'pressao-plugin'); ?>
+                </span>
+            </p>
+            <p>
+                <label>
+                    <?php esc_html_e('URL X (opcional)', 'pressao-plugin'); ?><br>
+                    <input type="url"
+                           name="pressao_compartilhamento[x_url]"
+                           value="<?php echo esc_url($config['x_url'] ?? ''); ?>"
+                           class="regular-text" />
+                </label>
+                <span class="description">
+                    <?php esc_html_e('Se vazio, o link é gerado automaticamente a partir da Mensagem (igual ao WhatsApp).', 'pressao-plugin'); ?>
+                </span>
             </p>
             <p>
                 <label>
@@ -856,15 +871,21 @@ class PressaoPlugin_Admin {
                            value="<?php echo esc_url($config['instagram_url'] ?? ''); ?>"
                            class="regular-text" />
                 </label>
+                <span class="description">
+                    <?php esc_html_e('Link direto pra uma publicação/perfil no Instagram — sem geração automática, precisa ser preenchido.', 'pressao-plugin'); ?>
+                </span>
             </p>
             <p>
                 <label>
-                    <?php esc_html_e('URL Messenger', 'pressao-plugin'); ?><br>
+                    <?php esc_html_e('URL Facebook', 'pressao-plugin'); ?><br>
                     <input type="url"
-                           name="pressao_compartilhamento[messenger_url]"
-                           value="<?php echo esc_url($config['messenger_url'] ?? ''); ?>"
+                           name="pressao_compartilhamento[facebook_url]"
+                           value="<?php echo esc_url($config['facebook_url'] ?? ''); ?>"
                            class="regular-text" />
                 </label>
+                <span class="description">
+                    <?php esc_html_e('Link direto pra uma publicação/perfil no Facebook — sem geração automática, precisa ser preenchido.', 'pressao-plugin'); ?>
+                </span>
             </p>
 
             <h4><?php esc_html_e('Imagens para postar', 'pressao-plugin'); ?></h4>
@@ -989,8 +1010,9 @@ class PressaoPlugin_Admin {
             'link' => esc_url_raw($value['link'] ?? ''),
             'mensagem' => sanitize_textarea_field($value['mensagem'] ?? ''),
             'whatsapp_url' => esc_url_raw($value['whatsapp_url'] ?? ''),
+            'x_url' => esc_url_raw($value['x_url'] ?? ''),
             'instagram_url' => esc_url_raw($value['instagram_url'] ?? ''),
-            'messenger_url' => esc_url_raw($value['messenger_url'] ?? ''),
+            'facebook_url' => esc_url_raw($value['facebook_url'] ?? ''),
             'imagens_titulo' => sanitize_text_field($value['imagens_titulo'] ?? ''),
             'imagens_subtitulo' => sanitize_text_field($value['imagens_subtitulo'] ?? ''),
             'imagens_instrucao' => sanitize_textarea_field($value['imagens_instrucao'] ?? ''),

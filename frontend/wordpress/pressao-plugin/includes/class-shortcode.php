@@ -555,6 +555,20 @@ class PressaoPlugin_Shortcode {
             $whatsapp_url = 'https://wa.me/?text=' . rawurlencode($mensagem);
         }
 
+        // X tem link oficial de compartilhamento com texto pré-preenchido —
+        // mesmo padrão de fallback automático do WhatsApp acima.
+        $x_url = isset($config['x_url']) ? trim((string) $config['x_url']) : '';
+        if ($x_url === '' && $mensagem !== '') {
+            $x_url = 'https://twitter.com/intent/tweet?text=' . rawurlencode($mensagem);
+        }
+
+        // Instagram e Facebook não têm mecanismo de compartilhamento com
+        // texto pré-preenchido via web — o botão só abre o link configurado
+        // manualmente no admin (ex.: a publicação da campanha), sem fallback
+        // automático.
+        $instagram_url = isset($config['instagram_url']) ? trim((string) $config['instagram_url']) : '';
+        $facebook_url = isset($config['facebook_url']) ? trim((string) $config['facebook_url']) : '';
+
         $imagens = [];
         if (!empty($config['imagens']) && is_array($config['imagens'])) {
             foreach ($config['imagens'] as $imagem) {
@@ -591,8 +605,9 @@ class PressaoPlugin_Shortcode {
             'link' => $link,
             'mensagem' => $mensagem,
             'whatsapp_url' => $whatsapp_url,
-            'instagram_url' => $config['instagram_url'] ?? '',
-            'messenger_url' => $config['messenger_url'] ?? '',
+            'x_url' => $x_url,
+            'instagram_url' => $instagram_url,
+            'facebook_url' => $facebook_url,
             'imagens_titulo' => !empty($config['imagens_titulo'])
                 ? $config['imagens_titulo']
                 : __('Imagens para postar', 'pressao-plugin'),
@@ -601,7 +616,7 @@ class PressaoPlugin_Shortcode {
                 : __('baixe imagens prontas para postar nas redes', 'pressao-plugin'),
             'imagens_instrucao' => !empty($config['imagens_instrucao'])
                 ? $config['imagens_instrucao']
-                : __('Utilize nossas imagens nas suas redes para que outras pessoas conheçam a campanha:', 'pressao-plugin'),
+                : __('Baixe as imagens e compartilhe nas redes. Marque @vamodebonde ou inclua tarifazero.bonde.org para ampliar a mobilização.', 'pressao-plugin'),
             'imagens' => $imagens,
         ];
     }
@@ -948,9 +963,11 @@ class PressaoPlugin_Shortcode {
         $ajuda_conteudo = isset($ajuda['conteudo']) ? (string) $ajuda['conteudo'] : '';
         $alvo_nome = isset($alvo['nome']) ? (string) $alvo['nome'] : '';
 
-        $candidatos_raw = get_option('pressao_candidatos', []);
-        $candidatos = $this->normalize_candidatos_for_fluxo($candidatos_raw, 'c');
-
+        // A lista completa de pressao_candidatos NÃO é carregada aqui de
+        // propósito — pode ter milhares de linhas. O campo de busca do
+        // [pressao_fluxo] usa TomSelect com `load` assíncrono, consultando
+        // PressaoPlugin_Ajax::ajax_buscar_candidatos() conforme o usuário
+        // digita, em vez de embutir tudo no HTML da página.
         $apoiadores_raw = get_option('pressao_candidatos_apoiadores', []);
         $apoiadores = $this->normalize_candidatos_for_fluxo($apoiadores_raw, 'a');
 
@@ -961,8 +978,9 @@ class PressaoPlugin_Shortcode {
                 'link' => '',
                 'mensagem' => '',
                 'whatsapp_url' => '',
+                'x_url' => '',
                 'instagram_url' => '',
-                'messenger_url' => '',
+                'facebook_url' => '',
                 'imagens_titulo' => __('Imagens para postar', 'pressao-plugin'),
                 'imagens_subtitulo' => __('baixe imagens prontas para postar nas redes', 'pressao-plugin'),
                 'imagens_instrucao' => '',
@@ -979,7 +997,6 @@ class PressaoPlugin_Shortcode {
             'contato_url' => $alvo['contato'] ?? '',
             'limite_candidatos' => $limite,
             'countdown_abrir' => (bool) get_option('pressao_fluxo_countdown_abrir', 0),
-            'candidatos' => $candidatos,
             'apoiadores' => $apoiadores,
             'acoes_confirmadas' => $acoes_count,
             'alvo_nome' => $alvo_nome,
@@ -1059,28 +1076,21 @@ class PressaoPlugin_Shortcode {
                     <div class="pressao-fluxo-right">
                         <div class="pressao-fluxo-search-block">
                             <label class="pressao-fluxo-field-label" for="<?php echo esc_attr($atts['id']); ?>-select">
-                                <?php esc_html_e('Busque ou selecione candidatos', 'pressao-plugin'); ?>
+                                <?php esc_html_e('Busque candidatos', 'pressao-plugin'); ?>
                             </label>
                             <select id="<?php echo esc_attr($atts['id']); ?>-select"
                                     class="pressao-fluxo-select"
                                     multiple
                                     data-fluxo-select
-                                    placeholder="<?php esc_attr_e('Nome do candidato ou @ do Instagram', 'pressao-plugin'); ?>">
-                                <?php foreach ($candidatos as $candidato) : ?>
-                                    <?php if (empty($candidato['instagram'])) { continue; } ?>
-                                    <option value="<?php echo esc_attr($candidato['id']); ?>"
-                                            data-instagram="<?php echo esc_attr($candidato['instagram']); ?>"
-                                            data-imagem="<?php echo esc_attr($candidato['imagem']); ?>">
-                                        <?php echo esc_html(trim(($candidato['nome'] ? $candidato['nome'] . ' ' : '') . $candidato['instagram'])); ?>
-                                    </option>
-                                <?php endforeach; ?>
+                                    placeholder="<?php esc_attr_e('Digite o nome ou @ do Instagram', 'pressao-plugin'); ?>">
+                                <?php // Sem <option> pré-renderizadas: o TomSelect busca via AJAX (ver fluxo.js), não carrega a lista inteira aqui. ?>
                             </select>
                             <p class="pressao-fluxo-limit-hint">
                                 <span class="pressao-fluxo-limit-hint-icon" aria-hidden="true"></span>
                                 <?php
                                 echo esc_html(sprintf(
                                     /* translators: %d: max candidates */
-                                    __('Você pode selecionar até %d candidatos por vez', 'pressao-plugin'),
+                                    __('Digite para ver os resultados. Você pode selecionar até %d candidatos.', 'pressao-plugin'),
                                     $limite
                                 ));
                                 ?>
@@ -1266,7 +1276,7 @@ class PressaoPlugin_Shortcode {
      * @param string $id_prefix
      * @return array<int, array<string, string>>
      */
-    private function normalize_candidatos_for_fluxo($raw, $id_prefix = 'c') {
+    public static function normalize_candidatos_for_fluxo($raw, $id_prefix = 'c') {
         $out = [];
         if (!is_array($raw)) {
             return $out;
@@ -1284,7 +1294,15 @@ class PressaoPlugin_Shortcode {
                 continue;
             }
             $imagem_id = absint($candidato['imagem_id'] ?? 0);
-            $imagem_url = $imagem_id ? wp_get_attachment_image_url($imagem_id, 'thumbnail') : '';
+            // Prefere a URL já resolvida e guardada na linha (gravada por
+            // PressaoPlugin_Admin::sanitize_one_candidato() no save) — só
+            // recalcula ao vivo se faltar (linhas antigas, de antes dessa
+            // otimização). Evita wp_get_attachment_image_url() por resultado
+            // de busca, que dominava o tempo de resposta do autocomplete.
+            $imagem_url = (string) ($candidato['imagem'] ?? '');
+            if ($imagem_url === '' && $imagem_id) {
+                $imagem_url = wp_get_attachment_image_url($imagem_id, 'thumbnail') ?: '';
+            }
             $out[] = [
                 'id' => $id_prefix . $index,
                 'nome' => $candidato['nome'] ?? '',

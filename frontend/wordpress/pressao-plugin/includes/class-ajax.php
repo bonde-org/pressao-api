@@ -28,6 +28,9 @@ class PressaoPlugin_Ajax {
         add_action('wp_ajax_pressao_get_acoes_status', [$this, 'ajax_get_acoes_status']);
         add_action('wp_ajax_nopriv_pressao_get_acoes_status', [$this, 'ajax_get_acoes_status']);
 
+        add_action('wp_ajax_pressao_buscar_candidatos', [$this, 'ajax_buscar_candidatos']);
+        add_action('wp_ajax_nopriv_pressao_buscar_candidatos', [$this, 'ajax_buscar_candidatos']);
+
         // Sem verificação de nonce: serve para renovar nonce stale (page cache / sessão)
         add_action('wp_ajax_pressao_refresh_nonce', [$this, 'ajax_refresh_nonce']);
         add_action('wp_ajax_nopriv_pressao_refresh_nonce', [$this, 'ajax_refresh_nonce']);
@@ -228,6 +231,68 @@ class PressaoPlugin_Ajax {
         }
         
         wp_send_json_success($acoes);
+    }
+
+    /**
+     * AJAX: Busca candidatos (base pressao_candidatos) para o autocomplete
+     * do [pressao_fluxo]. A lista pode ter milhares de linhas — por isso
+     * a busca é feita aqui, no servidor, em vez de embutir tudo no HTML.
+     */
+    public function ajax_buscar_candidatos() {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'pressao_acao_nonce')) {
+            wp_send_json_error(['message' => __('Nonce inválido', 'pressao-plugin')], 403);
+        }
+
+        $termo = isset($_POST['q']) ? trim(sanitize_text_field(wp_unslash($_POST['q']))) : '';
+        if (mb_strlen($termo) < 2) {
+            wp_send_json_success(['results' => []]);
+        }
+
+        $candidatos_raw = get_option('pressao_candidatos', []);
+        if (!is_array($candidatos_raw)) {
+            $candidatos_raw = [];
+        }
+        $termo_lower = mb_strtolower($termo);
+        $max_resultados = 20;
+
+        // Filtra ANTES de normalizar — normalize_candidatos_for_fluxo()
+        // resolve a URL da imagem (wp_get_attachment_image_url) pra cada
+        // linha, e com a base grande (6 mil+) rodar isso pra tudo antes de
+        // filtrar deixava a busca levando vários segundos por tecla. Aqui só
+        // as poucas linhas que batem com o termo passam pela normalização —
+        // o índice original é preservado (array_filter/chaves originais),
+        // então o id "c{índice}" sai igual ao que sairia sem esse filtro.
+        $matched_raw = [];
+        foreach ($candidatos_raw as $index => $candidato) {
+            if (!is_array($candidato) || empty($candidato['link_url'])) {
+                continue;
+            }
+            $alvo_busca = mb_strtolower(trim(($candidato['nome'] ?? '') . ' ' . $candidato['link_url']));
+            if (strpos($alvo_busca, $termo_lower) === false) {
+                continue;
+            }
+            $matched_raw[$index] = $candidato;
+            if (count($matched_raw) >= $max_resultados) {
+                break;
+            }
+        }
+
+        $candidatos = PressaoPlugin_Shortcode::normalize_candidatos_for_fluxo($matched_raw, 'c');
+        $resultados = [];
+        foreach ($candidatos as $candidato) {
+            if (empty($candidato['instagram'])) {
+                continue;
+            }
+            $resultados[] = [
+                'id' => $candidato['id'],
+                'text' => trim((($candidato['nome'] ?? '') ? $candidato['nome'] . ' ' : '') . $candidato['instagram']),
+                'nome' => $candidato['nome'] ?? '',
+                'instagram' => $candidato['instagram'],
+                'imagem' => $candidato['imagem'] ?? '',
+            ];
+        }
+
+        wp_send_json_success(['results' => $resultados]);
     }
 }
 

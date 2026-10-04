@@ -50,6 +50,8 @@
   --pressao-icon-copiar: url("../icons/copiar.svg");
   --pressao-icon-whatsapp: url("../icons/whatsapp.svg");
   --pressao-icon-messenger: url("../icons/messenger.svg");
+  --pressao-icon-x: url("../icons/x.svg");
+  --pressao-icon-facebook: url("../icons/facebook.svg");
   --pressao-icon-download: url("../icons/download.svg");
 }
 
@@ -99,7 +101,8 @@
 .pressao-fluxo-topbar,
 .pressao-fluxo-nav,
 .pressao-fluxo-lista-header,
-.pressao-fluxo-help-header {
+.pressao-fluxo-help-header,
+.pressao-fluxo-images-header {
   position: static;
   top: auto;
   left: auto;
@@ -1043,11 +1046,6 @@
   color: var(--fluxo-text);
 }
 
-.pressao-fluxo-share-social.is-disabled {
-  cursor: default;
-  pointer-events: none;
-}
-
 .pressao-fluxo-share-social-label {
   font-size: 12px;
   font-weight: 600;
@@ -1085,6 +1083,15 @@
   -webkit-mask-image: var(--pressao-icon-whatsapp, none);
 }
 
+.pressao-fluxo-share-social-icon[data-canal="x"] {
+  background-color: #000;
+}
+
+.pressao-fluxo-share-social-icon[data-canal="x"]::before {
+  mask-image: var(--pressao-icon-x, none);
+  -webkit-mask-image: var(--pressao-icon-x, none);
+}
+
 .pressao-fluxo-share-social-icon[data-canal="instagram"] {
   background: linear-gradient(135deg, #f58529, #dd2a7b 50%, #8134af);
 }
@@ -1094,13 +1101,13 @@
   -webkit-mask-image: var(--pressao-icon-instagram, none);
 }
 
-.pressao-fluxo-share-social-icon[data-canal="messenger"] {
-  background-color: #0084ff;
+.pressao-fluxo-share-social-icon[data-canal="facebook"] {
+  background-color: #1877f2;
 }
 
-.pressao-fluxo-share-social-icon[data-canal="messenger"]::before {
-  mask-image: var(--pressao-icon-messenger, none);
-  -webkit-mask-image: var(--pressao-icon-messenger, none);
+.pressao-fluxo-share-social-icon[data-canal="facebook"]::before {
+  mask-image: var(--pressao-icon-facebook, none);
+  -webkit-mask-image: var(--pressao-icon-facebook, none);
 }
 
 .pressao-fluxo-images-card {
