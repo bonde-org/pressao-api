@@ -75,29 +75,37 @@ pressao-plugin/
 ├── includes/
 │   ├── class-main.php          # Funcionalidades gerais
 │   ├── class-admin.php         # Página de configurações (abas)
+│   ├── class-candidatos-filtros.php     # Índice estado → cargos do “Filtre por estado” (fluxo)
 │   ├── class-candidatos-admin-list.php  # Tabela/expand/busca/paginação + AJAX
 │   ├── class-candidatos-import.php  # CSV apoiadores + remoção
+│   ├── class-apoiadores-imagens-fila.php  # Fila de imagens do CSV (lotes via AJAX + progresso)
 │   ├── class-candidatos-rest.php    # REST pressao/v1/candidatos-apoiadores
 │   ├── class-api.php           # Cliente HTTP: Keycloak + API Pressão
+│   ├── class-render-helpers.php  # Helpers de render comuns (candidatos, avatares, compartilhar, ajuda, cookie, campos do ativista)
 │   ├── class-shortcode.php     # Shortcodes e renderização SSR
+│   ├── class-multicanal.php    # [pressao_multicanal]: widget padrão (Instagram, TikTok, e-mail, compartilhar)
 │   └── class-ajax.php          # AJAX handlers
 ├── assets/
 │   ├── css/
 │   │   ├── admin.css           # Tabs, cards de ferramentas, callout LGPD
 │   │   ├── style.css           # Tokens, mask-image dos ícones, @font-face
-│   │   └── fluxo.css           # UI do shortcode [pressao_fluxo]
+│   │   ├── pressao-ui.css      # Base comum de fluxo/multicanal: @font-face, tokens (--fluxo-*, --pressao-ui-*), ícones
+│   │   ├── fluxo.css           # UI do shortcode [pressao_fluxo] (depende de pressao-ui.css)
+│   │   └── multicanal.css      # UI do [pressao_multicanal] (prefixo pressao-mc-*, depende de pressao-ui.css)
 │   ├── fonts/                  # Anton + Host_Grotesk (fluxo); NeueHaas*.woff* opcional p/ alvos
 │   │   ├── Anton/
 │   │   ├── Host_Grotesk/
 │   │   └── Funnel_Display/     # presente; não usada no [pressao_fluxo]
-│   ├── icons/                  # SVG de canais, compartilhar, copiar, download, seta e raio (via CSS mask-image)
+│   ├── icons/                  # SVG de canais (inclui x), compartilhar/enviar, copiar, download, setas, check, fechar, chevron, localização, interrogação e raio (via CSS mask-image; URLs absolutas injetadas como --pressao-icon-*)
 │   ├── vendor/tom-select/      # Autocomplete do fluxo único (+ remoção no admin)
 │   ├── examples/               # CSV + scripts REST (apoiadores)
 │   └── js/
 │       ├── admin.js            # Campos repetíveis, CSV/remoção apoiadores, Media Library
 │       ├── share-images.js     # Download blob / Web Share das “Imagens para postar”
-│       ├── widget.js           # UI, cookies, ações, compartilhamento e confirmações ([pressao_alvos])
-│       └── fluxo.js            # Wizard sequencial isolado ([pressao_fluxo])
+│       ├── pressao-core.js     # Módulo comum window.PressaoCore (cookies, AJAX, ações, abrir app, compartilhar)
+│       ├── widget.js           # UI, cookies, ações, compartilhamento e confirmações ([pressao_alvos], legado)
+│       ├── fluxo.js            # Wizard sequencial isolado ([pressao_fluxo]); usa pressao-core.js
+│       └── multicanal.js       # Widget padrão [pressao_multicanal]; usa pressao-core.js
 └── views/
     └── widget-template.php
 ```
@@ -141,7 +149,8 @@ Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não
 | Intervalo confirmar identidade | `pressao_ativista_confirm_interval` | Geral | Minutos até perguntar de novo (padrão `10`) |
 | Título do formulário | `pressao_ativista_form_title` | Geral | Título do formulário de identificação |
 | Duração da sessão | `pressao_session_duration` | Geral | TTL dos cookies em segundos (padrão `86400`) |
-| Candidatos a pressionar | `pressao_candidatos` | Candidatos | Lista AJAX (busca/paginação); usada na busca do `[pressao_fluxo]` |
+| Candidatos a pressionar | `pressao_candidatos` | Candidatos | Lista AJAX (busca/paginação); usada na busca e no filtro por estado do `[pressao_fluxo]` |
+| Índice de filtros | `pressao_candidatos_filtros` | Candidatos | Gerado (não editável): estados e cargos do “Filtre por estado”; recalculado a cada gravação de `pressao_candidatos` ou pelo botão **Regenerar filtros** |
 | Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Candidatos | Máximo de @ por mensagem (padrão `5`) — salvo pelo botão Salvar da aba |
 | Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Candidatos | Se ligado: toast com countdown antes de abrir; se desligado (padrão): abre no clique. Mobile tenta o app; desktop abre nova aba |
 | Ajuda do fluxo | `pressao_fluxo_ajuda` | Candidatos | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
@@ -173,7 +182,7 @@ Há **duas bases** no WordPress:
 
 No admin, as duas listas usam o **mesmo padrão de listagem** (`PressaoPlugin_Candidatos_Admin_List`):
 
-- Tabela com colunas: foto, nome, cargo, partido, Instagram
+- Tabela com colunas: foto, nome, cargo, partido, Instagram (+ **estado** só na base a pressionar)
 - Clique / **Editar** expande o formulário na linha; **Salvar item** grava via AJAX
 - Busca (`cs`) e paginação (`cpage`, 20 por página) no servidor
 - Actions: `pressao_candidato_save`, `pressao_candidato_delete`, `pressao_candidato_add`
@@ -186,10 +195,20 @@ Campos por candidato (iguais nas duas):
 - `descricao`
 - `link_url` — **Instagram (@)** (handle; aceita `@user` ou URL de perfil; sanitizado no save)
 - `imagem_id`
+- `estado` — sigla UF (select das 27 UFs; só editável na base **a pressionar**; valor inválido vira vazio)
 
 As imagens manuais usam a Biblioteca de Mídia do WordPress (`attachment ID` + `wp_get_attachment_image()`).
 
 No `[pressao_fluxo]`, os handles da base **a pressionar** entram na mensagem (`@a, @b …` + template do alvo). O limite de seleção vem de `pressao_fluxo_limite_candidatos`. Contagens do botão/lista usam a base **apoiadores**.
+
+#### Filtro por estado (`pressao_candidatos_filtros`)
+
+O “Filtre por estado” do `[pressao_fluxo]` usa um índice pré-calculado (`PressaoPlugin_Candidatos_Filtros`), para o render não percorrer a lista:
+
+- Só estados com pelo menos um candidato (com `@`), ordenados pelo nome.
+- Cargos = distinct do texto `cargo` **por estado**, agrupado ignorando maiúsculas, acentos e espaços extras; o rótulo é a primeira grafia encontrada. Cargo vazio não vira opção.
+- Regenerado automaticamente nos hooks `add_option_pressao_candidatos` / `update_option_pressao_candidatos` (salvar, adicionar ou remover item). Na aba **Candidatos**, o bloco **Filtros por estado** mostra o resumo e o botão **Regenerar filtros** (`admin-post` `pressao_regenerar_filtros`).
+- Candidatos sem estado aparecem só na busca por nome.
 
 #### Import CSV (apoiadores)
 
@@ -198,7 +217,17 @@ Na aba **Apoiadores**, abaixo da listagem: upload CSV com upsert **incremental**
 - Colunas: `nome`, `cargo`, `partido`, `descricao`, `instagram` (ou `link_url`), `imagem_url` (opcional)
 - Botão **Baixar CSV de exemplo** ao lado de Importar CSV (`assets/examples/candidatos-apoiadores-exemplo.csv`)
 - `@` novo → adiciona; `@` existente → atualiza; ausente no CSV → permanece
-- `imagem_url` http(s) → download + sideload em `uploads/…/candidatos/`; falha de imagem não aborta o lote
+- Os candidatos (campos de texto) são **salvos na hora**; o request do upload não baixa imagens
+- `imagem_url` http(s) → entra na **fila de imagens** (`pressao_apoiadores_imagens_fila`, um item por `@`; `@` repetido no CSV: a última linha vence)
+
+**Fila de imagens** (`PressaoPlugin_Apoiadores_Imagens_Fila`): baixar + gerar tamanhos + enviar ao S3 no request do upload estourava o timeout do gateway (504) e nada era salvo. Agora:
+
+- No topo da aba **Apoiadores**, o card **Imagens do import** mostra barra de progresso, contagem e erros. O `admin.js` chama `pressao_apoiadores_imagens_processar` em sequência; cada chamada processa imagens por **orçamento de ~10 s** (mínimo 1; só inicia outra se, pela duração da última, ainda couber) e grava o progresso após cada imagem.
+- A foto aparece no candidato assim que o item termina (`download_url` + `media_handle_sideload` em `uploads/…/candidatos/`); a imagem anterior permanece na Media Library.
+- Saiu da página: a fila continua salva e o processamento retoma ao abrir a aba de novo. Duas abas: lock atômico (`pressao_apoiadores_imagens_lock`, 120 s) — só uma processa, a outra acompanha.
+- Falha: até **2 tentativas**; depois o item fica listado com o erro e o botão **Tentar novamente** (`pressao_apoiadores_imagens_retentar`) recoloca na fila.
+- Reimport com fila pendente substitui o item do mesmo `@`. Imagem definida manualmente (Salvar item) ou via REST descarta o item pendente daquele `@`.
+- Fila e lock são por site (multisite).
 
 Para bases grandes (~milhares de linhas), prefira a [API REST](#api-rest-apoiadores) (um registro por request, debug por linha).
 
@@ -268,7 +297,8 @@ Campos principais da option `pressao_compartilhamento`:
 - `titulo`, `subtitulo`, `tempo` — textos do item na lista
 - `overlay_titulo`, `link`, `mensagem` — overlay principal
 - `whatsapp_url` (opcional; se vazio, monta `https://wa.me/?text=` com `mensagem`)
-- `instagram_url`, `messenger_url` — deep links completos definidos no admin
+- `x_url` (opcional; se vazio, monta `https://twitter.com/intent/tweet?text=` com `mensagem`)
+- `instagram_url`, `facebook_url` — links completos definidos no admin (sem geração automática; no `[pressao_fluxo]` e no `[pressao_multicanal]` a rede sem link não aparece / fica desabilitada)
 - `imagens_titulo`, `imagens_subtitulo`, `imagens_instrucao`
 - `imagens[]` — repetível com `imagem_id` (Media Library) + `rotulo`
 
@@ -306,9 +336,65 @@ docker compose exec wordpress php -l wp-content/plugins/pressao-plugin/includes/
 
 Os shortcodes ligados à campanha aceitam `campaign` e caem em `pressao_campaign_id` quando o atributo é omitido. O shortcode `[pressao_candidatos]` é editorial e usa a base **apoiadores** (`pressao_candidatos_apoiadores`).
 
-### `[pressao_alvos]` — lista de alvos com botão de ação
+### `[pressao_multicanal]` — widget padrão multicanal
 
-Principal shortcode do plugin: lista os alvos da campanha e permite agir por canal.
+Shortcode recomendado para campanhas: uma home com os canais da campanha (Instagram, TikTok, e-mail) e o
+compartilhamento, seguindo o Figma "Widget padrão". Mobile em drawer de tela cheia; desktop em card de duas
+colunas (hero à esquerda, etapas no painel direito, modais centralizados).
+
+```text
+[pressao_multicanal campaign="uuid" canais="instagram,tiktok,email" countdown="3" redes="whatsapp,x,instagram"]
+```
+
+**Cards:** só entram os canais que têm alvo na API, na ordem de `canais`. Qualquer ordem é permitida; a seta
+preenchida só sugere o próximo canal pendente. Estados: feito (verde), pulado com "Não uso" (cinza; clicar
+reabre o canal) e pendente.
+
+**Instagram/TikTok:** chips com todos os `@` de `pressao_candidatos`, mensagem `@a, @b` + template do alvo,
+"Copiar e abrir" (modal "Mensagem copiada!" com "Abrindo em N...") e confirmação "Sim, já publiquei!". A ação
+é criada e confirmada só no fim do canal, depois da captação de lead.
+
+**Captação de lead** ("Quer acompanhar os próximos passos?"): aparece só se ainda não pedimos e-mail (sem
+`__lead` no cookie, sem e-mail em `pressao_ativista_data` e e-mail não feito). Modal no desktop, tela cheia no
+mobile. "Agora não" registra a ação sem ativista.
+
+**E-mail:** "Para" com os nomes de `membros` do alvo agregado (API; sem o campo, "N destinatários"), "Assunto"
+= título do template, "Ver Texto" com o corpo e formulário nome/e-mail/WhatsApp. O envio cria a ação
+(`canal=email`) com o ativista.
+
+**Feedback:** "Legal, sua pressão já está valendo!" por 1 s; depois volta para a home ou, sem canal pendente,
+abre o compartilhar ("Convide mais pessoas": copiar link, redes de `redes`, imagens para postar).
+
+| Atributo | Padrão | Descrição |
+|----------|--------|-----------|
+| `campaign` | option | ID da campanha |
+| `canais` | `instagram,tiktok,email` | Canais e ordem dos cards |
+| `alvo_instagram` / `alvo_tiktok` / `alvo_email` | — | Alvo de cada card. Vazio: primeiro alvo do canal; no e-mail, o agregado |
+| `cache` | `0` | TTL do cache de alvos (`0` sorteia template a cada visita) |
+| `alvos` | `candidatos` | Palavra usada no título padrão e na lista ("Candidatos que serão pressionados") |
+| `selo` | `Faça sua cobrança aos candidatos` | Pílula do topo (vazio esconde) |
+| `title` | `Pressione os {alvos} pela {campanha}` | Título; `{alvos}` e `{campanha}` (nome da campanha na API) são substituídos |
+| `subtitle` | `Marque quem ainda não se comprometeu e ajude a fortalecer o movimento.` | Subtítulo |
+| `progresso` | `1` | `0` remove a barra "Etapas que você já fez" |
+| `countdown` | `3` | Segundos de "Abrindo em N..." antes de abrir o app; `0` abre após 1,5 s |
+| `tempo_instagram` / `tempo_tiktok` / `tempo_email` | `2 min` / `2 min` / `1 min` | Tempo exibido nos cards |
+| `ajuda_titulo` / `ajuda` | `Como funciona?` / texto padrão | Modal `?`. Sem `ajuda`, usa o conteúdo de `pressao_fluxo_ajuda` se preenchido |
+| `redes` | `whatsapp,x,instagram` | Redes do compartilhar (aceita também `messenger`) |
+| `class` / `id` | — / gerado | Classe CSS extra e ID do container |
+
+Assets: `pressao-ui.css` + `multicanal.css` + `pressao-core.js` + `share-images.js` + `multicanal.js` (só
+quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`. Contador
+`.pressao-acoes-counter` animado por `PressaoCore.updateCounter`.
+
+### Shortcodes legados
+
+`[pressao_alvos]`, `[pressao_contador]`, `[pressao_progresso]` e `[pressao_candidatos]` continuam
+funcionando sem mudanças, mas não recebem novas funcionalidades; para campanhas novas use
+`[pressao_multicanal]`. `[pressao_widget]`, `[pressao_form]` e `[pressao_list]` são containers antigos.
+
+### `[pressao_alvos]` — lista de alvos com botão de ação (legado)
+
+Lista os alvos da campanha e permite agir por canal.
 
 **E-mail:** a API agrupa todos os contatos de e-mail da campanha em um único item (`modo=agregado`, nome padrão "Pressionar por E-mail"). Um clique dispara a ação `multi_alvo` para todos os destinatários. O campo `total_membros` indica quantos e-mails serão pressionados. Use `action_label="Pressionar por E-mail"` para o rótulo do botão.
 
@@ -347,7 +433,7 @@ deep links WhatsApp/Instagram/Messenger e download/share de imagens (`share-imag
 | `ativista_confirm_yes` | `Sou eu` | Rótulo de confirmação |
 | `ativista_confirm_no` | `Não sou eu` | Rótulo que limpa os dados da sessão |
 
-### `[pressao_contador]` — total de ações confirmadas
+### `[pressao_contador]` — total de ações confirmadas (legado)
 
 Lê `acoes_confirmadas` da campanha (transient de 60s) e anima o número via countUp quando o ativista conclui uma ação na mesma página.
 
@@ -361,21 +447,21 @@ Lê `acoes_confirmadas` da campanha (transient de 60s) e anima o número via cou
 | `label` | `ações confirmadas` | Texto ao lado do número |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
 
-### `[pressao_progresso]` — progresso pessoal do ativista
+### `[pressao_progresso]` — progresso pessoal do ativista (legado)
 
 Barra `done / total` de alvos baseada no cookie `pressao_acoes_realizadas`. Conta ações **realizadas**: canais automáticos entram na hora, manuais só após a confirmação.
 
 ```text
-[pressao_progresso campaign="uuid" label="seu progresso"]
+[pressao_progresso campaign="uuid" label="Pressione para impactar"]
 ```
 
 | Atributo | Padrão | Descrição |
 |----------|--------|-----------|
 | `campaign` | option | ID da campanha |
-| `label` | `seu progresso` | Texto da barra |
+| `label` | `Pressione para impactar` | Texto da barra |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
 
-### `[pressao_candidatos]` — bloco de candidatos apoiadores
+### `[pressao_candidatos]` — bloco de candidatos apoiadores (legado)
 
 Renderiza os candidatos da option `pressao_candidatos_apoiadores` (já apoiam a pauta).
 
@@ -393,6 +479,8 @@ Renderiza os candidatos da option `pressao_candidatos_apoiadores` (já apoiam a 
 
 Wizard isolado de `[pressao_alvos]`: seleção de candidatos → copiar/abrir Instagram → confirmação humana → formulário de newsletter → compartilhar. **Cria e confirma a ação na API apenas na saída do formulário** (“Quero receber atualizações” com dados, ou “Agora não” sem ativista). Telas pós-Continuar são bloqueantes (sem dismiss por backdrop/Escape); no **mobile** abrem como **drawer tela cheia** (entra da direita, como o overlay de ação — distinto do bottom sheet da lista de candidatos); no desktop a troca continua inline no card. A lista de candidatos fecha no X ou backdrop.
 
+**Seleção de candidatos:** duas opções em acordeão (só uma aberta por vez). **Busque candidatos** (aberta por padrão) é o autocomplete por nome/@, que consulta o servidor a partir de 2 caracteres (`pressao_buscar_candidatos`, até 20 resultados; a base não é embutida na página). **Filtre por estado** tem checkboxes de cargo opcionais (cargos daquele estado; nenhum marcado = todos, marcados = união), select de estado e um segundo autocomplete desabilitado até escolher o estado; ao escolher estado/cargo, a mesma action devolve os candidatos daquele filtro (até 500) e o autocomplete filtra no navegador. Trocar estado/cargo remove só os selecionados que não batem mais. Ao começar a preencher uma opção, o que foi preenchido na outra é limpo. O “Continuar” usa os selecionados da opção aberta. Opções do autocomplete mostram nome + `@handle · cargo · partido`. Sem nenhum candidato com estado, só a busca aparece.
+
 **Abrir Instagram:** no mobile, “Copiar e abrir” tenta o **app** (Android Intent / iOS Universal Link) **sem nova aba**, para o X/voltar do app devolver à tela de confirmação do fluxo; no desktop abre a URL HTTPS em nova aba. A option `pressao_fluxo_countdown_abrir` (toast antes de abrir) permanece opcional.
 
 ```text
@@ -406,10 +494,10 @@ Wizard isolado de `[pressao_alvos]`: seleção de candidatos → copiar/abrir In
 | `campaign` | option | ID da campanha |
 | `template_id` | template do alvo | Fallback se a API não devolver template |
 | `title` / `subtitle` | copy do layout | Textos da tela inicial |
-| `cache` | `300` | TTL do cache de alvos |
+| `cache` | `0` | TTL do cache de alvos (`0` sorteia template a cada visita) |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
 
-Assets: `fluxo.js` + `fluxo.css` + `share-images.js` + Tom Select (só quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`.
+Assets: `pressao-core.js` + `fluxo.js` + `pressao-ui.css` + `fluxo.css` + `share-images.js` + Tom Select (só quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`.
 
 ### `[pressao_widget]` — widget principal
 
@@ -461,7 +549,7 @@ Todos usam o TTL de `pressao_session_duration` e são limpos de uma vez por `cle
 | `pressao_sessao_id` | UUID v4 da sessão do navegador |
 | `pressao_ativista_data` | Nome, email e telefone do ativista (JSON) |
 | `pressao_ativista_last_confirm` | Timestamp da última confirmação de identidade |
-| `pressao_acoes_realizadas` | Mapa `alvoId → {timestamp, acao_id, status, user_id}` — fonte de verdade do progresso e do estado SSR. Inclui a chave sintética `__compartilhar` quando o ativista compartilha (sem `acao_id`) |
+| `pressao_acoes_realizadas` | Mapa `alvoId → {timestamp, acao_id, status, user_id}` — fonte de verdade do progresso e do estado SSR. Chaves sintéticas (sem `acao_id`): `__compartilhar` (compartilhou), `__naouso_{canal}` (clicou "Não uso" no `[pressao_multicanal]`; vale para a pessoa, não para a campanha) e `__lead` (já pedimos o e-mail no `[pressao_multicanal]`) |
 | `pressao_usuario_id` | ID anônimo do usuário (legado) |
 
 O payload de `pressao_acoes_realizadas` é mantido enxuto de propósito: estourar ~4KB derruba os cookies de sessão do WordPress e o AJAX começa a responder 403 "Nonce inválido".
@@ -479,8 +567,17 @@ Todos registrados nas variantes logada e `nopriv`:
 | `pressao_realizar_acao` | `criar_acao_com_ativista` / `criar_acao_sem_ativista` | `POST /api/v1/acoes/` |
 | `pressao_confirmar_acao` | `confirmar_acao` | `PATCH /api/v1/acoes/{id}/confirmar` |
 | `pressao_get_acoes_status` | — | Nenhum: lê o estado do cookie `pressao_acoes_realizadas` |
+| `pressao_buscar_candidatos` | — | Nenhum: busca em `pressao_candidatos` para o autocomplete do `[pressao_fluxo]` (`q` com 2+ caracteres; ou `estado` + `cargos[]` opcionais do "Filtre por estado") |
 
 `pressao_realizar_acao` e `pressao_confirmar_acao` invalidam o transient do contador (`invalidar_cache_contador`) quando recebem `campanha_id` no POST.
+
+Handlers só do admin (logado, `manage_options` + nonce `pressao_apoiadores_imagens`; sem `nopriv`):
+
+| Action | Faz |
+|--------|-----|
+| `pressao_apoiadores_imagens_processar` | Processa um lote da fila de imagens do import e devolve o status (`ocupado` se outra aba tem o lock) |
+| `pressao_apoiadores_imagens_status` | Só devolve o status (`total`, `concluidas`, `pendentes`, `erros`) |
+| `pressao_apoiadores_imagens_retentar` | Recoloca os itens com erro na fila |
 
 ## 📏 Regras de manutenção
 

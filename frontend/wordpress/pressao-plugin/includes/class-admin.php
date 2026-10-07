@@ -380,12 +380,14 @@ class PressaoPlugin_Admin {
                 <?php elseif ($current_tab === 'apoiadores') : ?>
                     <h2><?php esc_html_e('Candidatos apoiadores', 'pressao-plugin'); ?></h2>
                     <p><?php esc_html_e('Base dos que já apoiam a pauta: botão/lista do [pressao_fluxo] e shortcode [pressao_candidatos]. Use as ferramentas abaixo para importar CSV ou remover da base.', 'pressao-plugin'); ?></p>
+                    <?php PressaoPlugin_Apoiadores_Imagens_Fila::render_admin_card(); ?>
                     <?php PressaoPlugin_Candidatos_Admin_List::render(PressaoPlugin_Candidatos_Admin_List::OPTION_APOIADORES); ?>
                     <?php $this->render_apoiadores_tools(); ?>
                 <?php elseif ($current_tab === 'candidatos') : ?>
                     <h2><?php esc_html_e('Candidatos a pressionar', 'pressao-plugin'); ?></h2>
                     <p><?php esc_html_e('Base usada na busca/seleção do [pressao_fluxo] (candidatos a pressionar).', 'pressao-plugin'); ?></p>
                     <?php PressaoPlugin_Candidatos_Admin_List::render(PressaoPlugin_Candidatos_Admin_List::OPTION_PRESSIONAR); ?>
+                    <?php PressaoPlugin_Candidatos_Filtros::render_admin_tools(); ?>
                     <form method="post" action="options.php" class="pressao-settings-fluxo-form">
                         <?php
                         settings_fields($this->get_option_group_for_tab('candidatos'));
@@ -412,9 +414,15 @@ class PressaoPlugin_Admin {
     private function render_documentacao_tab() {
         $shortcodes = [
             [
+                'tag' => '[pressao_multicanal]',
+                'title' => __('Widget padrão multicanal', 'pressao-plugin'),
+                'body' => __('Shortcode recomendado: home com os canais da campanha (Instagram, TikTok, e-mail), barra de progresso e compartilhamento. Marca todos os candidatos da aba Candidatos nos canais sociais e cria a ação ao fim de cada canal.', 'pressao-plugin'),
+                'example' => '[pressao_multicanal campaign="uuid" canais="instagram,tiktok,email" countdown="3"]',
+            ],
+            [
                 'tag' => '[pressao_alvos]',
-                'title' => __('Lista de alvos com ações', 'pressao-plugin'),
-                'body' => __('Shortcode principal: lista os canais da campanha (Instagram, TikTok, e-mail etc.) e permite ao ativista agir. Se o compartilhamento estiver ativo na aba Compartilhamento, o botão aparece por último na lista.', 'pressao-plugin'),
+                'title' => __('Lista de alvos com ações (legado)', 'pressao-plugin'),
+                'body' => __('Lista os canais da campanha (Instagram, TikTok, e-mail etc.) e permite ao ativista agir. Se o compartilhamento estiver ativo na aba Compartilhamento, o botão aparece por último na lista. Para campanhas novas, prefira [pressao_multicanal].', 'pressao-plugin'),
                 'example' => '[pressao_alvos campaign="uuid" show_ativista_form="yes" ordem="instagram,tiktok,email" tempo_email="1 min"]',
             ],
             [
@@ -425,26 +433,26 @@ class PressaoPlugin_Admin {
             ],
             [
                 'tag' => '[pressao_candidatos]',
-                'title' => __('Bloco de candidatos apoiadores', 'pressao-plugin'),
+                'title' => __('Bloco de candidatos apoiadores (legado)', 'pressao-plugin'),
                 'body' => __('Exibe a base editorial de quem já apoia a pauta (option pressao_candidatos_apoiadores), configurada na aba Apoiadores.', 'pressao-plugin'),
                 'example' => '[pressao_candidatos title="Conheça os candidatos"]',
             ],
             [
                 'tag' => '[pressao_contador]',
-                'title' => __('Contador de ações confirmadas', 'pressao-plugin'),
+                'title' => __('Contador de ações confirmadas (legado)', 'pressao-plugin'),
                 'body' => __('Mostra o total de ações confirmadas da campanha (atualiza com cache curto) e pode animar quando o ativista conclui uma ação na mesma página.', 'pressao-plugin'),
                 'example' => '[pressao_contador campaign="uuid" label="ações confirmadas"]',
             ],
             [
                 'tag' => '[pressao_progresso]',
-                'title' => __('Progresso pessoal do ativista', 'pressao-plugin'),
+                'title' => __('Progresso pessoal do ativista (legado)', 'pressao-plugin'),
                 'body' => __('Barra done/total com base nas ações realizadas neste navegador (cookie). Zera quando a sessão do ativista é limpa (“Não sou eu” ou expiração).', 'pressao-plugin'),
                 'example' => '[pressao_progresso]',
             ],
             [
                 'tag' => '[pressao_widget]',
                 'title' => __('Widget completo (legado)', 'pressao-plugin'),
-                'body' => __('Combina formulário e lista num único bloco. Prefira [pressao_alvos] para campanhas novas com canais e compartilhamento.', 'pressao-plugin'),
+                'body' => __('Combina formulário e lista num único bloco. Prefira [pressao_multicanal] para campanhas novas com canais e compartilhamento.', 'pressao-plugin'),
                 'example' => '[pressao_widget title="Meu Widget"]',
             ],
             [
@@ -572,7 +580,7 @@ class PressaoPlugin_Admin {
             <div class="pressao-admin-card">
                 <h3><?php esc_html_e('Importar CSV (incremental)', 'pressao-plugin'); ?></h3>
                 <p class="description">
-                    <?php esc_html_e('Colunas: nome, cargo, partido, descricao, instagram (ou link_url), imagem_url (opcional). Novos @ são adicionados; @ existentes são atualizados; quem não está no CSV permanece. Imagens públicas são baixadas para uploads/candidatos/.', 'pressao-plugin'); ?>
+                    <?php esc_html_e('Colunas: nome, cargo, partido, descricao, instagram (ou link_url), imagem_url (opcional). Novos @ são adicionados; @ existentes são atualizados; quem não está no CSV permanece. Os candidatos são salvos na hora; as imagens públicas são baixadas depois, em lotes, para uploads/candidatos/ (acompanhe o progresso no topo desta aba).', 'pressao-plugin'); ?>
                 </p>
                 <form method="post"
                       action="<?php echo esc_url(admin_url('admin-post.php')); ?>"

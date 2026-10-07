@@ -227,7 +227,7 @@ class PressaoPlugin_Ajax {
         // Busca ações realizadas (local ou DB)
         $acoes = [];
         foreach ($alvos as $alvo_id) {
-            $acoes[$alvo_id] = $this->get_alvo_action_state($alvo_id);
+            $acoes[$alvo_id] = PressaoPlugin_Render_Helpers::acao_state($alvo_id);
         }
         
         wp_send_json_success($acoes);
@@ -244,7 +244,21 @@ class PressaoPlugin_Ajax {
         }
 
         $termo = isset($_POST['q']) ? trim(sanitize_text_field(wp_unslash($_POST['q']))) : '';
-        if (mb_strlen($termo) < 2) {
+        // "Filtre por estado": com UF, o termo é opcional e a resposta traz os candidatos do
+        // estado (e dos cargos marcados) para o autocomplete filtrar no navegador.
+        $estado = PressaoPlugin_Candidatos_Filtros::sanitize_uf(
+            isset($_POST['estado']) ? sanitize_text_field(wp_unslash($_POST['estado'])) : ''
+        );
+        $cargos = [];
+        if (isset($_POST['cargos']) && is_array($_POST['cargos'])) {
+            foreach (wp_unslash($_POST['cargos']) as $cargo) {
+                $chave = PressaoPlugin_Candidatos_Filtros::normalize_cargo(sanitize_text_field((string) $cargo));
+                if ($chave !== '') {
+                    $cargos[$chave] = true;
+                }
+            }
+        }
+        if ($estado === '' && mb_strlen($termo) < 2) {
             wp_send_json_success(['results' => []]);
         }
 
@@ -253,9 +267,9 @@ class PressaoPlugin_Ajax {
             $candidatos_raw = [];
         }
         $termo_lower = mb_strtolower($termo);
-        $max_resultados = 20;
+        $max_resultados = $estado !== '' ? 500 : 20;
 
-        // Filtra ANTES de normalizar — normalize_candidatos_for_fluxo()
+        // Filtra ANTES de normalizar — PressaoPlugin_Render_Helpers::normalize_candidatos()
         // resolve a URL da imagem (wp_get_attachment_image_url) pra cada
         // linha, e com a base grande (6 mil+) rodar isso pra tudo antes de
         // filtrar deixava a busca levando vários segundos por tecla. Aqui só
@@ -267,9 +281,19 @@ class PressaoPlugin_Ajax {
             if (!is_array($candidato) || empty($candidato['link_url'])) {
                 continue;
             }
-            $alvo_busca = mb_strtolower(trim(($candidato['nome'] ?? '') . ' ' . $candidato['link_url']));
-            if (strpos($alvo_busca, $termo_lower) === false) {
-                continue;
+            if ($estado !== '') {
+                if (PressaoPlugin_Candidatos_Filtros::sanitize_uf($candidato['estado'] ?? '') !== $estado) {
+                    continue;
+                }
+                if ($cargos && !isset($cargos[PressaoPlugin_Candidatos_Filtros::normalize_cargo($candidato['cargo'] ?? '')])) {
+                    continue;
+                }
+            }
+            if ($termo_lower !== '') {
+                $alvo_busca = mb_strtolower(trim(($candidato['nome'] ?? '') . ' ' . $candidato['link_url']));
+                if (strpos($alvo_busca, $termo_lower) === false) {
+                    continue;
+                }
             }
             $matched_raw[$index] = $candidato;
             if (count($matched_raw) >= $max_resultados) {
@@ -277,7 +301,7 @@ class PressaoPlugin_Ajax {
             }
         }
 
-        $candidatos = PressaoPlugin_Shortcode::normalize_candidatos_for_fluxo($matched_raw, 'c');
+        $candidatos = PressaoPlugin_Render_Helpers::normalize_candidatos($matched_raw, 'c');
         $resultados = [];
         foreach ($candidatos as $candidato) {
             if (empty($candidato['instagram'])) {
@@ -289,6 +313,8 @@ class PressaoPlugin_Ajax {
                 'nome' => $candidato['nome'] ?? '',
                 'instagram' => $candidato['instagram'],
                 'imagem' => $candidato['imagem'] ?? '',
+                'cargo' => $candidato['cargo'] ?? '',
+                'partido' => $candidato['partido'] ?? '',
             ];
         }
 

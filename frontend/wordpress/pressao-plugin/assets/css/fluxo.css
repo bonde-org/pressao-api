@@ -1,59 +1,6 @@
 /* Fluxo único Instagram — isolado de style.css / [pressao_alvos] */
 
-@font-face {
-  font-family: "Anton";
-  src: url("../fonts/Anton/Anton-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Host Grotesk";
-  src: url("../fonts/Host_Grotesk/HostGrotesk-VariableFont_wght.ttf") format("truetype");
-  font-weight: 300 800;
-  font-style: normal;
-  font-display: swap;
-}
-
-/* Declaradas em :root (não só em .pressao-fluxo) porque os overlays de
-   tela cheia (lista/help/seq/toast) são movidos via JS pra filhos diretos
-   do <body> — pra escapar do contexto de empilhamento em que o tema prende
-   o conteúdo da página (ver comentário sobre `.pressao-fluxo header`
-   abaixo). Se essas variáveis só existissem em .pressao-fluxo, os overlays
-   portados perderiam a herança delas ao sair de dentro do widget. */
-:root {
-  --fluxo-bg: #ffffff;
-  --fluxo-text: #262626;
-  --fluxo-muted: #737373;
-  --fluxo-muted-2: #595959;
-  --fluxo-border: #bfbfbf;
-  --fluxo-border-soft: #d4d4d4;
-  --fluxo-soft: #f9f9f9;
-  --fluxo-soft-2: #f0f0f0;
-  --fluxo-chip: #eef2f6;
-  --fluxo-cta: #cc4a00;
-  --fluxo-secondary: #281150;
-  --fluxo-help-acao: #093217;
-  --fluxo-danger: #cc0000;
-  --fluxo-radius: 16px;
-  --fluxo-radius-card: 40px;
-  --fluxo-btn-radius: 80px;
-  --fluxo-font: "Host Grotesk", Helvetica, Arial, sans-serif;
-  --fluxo-font-display: "Anton", Helvetica, Arial, sans-serif;
-  --pressao-icon-instagram: url("../icons/instagram.svg");
-  --pressao-icon-seta: url("../icons/seta.svg");
-  --pressao-icon-seta-direita: url("../icons/seta-direita.svg");
-  --pressao-icon-abrir-externo: url("../icons/abrir-externo.svg");
-  --pressao-icon-check-circulo: url("../icons/check-circulo.svg");
-  --pressao-icon-raio: url("../icons/raio-barra-progresso.svg");
-  --pressao-icon-copiar: url("../icons/copiar.svg");
-  --pressao-icon-whatsapp: url("../icons/whatsapp.svg");
-  --pressao-icon-messenger: url("../icons/messenger.svg");
-  --pressao-icon-x: url("../icons/x.svg");
-  --pressao-icon-facebook: url("../icons/facebook.svg");
-  --pressao-icon-download: url("../icons/download.svg");
-}
+/* Fontes e tokens (--fluxo-*, ícones) vêm de pressao-ui.css (dependência deste arquivo). */
 
 .pressao-fluxo {
   font-family: var(--fluxo-font);
@@ -155,6 +102,166 @@
   flex-direction: column;
   gap: 8px;
   flex: 1;
+}
+
+/* Busca × filtro por estado (acordeão exclusivo) */
+.pressao-fluxo-modo {
+  display: flex;
+  flex-direction: column;
+}
+
+.pressao-fluxo-modo-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--fluxo-border-soft, #d9d9d9);
+  background: transparent;
+  color: var(--fluxo-text);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pressao-fluxo-modo.is-open .pressao-fluxo-modo-toggle {
+  border-bottom-color: transparent;
+}
+
+.pressao-fluxo-modo-chevron {
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.pressao-fluxo-modo.is-open .pressao-fluxo-modo-chevron {
+  transform: translateY(3px) rotate(-135deg);
+}
+
+.pressao-fluxo-modo-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 16px;
+}
+
+.pressao-fluxo-modo.is-open .pressao-fluxo-modo-body {
+  border-bottom: 1px solid var(--fluxo-border-soft, #d9d9d9);
+}
+
+.pressao-fluxo-modo-body[hidden] {
+  display: none;
+}
+
+.pressao-fluxo .screen-reader-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pressao-fluxo-modos-ou {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--fluxo-text);
+}
+
+.pressao-fluxo-cargos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--fluxo-text);
+}
+
+.pressao-fluxo-cargos[hidden] {
+  display: none;
+}
+
+.pressao-fluxo-cargos-list {
+  display: contents;
+}
+
+.pressao-fluxo-cargo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.pressao-fluxo-cargo input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--fluxo-cta, #cc4a00);
+}
+
+.pressao-fluxo-cargos-opcional {
+  color: var(--fluxo-muted);
+  font-size: 12px;
+}
+
+.pressao-fluxo-estado-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 40px 10px 12px;
+  border: 1px solid #999;
+  border-radius: 10px;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23222' stroke-width='1.5' d='M3 6l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 14px center;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--fluxo-text);
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.pressao-fluxo .ts-wrapper.disabled .ts-control {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pressao-fluxo-ts-option-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pressao-fluxo-ts-option-nome {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--fluxo-text);
+}
+
+.pressao-fluxo-ts-option-meta {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--fluxo-muted);
 }
 
 /* Sequência pós-Continuar: inline no desktop; drawer no mobile */
