@@ -19,6 +19,10 @@ services:
       - SENDGRID_WEBHOOK_URL=${SENDGRID_WEBHOOK_URL:-http://localhost:8000/api/v1/webhooks/sendgrid}
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-mock-sid}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-mock-token}
+      - TWILIO_API_KEY_SID=${TWILIO_API_KEY_SID:-}
+      - TWILIO_API_KEY_SECRET=${TWILIO_API_KEY_SECRET:-}
+      - TWILIO_SANDBOX_MODE=${TWILIO_SANDBOX_MODE:-true}
+      - TWILIO_WEBHOOK_URL=${TWILIO_WEBHOOK_URL:-http://localhost:8000/api/v1/webhooks/twilio}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - LOG_LEVEL=INFO
       - METRICS_ENABLED=true

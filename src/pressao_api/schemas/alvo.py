@@ -62,20 +62,32 @@ class AlvoMembroPublico(BaseModel):
     nome: str
 
 
+class AlvoMembroTelefonePublico(AlvoMembroPublico):
+    """Membro do agregado de telefone: o ativista pode escolhê-lo pelo `id`. Sem contato."""
+
+    id: UUID4
+    cargo: str | None = None
+    partido: str | None = None
+
+
 class AlvoResponse(AlvoBase):
     id: UUID4
     campanha_id: UUID4
     modo: ModoAlvo = ModoAlvo.INDIVIDUAL
     total_membros: int | None = Field(
-        None, description="Quantidade de membros (apenas alvo agregado de e-mail)"
+        None, description="Quantidade de membros (apenas alvo agregado de e-mail ou telefone)"
     )
-    membros: list[AlvoMembroPublico] | None = Field(
-        None, description="Membros ativos, só com nome (apenas alvo agregado de e-mail)"
+    membros: list[AlvoMembroTelefonePublico | AlvoMembroPublico] | None = Field(
+        None,
+        description=(
+            "Membros ativos, sem contatos (apenas alvo agregado). E-mail: só nome; "
+            "telefone: id, nome, cargo e partido"
+        ),
     )
     criado_em: datetime
     atualizado_em: datetime
     template: TemplateSorteadoResponse | None = Field(
-        None, description="Template sorteado para este alvo (apenas canal email)"
+        None, description="Template sorteado para este alvo (email, telefone, instagram, tiktok)"
     )
 
     class Config:

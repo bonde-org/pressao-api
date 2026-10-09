@@ -2,6 +2,17 @@ from datetime import datetime
 
 from pydantic import UUID4, BaseModel, Field, field_validator
 
+from pressao_api.utils.validadores import normalizar_telefone_e164, telefone_toll_free_br
+
+
+def _validar_telefone_origem(v: str | None) -> str | None:
+    if v is None or not v.strip():
+        return None
+    telefone = normalizar_telefone_e164(v)
+    if telefone_toll_free_br(telefone):
+        raise ValueError("Número 0800 não pode originar ligações; use um número local do Twilio")
+    return telefone
+
 
 class CampanhaBase(BaseModel):
     nome: str = Field(..., min_length=3, max_length=200, description="Nome da campanha")
@@ -10,6 +21,14 @@ class CampanhaBase(BaseModel):
         default=[], description="Domínios autorizados para acessar esta campanha"
     )
     ativa: bool = Field(default=True, description="Se a campanha está ativa")
+    telefone_origem: str | None = Field(
+        None,
+        max_length=20,
+        description=(
+            "Número Twilio (E.164) da campanha: liga para o ativista e aparece para o alvo "
+            "no canal telefone"
+        ),
+    )
 
     @field_validator("dominios_permitidos", mode="before")
     @classmethod
@@ -18,6 +37,11 @@ class CampanhaBase(BaseModel):
         if v is None:
             return []
         return v
+
+    @field_validator("telefone_origem")
+    @classmethod
+    def validate_telefone_origem(cls, v: str | None) -> str | None:
+        return _validar_telefone_origem(v)
 
 
 class CampanhaCreate(CampanhaBase):
@@ -29,6 +53,7 @@ class CampanhaUpdate(BaseModel):
     descricao: str | None = None
     dominios_permitidos: list[str] | None = None
     ativa: bool | None = None
+    telefone_origem: str | None = Field(None, max_length=20)
 
     @field_validator("dominios_permitidos", mode="before")
     @classmethod
@@ -36,6 +61,11 @@ class CampanhaUpdate(BaseModel):
         if v is None:
             return None
         return v
+
+    @field_validator("telefone_origem")
+    @classmethod
+    def validate_telefone_origem(cls, v: str | None) -> str | None:
+        return _validar_telefone_origem(v)
 
 
 class CampanhaResponse(CampanhaBase):

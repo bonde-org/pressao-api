@@ -27,6 +27,11 @@ class CampanhaRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def buscar_por_telefone_origem(self, telefone_origem: str) -> Campanha | None:
+        query = select(Campanha).where(Campanha.telefone_origem == telefone_origem)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def listar_todas(self, ativa: bool | None = None) -> list[Campanha]:
         query = select(Campanha)
         if ativa is not None:
