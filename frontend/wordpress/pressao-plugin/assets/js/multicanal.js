@@ -44,8 +44,57 @@
         email: {
             nome: 'Email',
             naoUso: 'Não uso email'
+        },
+        telefone: {
+            nome: 'Telefone'
         }
     };
+
+    var LIGACAO_STORAGE_PREFIX = 'pressao_mc_ligacao_';
+    var LIGACAO_POLL_MS = 2000;
+    var LIGACAO_POLL_LENTO_MS = 5000;
+    var LIGACAO_POLL_LENTO_APOS_MS = 60000;
+    var LIGACAO_FECHAR_APOS_MS = 90000;
+    var SEU_NOME = '[seu nome]';
+
+    /** Textos das telas de erro do Figma por origem/motivo da falha. */
+    function erroLigacaoTextos(origem, motivo, alvoNome) {
+        var alvo = alvoNome || 'o alvo';
+        if (origem === 'alvo' && motivo === 'no-answer') {
+            return {
+                titulo: 'Ninguém atendeu a ligação',
+                texto: 'Não conseguimos contato com ' + alvo + '. Você pode aguardar alguns minutos e tentar novamente a qualquer momento.',
+                doAlvo: true
+            };
+        }
+        if (origem === 'alvo' && motivo === 'busy') {
+            return {
+                titulo: 'A linha estava ocupada',
+                texto: 'Não conseguimos completar a ligação porque o número de ' + alvo + ' estava ocupado. Você pode aguardar alguns minutos e tentar novamente mais tarde.',
+                doAlvo: true
+            };
+        }
+        if (origem === 'ativista' && motivo === 'no-answer') {
+            return {
+                titulo: 'A ligação não foi atendida',
+                texto: 'Tentamos te ligar, mas a chamada não foi atendida. Mas tudo bem, você pode iniciar a ligação novamente a qualquer momento.'
+            };
+        }
+        if (origem === 'ativista' && motivo === 'canceled') {
+            return {
+                titulo: 'A ligação foi interrompida',
+                texto: 'Isso pode acontecer por instabilidade na rede ou encerramento da chamada. Mas tudo bem, você pode tentar novamente a qualquer momento.'
+            };
+        }
+        return {
+            titulo: 'A ligação não foi completada',
+            texto: 'Isso pode acontecer por instabilidade na rede ou número incorreto. Confirme seu número abaixo e tente novamente.'
+        };
+    }
+
+    function telefoneValido(digitos) {
+        return digitos.length === 10 || digitos.length === 11;
+    }
 
     // ------------------------------------------------------------------
     // Helpers de markup (sem estado)
@@ -150,6 +199,30 @@
         return { ativista: { nome: nome, email: email, telefone: telefone } };
     }
 
+    /** Lê e valida o formulário de telefone. Telefone com DDD obrigatório; e-mail conforme `emailCampo`. */
+    function lerAtivistaTelefone(form, emailCampo) {
+        var nome = (form.elements.nome.value || '').trim();
+        var telefone = Core.digitsOnly(form.elements.telefone.value || '');
+        var email = form.elements.email ? (form.elements.email.value || '').trim() : '';
+        if (!nome) {
+            return { erro: 'Preencha seu nome.' };
+        }
+        if (!telefoneValido(telefone)) {
+            return { erro: 'Informe seu telefone com DDD.' };
+        }
+        if (emailCampo === 'obrigatorio' && !email) {
+            return { erro: 'Preencha seu email.' };
+        }
+        if (email && !Core.isEmailValido(email)) {
+            return { erro: 'Informe um email válido.' };
+        }
+        return { ativista: { nome: nome, email: email, telefone: telefone } };
+    }
+
+    function cargoPartido(membro) {
+        return [membro && membro.cargo, membro && membro.partido].filter(Boolean).join(' · ');
+    }
+
     function textoParaExibicao(texto) {
         return String(texto || '').replace(/\{alvo_nome\}/g, '[nome do destinatário]');
     }
@@ -183,6 +256,7 @@
         var modalStack = [];
         var screenCanal = null;
         var focoAoFecharTela = null;
+        var aoFecharTela = null;
 
         // ---------------- Estado (cookie) ----------------
 
@@ -423,6 +497,11 @@
                 return;
             }
             screenCanal = null;
+            if (typeof aoFecharTela === 'function') {
+                var fn = aoFecharTela;
+                aoFecharTela = null;
+                fn();
+            }
             refreshHome();
             screen.classList.add('is-leaving');
             setTimeout(function () {
@@ -670,15 +749,16 @@
             return typeof v === 'number' ? v : undefined;
         }
 
-        /** Feedback "Legal, sua pressão já está valendo!" e volta para a home (ou compartilhar se acabou). */
-        function concluirComFeedback() {
+        /** Feedback (padrão "Legal, sua pressão já está valendo!") e volta para a home (ou compartilhar se acabou). */
+        function concluirComFeedback(titulo) {
+            titulo = titulo || 'Legal, sua pressão já está valendo!';
             refreshHome();
             var p = progresso();
             openModal({
-                label: 'Legal, sua pressão já está valendo!',
+                label: titulo,
                 className: 'pressao-mc-modal-dialog--feedback',
                 dismissable: false,
-                html: feedbackHtml('Legal, sua pressão já está valendo!', '', config.progresso ? progressHtml(p.feitos, p.total, 'light') : '')
+                html: feedbackHtml(titulo, '', config.progresso ? progressHtml(p.feitos, p.total, 'light') : '')
             });
             return Core.wait(FEEDBACK_MS).then(function () {
                 closeAllModals();
@@ -828,6 +908,549 @@
                 });
         }
 
+        // ---------------- Telefone ----------------
+
+        /** Ligação acompanhada agora: { salvo, poller }. `salvo` também vai para o sessionStorage. */
+        var ligacao = null;
+
+        function ligacaoStorageKey(c) {
+            return LIGACAO_STORAGE_PREFIX + c.alvo_id;
+        }
+
+        function salvarLigacao(c, salvo) {
+            try {
+                window.sessionStorage.setItem(ligacaoStorageKey(c), JSON.stringify(salvo));
+            } catch (e) { /* sem sessionStorage: só não retoma ao reabrir */ }
+        }
+
+        function lerLigacao(c) {
+            try {
+                var raw = window.sessionStorage.getItem(ligacaoStorageKey(c));
+                var salvo = raw ? JSON.parse(raw) : null;
+                return salvo && salvo.acaoId ? salvo : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function limparLigacao(c) {
+            try {
+                window.sessionStorage.removeItem(ligacaoStorageKey(c));
+            } catch (e) { /* ignore */ }
+        }
+
+        function pararAcompanhamento() {
+            if (ligacao && ligacao.poller) {
+                ligacao.poller.stop();
+            }
+            ligacao = null;
+        }
+
+        function membroPorId(c, id) {
+            var membros = Array.isArray(c.membros) ? c.membros : [];
+            for (var i = 0; i < membros.length; i++) {
+                if (membros[i].id === id) {
+                    return membros[i];
+                }
+            }
+            return null;
+        }
+
+        function roteiroTexto(texto, alvoNome, ativistaNome) {
+            return String(texto || '')
+                .replace(/\{alvo_nome\}/g, alvoNome || '[nome do alvo]')
+                .replace(/\{campanha_nome\}/g, campanhaNome)
+                .replace(/\{ativista_nome\}/g, ativistaNome || SEU_NOME);
+        }
+
+        function infoHtml(texto) {
+            return '<p class="pressao-mc-tel-info">' + ico('info') + '<span>' + esc(texto) + '</span></p>';
+        }
+
+        function roteiroHtml(texto, aberto) {
+            return (
+                '<details class="pressao-mc-accordion pressao-mc-tel-roteiro" data-mc-tel-roteiro' + (aberto ? ' open' : '') + (texto ? '' : ' hidden') + '>' +
+                '<summary>Não sabe o que falar? Utilize esse roteiro' + ico('chevron') + '</summary>' +
+                '<div class="pressao-mc-accordion-body" data-mc-tel-roteiro-texto>' + esc(texto) + '</div></details>'
+            );
+        }
+
+        function telefoneIntroHtml(c) {
+            var passos = [
+                ['lapis', 'Você informa seus dados telefônicos'],
+                ['telefone-entrada', 'Você recebe uma ligação nossa em instantes'],
+                ['pessoas', 'A gente te conecta com a equipe do alvo']
+            ];
+            return (
+                navHtml('telefone', CANAL_TEXTOS.telefone.nome) +
+                '<div class="pressao-mc-screen-body">' +
+                bannerFeitoHtml('telefone') +
+                '<h4 class="pressao-mc-block-title">Como funciona</h4>' +
+                '<ol class="pressao-mc-tel-passos">' +
+                passos
+                    .map(function (p) {
+                        return '<li class="pressao-mc-tel-passo"><span class="pressao-mc-tel-passo-icon">' + ico(p[0]) + '</span><span>' + esc(p[1]) + '</span></li>';
+                    })
+                    .join('') +
+                '</ol>' +
+                (c.selecao === 'escolher'
+                    ? ''
+                    : infoHtml('Na próxima ligação, você pode ser direcionado para outro alvo. Assim, equilibramos as ligações entre todos os candidatos da campanha.')) +
+                '<div class="pressao-mc-actions">' +
+                '<button type="button" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-tel-preencher>Preencher dados telefônicos</button>' +
+                '</div></div>'
+            );
+        }
+
+        function telefoneFormHtml(c) {
+            var ativista = Core.getAtivista() || {};
+            var emailCampo = c.email_campo || 'obrigatorio';
+            var membros = Array.isArray(c.membros) ? c.membros : [];
+            function value(v) {
+                return v ? ' value="' + escAttr(v) + '"' : '';
+            }
+
+            var alvoHtml = c.selecao === 'escolher'
+                ? '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Escolha para quem ligar <span class="pressao-mc-required">*</span></span>' +
+                  '<select name="membro_id" required data-mc-tel-membro><option value="">Selecione um candidato</option>' +
+                  membros
+                      .map(function (m) {
+                          var meta = cargoPartido(m);
+                          return '<option value="' + escAttr(m.id) + '">' + esc(m.nome + (meta ? ' · ' + meta : '')) + '</option>';
+                      })
+                      .join('') +
+                  '</select></label>'
+                : '<div class="pressao-mc-tel-alvo" data-mc-tel-alvo aria-busy="true">' +
+                  '<span class="pressao-mc-tel-alvo-icon" aria-hidden="true">' + ico('telefone') + '</span>' +
+                  '<span class="pressao-mc-tel-alvo-copy"><strong data-mc-tel-alvo-nome>Carregando o alvo da vez...</strong>' +
+                  '<span data-mc-tel-alvo-meta></span></span>' +
+                  '<span class="pressao-mc-tel-badge">Alvo da vez</span></div>';
+
+            var campoEmail = emailCampo === 'oculto'
+                ? ''
+                : '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Email ' +
+                  (emailCampo === 'obrigatorio' ? '<span class="pressao-mc-required">*</span>' : '(opcional)') + '</span>' +
+                  '<input type="email" name="email"' + (emailCampo === 'obrigatorio' ? ' required' : '') +
+                  ' autocomplete="email" placeholder="Seu melhor email"' + value(ativista.email) + ' /></label>';
+
+            var privacidade = emailCampo === 'oculto'
+                ? ''
+                : '<p class="pressao-mc-footnote">Ao continuar, você concorda em receber atualizações por e-mail, conforme a ' +
+                  (config.privacidade_url
+                      ? '<a href="' + escAttr(config.privacidade_url) + '" target="_blank" rel="noopener">Política de Privacidade</a>'
+                      : 'Política de Privacidade') +
+                  '.</p>';
+
+            return (
+                navHtml('telefone', CANAL_TEXTOS.telefone.nome) +
+                '<div class="pressao-mc-screen-body">' +
+                '<form class="pressao-mc-tel-form" data-mc-tel-form novalidate>' +
+                '<h4 class="pressao-mc-block-title">Preencha seus dados para gente te ligar:</h4>' +
+                '<section class="pressao-mc-block"><p class="pressao-mc-tel-label">Você vai ligar para:</p>' + alvoHtml + '</section>' +
+                roteiroHtml(c.roteiro || '', false) +
+                '<div class="pressao-mc-fields">' +
+                '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Nome completo <span class="pressao-mc-required">*</span></span>' +
+                '<input type="text" name="nome" required autocomplete="name" placeholder="Seu nome completo"' + value(ativista.nome) + ' /></label>' +
+                '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Telefone <span class="pressao-mc-required">*</span></span>' +
+                '<input type="tel" name="telefone" required inputmode="numeric" autocomplete="tel" placeholder="(00) 00000-0000" data-mc-telefone' +
+                value(ativista.telefone ? Core.formatPhoneMask(ativista.telefone) : '') + ' /></label>' +
+                campoEmail +
+                '</div>' +
+                erroHtml() +
+                '<div class="pressao-mc-actions">' +
+                '<button type="submit" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-tel-ligar>' + ico('telefone') + 'Já pode me ligar</button>' +
+                '</div>' +
+                privacidade +
+                '</form></div>'
+            );
+        }
+
+        function abrirTelefone(c) {
+            openScreen(telefoneIntroHtml(c), 'telefone', function (container) {
+                container.querySelector('[data-mc-tel-preencher]').addEventListener('click', function () {
+                    abrirTelefoneForm(c);
+                });
+            });
+            var salvo = lerLigacao(c);
+            if (salvo) {
+                acompanharLigacao(c, salvo, true);
+            }
+        }
+
+        function abrirTelefoneForm(c) {
+            var estado = { membro: null, roteiro: c.roteiro || '', templateId: c.template_id || '' };
+            openScreen(telefoneFormHtml(c), 'telefone', function (container) {
+                var form = container.querySelector('[data-mc-tel-form]');
+                var btn = form.querySelector('[data-mc-tel-ligar]');
+                var select = form.querySelector('[data-mc-tel-membro]');
+                Core.bindPhoneMask(form.querySelector('[data-mc-telefone]'));
+
+                function atualizarRoteiro() {
+                    var det = form.querySelector('[data-mc-tel-roteiro]');
+                    det.hidden = !estado.roteiro;
+                    det.querySelector('[data-mc-tel-roteiro-texto]').textContent = roteiroTexto(
+                        estado.roteiro,
+                        estado.membro && estado.membro.nome,
+                        (form.elements.nome.value || '').trim()
+                    );
+                }
+                form.elements.nome.addEventListener('input', atualizarRoteiro);
+
+                if (select) {
+                    if (!select.options || select.options.length <= 1) {
+                        btn.disabled = true;
+                        mostrarErro(form, 'Nenhum candidato disponível para ligação no momento.');
+                    }
+                    select.addEventListener('change', function () {
+                        estado.membro = membroPorId(c, select.value);
+                        atualizarRoteiro();
+                    });
+                } else {
+                    btn.disabled = true;
+                    Core.proximoMembro({ root: root, alvoId: c.alvo_id })
+                        .then(function (r) {
+                            if (!r.membro) {
+                                throw new Error('Nenhum candidato disponível para ligação no momento.');
+                            }
+                            estado.membro = r.membro;
+                            if (r.roteiro) {
+                                estado.roteiro = r.roteiro;
+                                estado.templateId = r.template_id || '';
+                            }
+                            var box = form.querySelector('[data-mc-tel-alvo]');
+                            box.removeAttribute('aria-busy');
+                            box.querySelector('[data-mc-tel-alvo-nome]').textContent = r.membro.nome;
+                            box.querySelector('[data-mc-tel-alvo-meta]').textContent = cargoPartido(r.membro);
+                            btn.disabled = false;
+                            atualizarRoteiro();
+                        })
+                        .catch(function (err) {
+                            form.querySelector('[data-mc-tel-alvo]').hidden = true;
+                            mostrarErro(form, (err && err.message) || 'Não foi possível carregar o alvo da vez.');
+                        });
+                }
+                atualizarRoteiro();
+
+                form.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    var r = lerAtivistaTelefone(form, c.email_campo);
+                    if (r.erro) {
+                        mostrarErro(form, r.erro);
+                        return;
+                    }
+                    if (!estado.membro) {
+                        mostrarErro(form, select ? 'Escolha para quem ligar.' : 'Aguarde o carregamento do alvo da vez.');
+                        return;
+                    }
+                    mostrarErro(form, '');
+                    iniciarLigacao(c, r.ativista, estado, btn, form);
+                });
+            });
+        }
+
+        function iniciarLigacao(c, ativista, estado, btn, form) {
+            var anterior = Core.getAtivista() || {};
+            Core.saveAtivista({ nome: ativista.nome, email: ativista.email || anterior.email || '', telefone: ativista.telefone });
+            if (ativista.email) {
+                marcarLead();
+            }
+            var escolher = c.selecao === 'escolher';
+            setLoading(btn, true);
+            Core.realizarAcao({
+                root: root,
+                alvoId: c.alvo_id,
+                campanhaId: config.campanha_id,
+                canal: 'telefone',
+                templateId: estado.templateId,
+                ativista: ativista,
+                membroId: estado.membro.id,
+                selecao: escolher ? 'ativista' : 'automatica'
+            })
+                .then(function (create) {
+                    var api = (create.data && create.data.data) || {};
+                    var acaoId = (create.data && create.data.acao_id) || api.acao_id;
+                    if (!acaoId) {
+                        throw new Error('ID da ação não encontrado.');
+                    }
+                    var dados = (api.proximo_passo && api.proximo_passo.dados) || {};
+                    var salvo = {
+                        acaoId: acaoId,
+                        telefone: ativista.telefone,
+                        membroId: escolher ? estado.membro.id : '',
+                        prefixo: dados.numero_origem_prefixo || '',
+                        alvoNome: (dados.alvo && dados.alvo.nome) || estado.membro.nome,
+                        roteiro: dados.roteiro || roteiroTexto(estado.roteiro, estado.membro.nome, ativista.nome)
+                    };
+                    salvarLigacao(c, salvo);
+                    acompanharLigacao(c, salvo);
+                })
+                .catch(function (err) {
+                    mostrarErro(form, (err && err.message) || 'Não foi possível iniciar a ligação. Tente novamente.');
+                })
+                .finally(function () {
+                    setLoading(btn, false);
+                });
+        }
+
+        function ligandoTextos(salvo) {
+            return {
+                titulo: 'Vamos te ligar em instantes',
+                texto: 'Fique com o telefone por perto.' + (salvo.prefixo ? ' O número pode começar com (' + salvo.prefixo + ').' : '')
+            };
+        }
+
+        function andamentoTextos(etapa, salvo) {
+            var alvo = salvo.alvoNome || 'o alvo';
+            return {
+                titulo: 'Ligação em andamento',
+                texto: etapa === 'EM_ANDAMENTO'
+                    ? 'Você está falando com a equipe de ' + alvo + '. Se precisar, use o roteiro abaixo.'
+                    : 'Estamos conectando você com a equipe de ' + alvo + '.'
+            };
+        }
+
+        function ligandoHtml(salvo) {
+            var t = ligandoTextos(salvo);
+            return (
+                '<div class="pressao-mc-feedback pressao-mc-tel-ligando">' +
+                '<span class="pressao-mc-feedback-icon" aria-hidden="true">' + ico('telefone-entrada') + '</span>' +
+                '<h3 class="pressao-mc-feedback-title">' + esc(t.titulo) + '</h3>' +
+                '<p class="pressao-mc-feedback-text">' + esc(t.texto) + '</p>' +
+                '</div>' +
+                '<button type="button" class="pressao-mc-btn pressao-mc-btn-secondary pressao-mc-tel-ligando-fechar" data-mc-tel-fechar hidden>Fechar e acompanhar depois</button>'
+            );
+        }
+
+        function andamentoHtml(etapa, salvo) {
+            var t = andamentoTextos(etapa, salvo);
+            return (
+                navHtml('telefone', CANAL_TEXTOS.telefone.nome) +
+                '<div class="pressao-mc-screen-body">' +
+                '<div class="pressao-mc-tel-status" role="status">' +
+                '<span class="pressao-mc-tel-status-icon" aria-hidden="true">' + ico('telefone') + '</span>' +
+                '<div><strong data-mc-tel-status-titulo>' + esc(t.titulo) + '</strong>' +
+                '<p data-mc-tel-status-texto>' + esc(t.texto) + '</p></div></div>' +
+                roteiroHtml(salvo.roteiro || '', true) +
+                '</div>'
+            );
+        }
+
+        /**
+         * Acompanha a ligação por polling: modal "Vamos te ligar" até o ativista atender, tela
+         * "Ligação em andamento" com o roteiro enquanto fala com o alvo, depois sucesso ou erro.
+         * `retomando`: reabertura do canal; espera o primeiro status antes de escolher a tela.
+         */
+        function acompanharLigacao(c, salvo, retomando) {
+            pararAcompanhamento();
+            var atual = { salvo: salvo, poller: null };
+            ligacao = atual;
+            aoFecharTela = pararAcompanhamento;
+
+            var fase = null;
+            var inicio = Date.now();
+            var fecharVisivel = false;
+
+            function abrirLigando() {
+                fase = 'ligando';
+                closeAllModals();
+                openModal({
+                    label: 'Vamos te ligar em instantes',
+                    className: 'pressao-mc-modal-dialog--feedback',
+                    dismissable: false,
+                    html: ligandoHtml(salvo),
+                    onMount: function (d) {
+                        var fechar = d.querySelector('[data-mc-tel-fechar]');
+                        fechar.hidden = !fecharVisivel;
+                        fechar.addEventListener('click', function () {
+                            closeAllModals();
+                            closeScreen();
+                        });
+                    }
+                });
+            }
+
+            function mostrarAndamento(etapa) {
+                if (fase !== 'andamento') {
+                    fase = 'andamento';
+                    closeAllModals();
+                    openScreen(andamentoHtml(etapa, salvo), 'telefone');
+                    return;
+                }
+                var t = andamentoTextos(etapa, salvo);
+                var titulo = screen.querySelector('[data-mc-tel-status-titulo]');
+                var texto = screen.querySelector('[data-mc-tel-status-texto]');
+                if (titulo) {
+                    titulo.textContent = t.titulo;
+                }
+                if (texto) {
+                    texto.textContent = t.texto;
+                }
+            }
+
+            if (!retomando) {
+                abrirLigando();
+            }
+            atual.poller = Core.poll(
+                function () {
+                    return Core.statusLigacao({ root: root, acaoId: salvo.acaoId, campanhaId: config.campanha_id }).then(
+                        function (st) {
+                            if (ligacao !== atual) {
+                                return true;
+                            }
+                            if (st.alvo && st.alvo.nome) {
+                                salvo.alvoNome = st.alvo.nome;
+                            }
+                            if (st.etapa === 'CONCLUIDA') {
+                                ligacaoConcluida(c, salvo, st);
+                                return true;
+                            }
+                            if (st.etapa === 'FALHA') {
+                                ligacaoFalhou(c, salvo, st);
+                                return true;
+                            }
+                            if (st.etapa === 'CHAMANDO_ALVO' || st.etapa === 'EM_ANDAMENTO') {
+                                mostrarAndamento(st.etapa);
+                            } else if (fase !== 'ligando') {
+                                abrirLigando();
+                            }
+                            if (!fecharVisivel && Date.now() - inicio > LIGACAO_FECHAR_APOS_MS) {
+                                fecharVisivel = true;
+                                var fechar = dialog.querySelector('[data-mc-tel-fechar]');
+                                if (fechar) {
+                                    fechar.hidden = false;
+                                }
+                            }
+                            return false;
+                        },
+                        function (err) {
+                            if (ligacao !== atual) {
+                                return true;
+                            }
+                            if (/sessão/i.test((err && err.message) || '')) {
+                                pararAcompanhamento();
+                                aoFecharTela = null;
+                                limparLigacao(c);
+                                closeAllModals();
+                                abrirTelefoneForm(c);
+                                mostrarErro(screen, 'Não encontramos sua ligação. Inicie uma nova.');
+                                return true;
+                            }
+                            throw err;
+                        }
+                    );
+                },
+                function (decorrido) {
+                    return decorrido < LIGACAO_POLL_LENTO_APOS_MS ? LIGACAO_POLL_MS : LIGACAO_POLL_LENTO_MS;
+                }
+            );
+        }
+
+        function ligacaoConcluida(c, salvo, st) {
+            pararAcompanhamento();
+            aoFecharTela = null;
+            limparLigacao(c);
+            salvarAcaoFeita(c, salvo.acaoId);
+            Core.updateCounter(config.campanha_id, typeof st.acoes_confirmadas === 'number' ? st.acoes_confirmadas : undefined);
+            closeAllModals();
+            concluirComFeedback('Ligação realizada com sucesso!');
+        }
+
+        function ligacaoFalhou(c, salvo, st) {
+            pararAcompanhamento();
+            aoFecharTela = null;
+            limparLigacao(c);
+            closeAllModals();
+            abrirErroLigacao(c, salvo, erroLigacaoTextos(st.origem_falha, st.motivo_falha, salvo.alvoNome));
+        }
+
+        function erroLigacaoHtml(salvo, t) {
+            var numero = t.doAlvo
+                ? infoHtml('Se ninguém atender, você ainda pode ajudar compartilhando a campanha.') +
+                  '<button type="button" class="pressao-mc-share-link" data-mc-open-share>Compartilhar campanha' + ico('enviar') + '</button>'
+                : '<div class="pressao-mc-tel-numero">' +
+                  '<span class="pressao-mc-tel-numero-label">Seu número</span>' +
+                  '<strong data-mc-tel-numero-valor>' + esc(Core.formatPhoneMask(salvo.telefone)) + '</strong>' +
+                  '<button type="button" class="pressao-mc-tel-alterar" data-mc-tel-alterar>Alterar</button>' +
+                  '<input type="tel" name="telefone" inputmode="numeric" autocomplete="tel" placeholder="(00) 00000-0000" aria-label="Seu número" data-mc-telefone hidden' +
+                  ' value="' + escAttr(Core.formatPhoneMask(salvo.telefone)) + '" />' +
+                  '</div>';
+            return (
+                navHtml('telefone', CANAL_TEXTOS.telefone.nome) +
+                '<div class="pressao-mc-screen-body">' +
+                '<div class="pressao-mc-tel-erro" role="alert">' +
+                '<span class="pressao-mc-tel-erro-icon" aria-hidden="true">' + ico('alerta') + '</span>' +
+                '<h4 class="pressao-mc-tel-erro-titulo">' + esc(t.titulo) + '</h4>' +
+                '<p class="pressao-mc-tel-erro-texto">' + esc(t.texto) + '</p>' +
+                '</div>' +
+                numero +
+                erroHtml() +
+                '<div class="pressao-mc-actions">' +
+                '<button type="button" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-tel-novamente>' + ico('telefone') + 'Iniciar ligação novamente</button>' +
+                '</div></div>'
+            );
+        }
+
+        function abrirErroLigacao(c, salvo, t) {
+            openScreen(erroLigacaoHtml(salvo, t), 'telefone', function (container) {
+                var input = container.querySelector('[data-mc-telefone]');
+                var alterar = container.querySelector('[data-mc-tel-alterar]');
+                var btn = container.querySelector('[data-mc-tel-novamente]');
+                if (input) {
+                    Core.bindPhoneMask(input);
+                }
+                if (alterar) {
+                    alterar.addEventListener('click', function () {
+                        container.querySelector('[data-mc-tel-numero-valor]').hidden = true;
+                        alterar.hidden = true;
+                        input.hidden = false;
+                        input.focus();
+                    });
+                }
+                btn.addEventListener('click', function () {
+                    var telefone = '';
+                    if (input && !input.hidden) {
+                        telefone = Core.digitsOnly(input.value);
+                        if (!telefoneValido(telefone)) {
+                            mostrarErro(container, 'Informe seu telefone com DDD.');
+                            return;
+                        }
+                    }
+                    mostrarErro(container, '');
+                    tentarDeNovo(c, salvo, telefone, btn, container);
+                });
+            });
+        }
+
+        function tentarDeNovo(c, salvo, telefone, btn, container) {
+            setLoading(btn, true);
+            Core.novaLigacao({ root: root, acaoId: salvo.acaoId, telefone: telefone, membroId: salvo.membroId })
+                .then(function (r) {
+                    var api = r.data || {};
+                    var dados = (api.proximo_passo && api.proximo_passo.dados) || {};
+                    if (telefone) {
+                        var ativista = Core.getAtivista() || {};
+                        ativista.telefone = telefone;
+                        Core.saveAtivista(ativista);
+                    }
+                    var novo = {
+                        acaoId: salvo.acaoId,
+                        telefone: telefone || salvo.telefone,
+                        membroId: salvo.membroId,
+                        prefixo: dados.numero_origem_prefixo || salvo.prefixo,
+                        alvoNome: (dados.alvo && dados.alvo.nome) || salvo.alvoNome,
+                        roteiro: dados.roteiro || salvo.roteiro
+                    };
+                    salvarLigacao(c, novo);
+                    acompanharLigacao(c, novo);
+                })
+                .catch(function (err) {
+                    mostrarErro(container, (err && err.message) || 'Não foi possível iniciar a ligação. Tente novamente.');
+                })
+                .finally(function () {
+                    setLoading(btn, false);
+                });
+        }
+
         // ---------------- Pular ("Não uso") ----------------
 
         function abrirPular(canalPulado) {
@@ -892,6 +1515,8 @@
             }
             if (canal === 'email') {
                 abrirEmail(c);
+            } else if (canal === 'telefone') {
+                abrirTelefone(c);
             } else {
                 abrirSocial(c, 'copiar');
             }

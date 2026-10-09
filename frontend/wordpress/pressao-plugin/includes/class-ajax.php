@@ -31,6 +31,15 @@ class PressaoPlugin_Ajax {
         add_action('wp_ajax_pressao_buscar_candidatos', [$this, 'ajax_buscar_candidatos']);
         add_action('wp_ajax_nopriv_pressao_buscar_candidatos', [$this, 'ajax_buscar_candidatos']);
 
+        add_action('wp_ajax_pressao_proximo_membro', [$this, 'ajax_proximo_membro']);
+        add_action('wp_ajax_nopriv_pressao_proximo_membro', [$this, 'ajax_proximo_membro']);
+
+        add_action('wp_ajax_pressao_status_ligacao', [$this, 'ajax_status_ligacao']);
+        add_action('wp_ajax_nopriv_pressao_status_ligacao', [$this, 'ajax_status_ligacao']);
+
+        add_action('wp_ajax_pressao_nova_ligacao', [$this, 'ajax_nova_ligacao']);
+        add_action('wp_ajax_nopriv_pressao_nova_ligacao', [$this, 'ajax_nova_ligacao']);
+
         // Sem verificação de nonce: serve para renovar nonce stale (page cache / sessão)
         add_action('wp_ajax_pressao_refresh_nonce', [$this, 'ajax_refresh_nonce']);
         add_action('wp_ajax_nopriv_pressao_refresh_nonce', [$this, 'ajax_refresh_nonce']);
@@ -92,6 +101,14 @@ class PressaoPlugin_Ajax {
         $canal = isset($_POST['canal']) ? sanitize_text_field($_POST['canal']) : 'email';
         $sessao_id = isset($_POST['sessao_id']) ? sanitize_text_field($_POST['sessao_id']) : '';
         $template_id = isset($_POST['template_id']) ? sanitize_text_field($_POST['template_id']) : null;
+        $extra = [
+            'membro_id' => isset($_POST['membro_id']) ? sanitize_text_field($_POST['membro_id']) : '',
+            'selecao' => isset($_POST['selecao']) ? sanitize_text_field($_POST['selecao']) : '',
+        ];
+
+        if ($canal === 'telefone' && $sessao_id === '') {
+            wp_send_json_error(['message' => __('Sessão não identificada', 'pressao-plugin')], 400);
+        }
         
         // Dados do ativista
         $ativista_nome = isset($_POST['ativista_nome']) ? sanitize_text_field($_POST['ativista_nome']) : '';
@@ -111,7 +128,7 @@ class PressaoPlugin_Ajax {
                 'email' => $ativista_email,
                 'telefone' => $ativista_telefone
             ];
-            $result = $this->api->criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id, $sessao_id);
+            $result = $this->api->criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id, $sessao_id, $extra);
         } else {
             $result = $this->api->criar_acao_sem_ativista($campanha_id, $alvo_id, $canal, $template_id, $sessao_id);
         }
@@ -120,7 +137,11 @@ class PressaoPlugin_Ajax {
             wp_send_json_error([
                 'message' => $result->get_error_message(),
                 'code' => $result->get_error_code()
-            ], 500);
+            ], $canal === 'telefone' ? $this->status_do_erro($result) : 500);
+        }
+
+        if ($canal === 'telefone' && !empty($result['data']['acao_id'])) {
+            $this->registrar_ligacao($result['data']['acao_id'], $sessao_id);
         }
         
         // Gera ID de usuário anônimo se necessário
@@ -183,6 +204,131 @@ class PressaoPlugin_Ajax {
             'timestamp' => time(),
             'acoes_confirmadas' => $result['acoes_confirmadas'] ?? null,
         ]);
+    }
+
+    /**
+     * AJAX: Alvo da vez do agregado de telefone (mostrado no formulário antes de ligar).
+     */
+    public function ajax_proximo_membro() {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'pressao_acao_nonce')) {
+            wp_send_json_error(['message' => __('Nonce inválido', 'pressao-plugin')], 403);
+        }
+
+        $alvo_id = isset($_POST['alvo_id']) ? sanitize_text_field($_POST['alvo_id']) : '';
+        if ($alvo_id === '') {
+            wp_send_json_error(['message' => __('Dados incompletos', 'pressao-plugin')], 400);
+        }
+
+        $result = $this->api->get_proximo_membro($alvo_id);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()], $this->status_do_erro($result));
+        }
+
+        $template = isset($result['template']) && is_array($result['template']) ? $result['template'] : [];
+        wp_send_json_success([
+            'membro' => $result['membro'] ?? null,
+            'template_id' => (string) ($template['id'] ?? ''),
+            'roteiro' => isset($template['conteudo']) ? PressaoPlugin_Render_Helpers::texto_de_html($template['conteudo']) : '',
+        ]);
+    }
+
+    /**
+     * AJAX: Status da ligação em andamento (polling do widget).
+     */
+    public function ajax_status_ligacao() {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'pressao_acao_nonce')) {
+            wp_send_json_error(['message' => __('Nonce inválido', 'pressao-plugin')], 403);
+        }
+
+        $acao_id = $this->acao_da_sessao();
+        $campanha_id = isset($_POST['campanha_id']) ? sanitize_text_field($_POST['campanha_id']) : '';
+
+        $result = $this->api->get_status_ligacao($acao_id);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()], $this->status_do_erro($result));
+        }
+
+        $resposta = [
+            'acao_id' => $acao_id,
+            'ligacao_id' => $result['ligacao_id'] ?? null,
+            'etapa' => $result['etapa'] ?? null,
+            'acao_status' => $result['acao_status'] ?? null,
+            'origem_falha' => $result['origem_falha'] ?? null,
+            'motivo_falha' => $result['motivo_falha'] ?? null,
+            'alvo' => $result['alvo'] ?? null,
+            'tentativas' => $result['tentativas'] ?? 0,
+            'acoes_confirmadas' => null,
+        ];
+
+        if ($resposta['etapa'] === 'CONCLUIDA' && $campanha_id !== '') {
+            $this->api->invalidar_cache_contador($campanha_id);
+            $count = $this->api->get_acoes_confirmadas_count($campanha_id, 60);
+            if (!is_wp_error($count)) {
+                $resposta['acoes_confirmadas'] = (int) $count['count'];
+            }
+        }
+
+        wp_send_json_success($resposta);
+    }
+
+    /**
+     * AJAX: Nova tentativa de ligação na mesma ação ("Iniciar ligação novamente").
+     */
+    public function ajax_nova_ligacao() {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'pressao_acao_nonce')) {
+            wp_send_json_error(['message' => __('Nonce inválido', 'pressao-plugin')], 403);
+        }
+
+        $acao_id = $this->acao_da_sessao();
+        $telefone = isset($_POST['telefone']) ? preg_replace('/\D+/', '', sanitize_text_field($_POST['telefone'])) : '';
+        $membro_id = isset($_POST['membro_id']) ? sanitize_text_field($_POST['membro_id']) : '';
+
+        $result = $this->api->nova_ligacao($acao_id, $telefone, $membro_id);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()], $this->status_do_erro($result));
+        }
+
+        $this->registrar_ligacao($acao_id, sanitize_text_field($_POST['sessao_id'] ?? ''));
+
+        wp_send_json_success([
+            'acao_id' => $acao_id,
+            'data' => $result,
+            'status' => $result['status_atual'] ?? null,
+        ]);
+    }
+
+    /**
+     * Guarda a qual sessão do navegador pertence a ação de telefone. A service account do
+     * plugin enxerga qualquer ação na API, então status e nova tentativa conferem a sessão aqui.
+     */
+    private function registrar_ligacao($acao_id, $sessao_id) {
+        set_transient('pressao_ligacao_' . md5($acao_id), $sessao_id, HOUR_IN_SECONDS);
+    }
+
+    /**
+     * acao_id do POST, desde que pertença ao sessao_id enviado; senão encerra com 403.
+     */
+    private function acao_da_sessao() {
+        $acao_id = isset($_POST['acao_id']) ? sanitize_text_field($_POST['acao_id']) : '';
+        $sessao_id = isset($_POST['sessao_id']) ? sanitize_text_field($_POST['sessao_id']) : '';
+        if ($acao_id === '' || $sessao_id === '') {
+            wp_send_json_error(['message' => __('Dados incompletos', 'pressao-plugin')], 400);
+        }
+
+        $dono = get_transient('pressao_ligacao_' . md5($acao_id));
+        if (!is_string($dono) || !hash_equals($dono, $sessao_id)) {
+            wp_send_json_error(['message' => __('Ligação não encontrada para esta sessão', 'pressao-plugin')], 403);
+        }
+        return $acao_id;
+    }
+
+    /**
+     * Status HTTP de um erro da API repassado ao navegador (4xx da API; resto vira 500).
+     */
+    private function status_do_erro(WP_Error $erro) {
+        $dados = $erro->get_error_data();
+        $status = is_array($dados) && isset($dados['status']) ? (int) $dados['status'] : 500;
+        return ($status >= 400 && $status < 500) ? $status : 500;
     }
 
     /**

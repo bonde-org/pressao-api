@@ -83,7 +83,7 @@ pressao-plugin/
 │   ├── class-api.php           # Cliente HTTP: Keycloak + API Pressão
 │   ├── class-render-helpers.php  # Helpers de render comuns (candidatos, avatares, compartilhar, ajuda, cookie, campos do ativista)
 │   ├── class-shortcode.php     # Shortcodes e renderização SSR
-│   ├── class-multicanal.php    # [pressao_multicanal]: widget padrão (Instagram, TikTok, e-mail, compartilhar)
+│   ├── class-multicanal.php    # [pressao_multicanal]: widget padrão (Instagram, TikTok, e-mail, telefone, compartilhar)
 │   └── class-ajax.php          # AJAX handlers
 ├── assets/
 │   ├── css/
@@ -96,7 +96,7 @@ pressao-plugin/
 │   │   ├── Anton/
 │   │   ├── Host_Grotesk/
 │   │   └── Funnel_Display/     # presente; não usada no [pressao_fluxo]
-│   ├── icons/                  # SVG de canais (inclui x), compartilhar/enviar, copiar, download, setas, check, fechar, chevron, localização, interrogação e raio (via CSS mask-image; URLs absolutas injetadas como --pressao-icon-*)
+│   ├── icons/                  # SVG de canais (inclui x e telefone), compartilhar/enviar, copiar, download, setas, check, fechar, chevron, localização, interrogação, raio e os do telefone (telefone-entrada, lapis, pessoas, info, alerta; Bootstrap Icons, MIT) (via CSS mask-image; URLs absolutas injetadas como --pressao-icon-*)
 │   ├── vendor/tom-select/      # Autocomplete do fluxo único (+ remoção no admin)
 │   ├── examples/               # CSV + scripts REST (apoiadores)
 │   └── js/
@@ -338,12 +338,12 @@ Os shortcodes ligados à campanha aceitam `campaign` e caem em `pressao_campaign
 
 ### `[pressao_multicanal]` — widget padrão multicanal
 
-Shortcode recomendado para campanhas: uma home com os canais da campanha (Instagram, TikTok, e-mail) e o
+Shortcode recomendado para campanhas: uma home com os canais da campanha (Instagram, TikTok, e-mail, telefone) e o
 compartilhamento, seguindo o Figma "Widget padrão". Mobile em drawer de tela cheia; desktop em card de duas
 colunas (hero à esquerda, etapas no painel direito, modais centralizados).
 
 ```text
-[pressao_multicanal campaign="uuid" canais="instagram,tiktok,email" countdown="3" redes="whatsapp,x,instagram"]
+[pressao_multicanal campaign="uuid" canais="instagram,tiktok,email,telefone" countdown="3" redes="whatsapp,x,instagram"]
 ```
 
 **Cards:** só entram os canais que têm alvo na API, na ordem de `canais`. Qualquer ordem é permitida; a seta
@@ -362,14 +362,36 @@ mobile. "Agora não" registra a ação sem ativista.
 = título do template, "Ver Texto" com o corpo e formulário nome/e-mail/WhatsApp. O envio cria a ação
 (`canal=email`) com o ativista.
 
+**Telefone** (Figma V2, "ligamos para você"): o card só aparece com o alvo **agregado** de telefone da API
+(alvo telefone individual é ignorado). Telas:
+
+1. "Como funciona" (3 passos) e, no alvo da vez, o aviso de que a próxima ligação pode ir para outro alvo.
+2. Formulário "Preencha seus dados para gente te ligar:": "Você vai ligar para:" com o alvo da vez
+   (`pressao_proximo_membro`, badge "Alvo da vez") ou um select com os membros (`telefone_selecao="escolher"`);
+   roteiro recolhível (template `telefone`, com `{alvo_nome}`, `{campanha_nome}` e `{ativista_nome}` trocados no
+   navegador); nome, telefone com DDD e e-mail conforme `telefone_email`. "Já pode me ligar" cria a ação com
+   `membro_id` e `selecao` (`automatica` no alvo da vez, `ativista` no select).
+3. Modal "Vamos te ligar em instantes" ("O número pode começar com (DDD)" do número de origem da campanha);
+   depois de 90 s aparece "Fechar e acompanhar depois".
+4. "Ligação em andamento" com o roteiro aberto, quando o ativista atende.
+5. Sucesso ("Ligação realizada com sucesso!", cookie da ação, contador, home ou compartilhar) ou uma das telas de
+   erro do Figma com "Iniciar ligação novamente" (`pressao_nova_ligacao`): erros do ativista mostram "Seu número" com
+   "Alterar"; erros do alvo (não atendeu, ocupado) sugerem compartilhar.
+
+O status vem de `pressao_status_ligacao` a cada 2 s (5 s depois de 1 min); o polling para ao fechar a tela. A ação
+em andamento fica em `sessionStorage` (`pressao_mc_ligacao_{alvo_id}`) e é retomada ao reabrir o card. O cookie
+`pressao_acoes_realizadas` só é gravado quando a ligação conclui.
+
 **Feedback:** "Legal, sua pressão já está valendo!" por 1 s; depois volta para a home ou, sem canal pendente,
 abre o compartilhar ("Convide mais pessoas": copiar link, redes de `redes`, imagens para postar).
 
 | Atributo | Padrão | Descrição |
 |----------|--------|-----------|
 | `campaign` | option | ID da campanha |
-| `canais` | `instagram,tiktok,email` | Canais e ordem dos cards |
-| `alvo_instagram` / `alvo_tiktok` / `alvo_email` | — | Alvo de cada card. Vazio: primeiro alvo do canal; no e-mail, o agregado |
+| `canais` | `instagram,tiktok,email,telefone` | Canais e ordem dos cards |
+| `alvo_instagram` / `alvo_tiktok` / `alvo_email` / `alvo_telefone` | — | Alvo de cada card. Vazio: primeiro alvo do canal; no e-mail e no telefone, o agregado |
+| `telefone_selecao` | `alvo_da_vez` | `alvo_da_vez`: a API escolhe o membro (badge "Alvo da vez"); `escolher`: select com os membros |
+| `telefone_email` | `obrigatorio` | Campo de e-mail no telefone: `obrigatorio`, `opcional` ou `oculto` (oculto também tira o aviso de privacidade) |
 | `cache` | `0` | TTL do cache de alvos (`0` sorteia template a cada visita) |
 | `alvos` | `candidatos` | Palavra usada no título padrão e na lista ("Candidatos que serão pressionados") |
 | `selo` | `Faça sua cobrança aos candidatos` | Pílula do topo (vazio esconde) |
@@ -377,13 +399,15 @@ abre o compartilhar ("Convide mais pessoas": copiar link, redes de `redes`, imag
 | `subtitle` | `Marque quem ainda não se comprometeu e ajude a fortalecer o movimento.` | Subtítulo |
 | `progresso` | `1` | `0` remove a barra "Etapas que você já fez" |
 | `countdown` | `3` | Segundos de "Abrindo em N..." antes de abrir o app; `0` abre após 1,5 s |
-| `tempo_instagram` / `tempo_tiktok` / `tempo_email` | `2 min` / `2 min` / `1 min` | Tempo exibido nos cards |
+| `tempo_instagram` / `tempo_tiktok` / `tempo_email` / `tempo_telefone` | `2 min` / `2 min` / `1 min` / `5 min` | Tempo exibido nos cards |
 | `ajuda_titulo` / `ajuda` | `Como funciona?` / texto padrão | Modal `?`. Sem `ajuda`, usa o conteúdo de `pressao_fluxo_ajuda` se preenchido |
-| `redes` | `whatsapp,x,instagram` | Redes do compartilhar (aceita também `messenger`) |
+| `redes` | `whatsapp,x,instagram` | Redes do compartilhar (aceita também `facebook`; rede sem link no admin fica desabilitada) |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
 
 Assets: `pressao-ui.css` + `multicanal.css` + `pressao-core.js` + `share-images.js` + `multicanal.js` (só
-quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`. Contador
+quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`; o telefone
+usa também `pressao_proximo_membro`, `pressao_status_ligacao` e `pressao_nova_ligacao`. O config do widget leva
+`privacidade_url` (`get_privacy_policy_url()`) para o link do aviso de privacidade. Contador
 `.pressao-acoes-counter` animado por `PressaoCore.updateCounter`.
 
 ### Shortcodes legados
@@ -552,6 +576,10 @@ Todos usam o TTL de `pressao_session_duration` e são limpos de uma vez por `cle
 | `pressao_acoes_realizadas` | Mapa `alvoId → {timestamp, acao_id, status, user_id}` — fonte de verdade do progresso e do estado SSR. Chaves sintéticas (sem `acao_id`): `__compartilhar` (compartilhou), `__naouso_{canal}` (clicou "Não uso" no `[pressao_multicanal]`; vale para a pessoa, não para a campanha) e `__lead` (já pedimos o e-mail no `[pressao_multicanal]`) |
 | `pressao_usuario_id` | ID anônimo do usuário (legado) |
 
+Fora dos cookies, o `[pressao_multicanal]` guarda a ligação de telefone em andamento em `sessionStorage`
+(`pressao_mc_ligacao_{alvo_id}` → `acaoId`, telefone, membro escolhido, DDD de origem, nome do alvo e roteiro). A
+chave some quando a ligação conclui ou falha, e com o fechamento da aba.
+
 O payload de `pressao_acoes_realizadas` é mantido enxuto de propósito: estourar ~4KB derruba os cookies de sessão do WordPress e o AJAX começa a responder 403 "Nonce inválido".
 
 Instagram/TikTok disparam `pressao_realizar_acao` **ao abrir o modal**. Se o nonce embutido na página estiver inválido (page cache aquecido por outro usuário, ou cookie de login WP perdido), o erro aparece na hora. O plugin renova o nonce via `pressao_refresh_nonce` antes do POST e tenta de novo uma vez se ainda falhar.
@@ -564,12 +592,21 @@ Todos registrados nas variantes logada e `nopriv`:
 |--------|-------------------------------|-----------------|
 | `pressao_refresh_nonce` | — | Nenhum: devolve `wp_create_nonce('pressao_acao_nonce')` da sessão atual (sem exigir nonce prévio) |
 | `pressao_get_campanha` | `get_campanha` | `GET /api/v1/campanhas/{id}` |
-| `pressao_realizar_acao` | `criar_acao_com_ativista` / `criar_acao_sem_ativista` | `POST /api/v1/acoes/` |
+| `pressao_realizar_acao` | `criar_acao_com_ativista` / `criar_acao_sem_ativista` | `POST /api/v1/acoes/` (aceita `membro_id` e `selecao`; no telefone exige `sessao_id`) |
+| `pressao_proximo_membro` | `get_proximo_membro` | `GET /api/v1/alvos/{id}/proximo-membro` (devolve `membro`, `template_id`, `roteiro`) |
+| `pressao_status_ligacao` | `get_status_ligacao` | `GET /api/v1/acoes/{id}/ligacao` (em `CONCLUIDA` invalida o contador e devolve `acoes_confirmadas`) |
+| `pressao_nova_ligacao` | `nova_ligacao` | `POST /api/v1/acoes/{id}/ligacoes` (`telefone` e `membro_id` opcionais) |
 | `pressao_confirmar_acao` | `confirmar_acao` | `PATCH /api/v1/acoes/{id}/confirmar` |
 | `pressao_get_acoes_status` | — | Nenhum: lê o estado do cookie `pressao_acoes_realizadas` |
 | `pressao_buscar_candidatos` | — | Nenhum: busca em `pressao_candidatos` para o autocomplete do `[pressao_fluxo]` (`q` com 2+ caracteres; ou `estado` + `cargos[]` opcionais do "Filtre por estado") |
 
 `pressao_realizar_acao` e `pressao_confirmar_acao` invalidam o transient do contador (`invalidar_cache_contador`) quando recebem `campanha_id` no POST.
+
+**Posse da ligação:** a service account do plugin enxerga qualquer ação na API. Por isso `pressao_realizar_acao`
+(telefone) e `pressao_nova_ligacao` gravam o transient `pressao_ligacao_{md5(acao_id)}` = `sessao_id` (1 h), e
+`pressao_status_ligacao` / `pressao_nova_ligacao` só respondem quando o `sessao_id` enviado bate (senão, 403
+"Ligação não encontrada para esta sessão"). Erros 4xx da API nesses handlers são repassados com o mesmo status
+(ex.: 409 com ligação em andamento).
 
 Handlers só do admin (logado, `manage_options` + nonce `pressao_apoiadores_imagens`; sem `nopriv`):
 
