@@ -99,6 +99,9 @@ config:
   KEYCLOAK_CLIENT_ID: pressao-api
   SENDGRID_SANDBOX_MODE: "true"
   SENDGRID_WEBHOOK_URL: /api/v1/webhooks/sendgrid
+  TWILIO_SANDBOX_MODE: "true"
+  # Fora do dry-run: URL pública https (https://host/api/v1/webhooks/twilio)
+  TWILIO_WEBHOOK_URL: /api/v1/webhooks/twilio
 
 # Credenciais da aplicação.
 # Em produção: secrets.existingSecret + SealedSecrets / ExternalSecrets.
@@ -110,6 +113,8 @@ secrets:
   SENDGRID_WEBHOOK_VERIFICATION_KEY: ""
   TWILIO_ACCOUNT_SID: "mock-sid"
   TWILIO_AUTH_TOKEN: "mock-token"
+  TWILIO_API_KEY_SID: ""
+  TWILIO_API_KEY_SECRET: ""
   # Usado somente quando database.enabled=false e database.existingSecret está vazio
   DATABASE_URL: "postgresql://pressao:pressao123@postgres:5432/pressao"
 
