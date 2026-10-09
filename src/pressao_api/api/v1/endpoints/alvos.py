@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,32 +12,53 @@ from pressao_api.repositories.alvo_repository import AlvoRepository
 from pressao_api.repositories.campanha_repository import CampanhaRepository
 from pressao_api.repositories.template_repository import TemplateRepository
 from pressao_api.schemas.acao import CanalEnum
-from pressao_api.schemas.alvo import AlvoCreate, AlvoMembroPublico, AlvoResponse, AlvoUpdate
+from pressao_api.schemas.alvo import (
+    AlvoCreate,
+    AlvoMembroPublico,
+    AlvoMembroTelefonePublico,
+    AlvoResponse,
+    AlvoUpdate,
+)
+from pressao_api.schemas.telefone import ProximoMembroResponse
 from pressao_api.schemas.template import TemplateSorteadoResponse
-from pressao_api.services.alvo_agregado import AlvoAgregadoService
+from pressao_api.services.alvo_agregado import (
+    TIPOS_AGREGADOS,
+    AlvoAgregadoService,
+    membro_telefone_publico,
+)
+from pressao_api.services.telefone_alvo_da_vez import SemMembrosTelefoneError, escolher_membro
 from pressao_api.services.templates import sortear_template
 
 router = APIRouter(prefix="/alvos", tags=["Alvos"])
 
 CANAIS_COM_TEMPLATE = {
     TipoContato.EMAIL: CanalEnum.EMAIL.value,
+    TipoContato.TELEFONE: CanalEnum.TELEFONE.value,
     TipoContato.INSTAGRAM: CanalEnum.INSTAGRAM.value,
     TipoContato.TIKTOK: CanalEnum.TIKTOK.value,
 }
+
+
+def _membros_publicos(
+    membros: list[dict[str, Any]],
+) -> list[AlvoMembroTelefonePublico | AlvoMembroPublico]:
+    return [
+        AlvoMembroTelefonePublico(**m) if "id" in m else AlvoMembroPublico(**m) for m in membros
+    ]
 
 
 def _montar_resposta_com_template(
     alvo: Alvo,
     templates_por_canal: dict[str, list[Template]],
     total_membros: int | None = None,
-    membros: list[str] | None = None,
+    membros: list[dict[str, Any]] | None = None,
 ) -> AlvoResponse:
     """Monta a resposta do alvo sorteando template para canais que suportam preview."""
     resposta = AlvoResponse.model_validate(alvo)
     if total_membros is not None:
         resposta.total_membros = total_membros
     if membros is not None:
-        resposta.membros = [AlvoMembroPublico(nome=nome) for nome in membros]
+        resposta.membros = _membros_publicos(membros)
 
     canal_template = CANAIS_COM_TEMPLATE.get(alvo.tipo_contato)
     if not canal_template:
@@ -47,6 +69,10 @@ def _montar_resposta_com_template(
         resposta.template = TemplateSorteadoResponse.model_validate(sorteado)
 
     return resposta
+
+
+def _e_individual_agregavel(alvo: Alvo) -> bool:
+    return alvo.tipo_contato in TIPOS_AGREGADOS and alvo.modo == ModoAlvo.INDIVIDUAL
 
 
 @router.post("/", response_model=AlvoResponse, status_code=status.HTTP_201_CREATED)
@@ -71,9 +97,9 @@ async def criar_alvo(
 
     alvo = await alvo_repo.criar(request.model_dump())
 
-    if request.tipo_contato.value == TipoContato.EMAIL.value:
+    if _e_individual_agregavel(alvo):
         agregado_service = AlvoAgregadoService(db)
-        await agregado_service.sincronizar_membros(request.campanha_id)
+        await agregado_service.sincronizar_membros_tipo(request.campanha_id, alvo.tipo_contato)
 
     return alvo
 
@@ -88,9 +114,9 @@ async def listar_alvos_por_campanha(
     """
     Lista alvos para exibição na campanha.
 
-    E-mails individuais são agrupados em um alvo agregado; outros canais listam-se
-    individualmente. Alvos de e-mail, Instagram e TikTok vêm com template sorteado
-    neste request quando houver templates ativos no canal.
+    E-mails e telefones individuais são agrupados em um alvo agregado por canal; outros
+    canais listam-se individualmente. Alvos de e-mail, telefone, Instagram e TikTok vêm com
+    template sorteado neste request quando houver templates ativos no canal.
     """
     agregado_service = AlvoAgregadoService(db)
     alvos = await agregado_service.listar_para_exibicao(campanha_id, ativo)
@@ -106,13 +132,49 @@ async def listar_alvos_por_campanha(
         membros = None
         if alvo.modo == ModoAlvo.AGREGADO:
             total_membros = await agregado_service.contar_membros_agregado(alvo.id)
-            membros = await agregado_service.listar_nomes_membros(alvo.id)
+            membros = await agregado_service.listar_membros_publicos(alvo)
         respostas.append(
             _montar_resposta_com_template(
                 alvo, templates_por_canal, total_membros=total_membros, membros=membros
             )
         )
     return respostas
+
+
+@router.get(
+    "/{alvo_id}/proximo-membro",
+    response_model=ProximoMembroResponse,
+    summary="Alvo da vez do agregado de telefone",
+)
+async def obter_proximo_membro(
+    alvo_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Sugere o membro com menos ligações e sorteia um roteiro (template do canal telefone).
+
+    Não reserva o membro: a escolha definitiva acontece ao criar a ação.
+    """
+    alvo = await AlvoRepository(db).buscar_por_id(alvo_id)
+    if not alvo:
+        raise HTTPException(status_code=404, detail="Alvo não encontrado")
+    if alvo.tipo_contato != TipoContato.TELEFONE or alvo.modo != ModoAlvo.AGREGADO:
+        raise HTTPException(status_code=400, detail="Alvo não é o agregado de telefone")
+
+    try:
+        membro, _ = await escolher_membro(db, alvo.id)
+    except SemMembrosTelefoneError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    templates = await TemplateRepository(db).listar_ativos_por_canal(
+        alvo.campanha_id, CanalEnum.TELEFONE.value
+    )
+    sorteado = sortear_template(templates)
+    return ProximoMembroResponse(
+        membro=AlvoMembroTelefonePublico(**membro_telefone_publico(membro)),
+        template=TemplateSorteadoResponse.model_validate(sorteado) if sorteado else None,
+    )
 
 
 @router.get("/{alvo_id}", response_model=AlvoResponse)
@@ -140,7 +202,7 @@ async def obter_alvo(
     if alvo.modo == ModoAlvo.AGREGADO:
         agregado_service = AlvoAgregadoService(db)
         total_membros = await agregado_service.contar_membros_agregado(alvo.id)
-        membros = await agregado_service.listar_nomes_membros(alvo.id)
+        membros = await agregado_service.listar_membros_publicos(alvo)
 
     return _montar_resposta_com_template(
         alvo, templates_por_canal, total_membros=total_membros, membros=membros
@@ -159,7 +221,7 @@ async def atualizar_alvo(
     if not alvo:
         raise HTTPException(status_code=404, detail="Alvo não encontrado")
 
-    if alvo.tipo_contato == TipoContato.EMAIL and alvo.modo == ModoAlvo.INDIVIDUAL:
+    if alvo.modo == ModoAlvo.INDIVIDUAL:
         agregado_service = AlvoAgregadoService(db)
         await agregado_service.sincronizar_membros(alvo.campanha_id)
 
@@ -178,14 +240,12 @@ async def deletar_alvo(
         raise HTTPException(status_code=404, detail="Alvo não encontrado")
 
     campanha_id = alvo.campanha_id
-    era_email_individual = (
-        alvo.tipo_contato == TipoContato.EMAIL and alvo.modo == ModoAlvo.INDIVIDUAL
-    )
+    era_individual_agregavel = _e_individual_agregavel(alvo)
 
     deletado = await repo.deletar(alvo_id)
     if not deletado:
         raise HTTPException(status_code=404, detail="Alvo não encontrado")
 
-    if era_email_individual:
+    if era_individual_agregavel:
         agregado_service = AlvoAgregadoService(db)
         await agregado_service.sincronizar_membros(campanha_id)

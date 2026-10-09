@@ -15,6 +15,17 @@ from pressao_api.schemas.campanha import (
 
 router = APIRouter(prefix="/campanhas", tags=["Campanhas"])
 
+ERRO_TELEFONE_ORIGEM_EM_USO = "Este número de origem já pertence a outra campanha"
+
+
+async def _telefone_origem_em_uso(
+    repo: CampanhaRepository, telefone_origem: str | None, campanha_id: UUID | None = None
+) -> bool:
+    if not telefone_origem:
+        return False
+    dona = await repo.buscar_por_telefone_origem(telefone_origem)
+    return dona is not None and dona.id != campanha_id
+
 
 @router.post("/", response_model=CampanhaResponse, status_code=status.HTTP_201_CREATED)
 async def criar_campanha(
@@ -32,6 +43,9 @@ async def criar_campanha(
     existente = await repo.buscar_por_nome(request.nome)
     if existente:
         raise HTTPException(status_code=400, detail="Já existe uma campanha com este nome")
+
+    if await _telefone_origem_em_uso(repo, request.telefone_origem):
+        raise HTTPException(status_code=400, detail=ERRO_TELEFONE_ORIGEM_EM_USO)
 
     campanha = await repo.criar(request.model_dump())
     return campanha
@@ -75,6 +89,9 @@ async def atualizar_campanha(
         )
 
     repo = CampanhaRepository(db)
+    if await _telefone_origem_em_uso(repo, request.telefone_origem, campanha_id):
+        raise HTTPException(status_code=400, detail=ERRO_TELEFONE_ORIGEM_EM_USO)
+
     campanha = await repo.atualizar(campanha_id, request.model_dump(exclude_none=True))
     if not campanha:
         raise HTTPException(status_code=404, detail="Campanha não encontrada")
