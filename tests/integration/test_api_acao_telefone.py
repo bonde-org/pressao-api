@@ -92,9 +92,7 @@ class TestCriarAcaoTelefone:
         assert dados["alvo"]["cargo"] == "Deputado"
         assert dados["selecao"] == "ativista"
 
-    def test_membro_sugerido_mantem_selecao_automatica(
-        self, client, campanha_telefone, ativista
-    ):
+    def test_membro_sugerido_mantem_selecao_automatica(self, client, campanha_telefone, ativista):
         membro = campanha_telefone["membros"]["Fulana Souza"]
         data = _criar(client, campanha_telefone, membro_id=membro["id"], selecao="automatica")
 
@@ -355,9 +353,7 @@ class TestEventosLigacao:
 
 
 class TestNovaTentativa:
-    def test_nova_tentativa_reabre_acao_com_novo_disparo(
-        self, client, campanha_telefone, ativista
-    ):
+    def test_nova_tentativa_reabre_acao_com_novo_disparo(self, client, campanha_telefone, ativista):
         data = _criar(client, campanha_telefone)
         _simular(client, _ligacao_id(data), "ativista", "no-answer")
 
@@ -391,9 +387,7 @@ class TestNovaTentativa:
         assert resp.json()["proximo_passo"]["dados"]["alvo"]["id"] == membro["id"]
         assert resp.json()["proximo_passo"]["dados"]["selecao"] == "ativista"
 
-    def test_conclusao_apos_nova_tentativa_conta_uma_vez(
-        self, client, campanha_telefone, ativista
-    ):
+    def test_conclusao_apos_nova_tentativa_conta_uma_vez(self, client, campanha_telefone, ativista):
         campanha_id = campanha_telefone["campanha"]["id"]
         data = _criar(client, campanha_telefone)
         _simular(client, _ligacao_id(data), "alvo", "no-answer")

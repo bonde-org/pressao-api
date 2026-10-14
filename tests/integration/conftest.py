@@ -53,9 +53,7 @@ def campanha_telefone(client, db_session, mock_admin, telefone_dry_run):
     assert template.status_code == 201, template.text
 
     alvos = client.get(f"/api/v1/alvos/campanha/{campanha['id']}").json()
-    agregado = next(
-        a for a in alvos if a["modo"] == "agregado" and a["tipo_contato"] == "telefone"
-    )
+    agregado = next(a for a in alvos if a["modo"] == "agregado" and a["tipo_contato"] == "telefone")
 
     return {
         "campanha": campanha,

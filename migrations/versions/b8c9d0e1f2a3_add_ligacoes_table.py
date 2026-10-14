@@ -49,7 +49,9 @@ def upgrade() -> None:
     tables = set(inspector.get_table_names())
 
     if "telefone_origem" not in campanhas_columns:
-        op.add_column("campanhas", sa.Column("telefone_origem", sa.String(length=20), nullable=True))
+        op.add_column(
+            "campanhas", sa.Column("telefone_origem", sa.String(length=20), nullable=True)
+        )
         op.create_unique_constraint(
             "uq_campanhas_telefone_origem", "campanhas", ["telefone_origem"]
         )
@@ -63,9 +65,7 @@ def upgrade() -> None:
             sa.Column("alvo_id", sa.UUID(), nullable=False),
             sa.Column("telefone_ativista", sa.String(length=20), nullable=False),
             sa.Column("telefone_alvo", sa.String(length=20), nullable=False),
-            sa.Column(
-                "etapa", status_ligacao_enum, nullable=False, server_default="INICIANDO"
-            ),
+            sa.Column("etapa", status_ligacao_enum, nullable=False, server_default="INICIANDO"),
             sa.Column("origem_falha", origem_falha_enum, nullable=True),
             sa.Column("motivo_falha", sa.String(length=20), nullable=True),
             sa.Column("provedor", sa.String(length=20), nullable=False),

@@ -33,9 +33,7 @@ def _simular(client, ligacao_id, perna, status, duracao_seg=None):
 
 
 class TestListagemAgregadoTelefone:
-    def test_lista_agregado_de_telefone_e_oculta_individuais(
-        self, client, campanha_telefone
-    ):
+    def test_lista_agregado_de_telefone_e_oculta_individuais(self, client, campanha_telefone):
         campanha_id = campanha_telefone["campanha"]["id"]
         alvos = client.get(f"/api/v1/alvos/campanha/{campanha_id}").json()
 
@@ -47,9 +45,7 @@ class TestListagemAgregadoTelefone:
         assert agregado["total_membros"] == 3
         assert agregado["template"]["canal"] == "telefone"
 
-    def test_membros_publicos_sem_contato_em_ordem_alfabetica(
-        self, client, campanha_telefone
-    ):
+    def test_membros_publicos_sem_contato_em_ordem_alfabetica(self, client, campanha_telefone):
         agregado = campanha_telefone["agregado"]
         membros = agregado["membros"]
 
@@ -64,9 +60,7 @@ class TestListagemAgregadoTelefone:
         assert ciclana["partido"] == "PT"
         assert all("contato" not in m for m in membros)
 
-    def test_agregados_de_email_e_telefone_convivem(
-        self, client, mock_admin, campanha_telefone
-    ):
+    def test_agregados_de_email_e_telefone_convivem(self, client, mock_admin, campanha_telefone):
         app.dependency_overrides[get_current_user] = lambda: mock_admin
         campanha_id = campanha_telefone["campanha"]["id"]
         client.post(
@@ -147,9 +141,7 @@ class TestProximoMembro:
         data = client.get(f"/api/v1/alvos/{agregado['id']}/proximo-membro").json()
         assert data["membro"]["id"] == membros["Ciclana de Tal"]["id"]
 
-    def test_recusa_alvo_que_nao_e_agregado_de_telefone(
-        self, client, campanha_telefone
-    ):
+    def test_recusa_alvo_que_nao_e_agregado_de_telefone(self, client, campanha_telefone):
         membro = campanha_telefone["membros"]["Ciclana de Tal"]
         resp = client.get(f"/api/v1/alvos/{membro['id']}/proximo-membro")
         assert resp.status_code == 400

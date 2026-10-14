@@ -166,9 +166,7 @@ class TestCampanhaTelefoneOrigem:
         )
         assert atualizada.status_code == 400
 
-    def test_atualizar_telefone_origem_da_propria_campanha(
-        self, client, db_session, mock_admin
-    ):
+    def test_atualizar_telefone_origem_da_propria_campanha(self, client, db_session, mock_admin):
         app.dependency_overrides[get_current_user] = lambda: mock_admin
 
         campanha = client.post(

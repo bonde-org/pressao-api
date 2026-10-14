@@ -85,9 +85,7 @@ class AlvoAgregadoService:
     ) -> list[Alvo]:
         alvos = await self.alvo_repo.listar_por_campanha(campanha_id, ativo)
         return [
-            alvo
-            for alvo in alvos
-            if alvo.tipo_contato == tipo and alvo.modo == ModoAlvo.INDIVIDUAL
+            alvo for alvo in alvos if alvo.tipo_contato == tipo and alvo.modo == ModoAlvo.INDIVIDUAL
         ]
 
     async def sincronizar_membros_tipo(self, campanha_id: UUID, tipo: TipoContato) -> int:
