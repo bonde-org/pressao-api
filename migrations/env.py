@@ -16,7 +16,11 @@ from pressao_api.core.database import Base
 # access to the values within the .ini file in use.
 config = context.config
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# O Alembic usa engine síncrono: "postgresql://" cru resolve para o driver psycopg v3
+# (não instalado na imagem); o psycopg2-binary é a dependência declarada.
+config.set_main_option(
+    "sqlalchemy.url", settings.DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
