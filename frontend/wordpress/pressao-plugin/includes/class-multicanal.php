@@ -11,8 +11,11 @@ if (!defined('ABSPATH')) {
 
 class PressaoPlugin_Multicanal {
 
-    const CANAIS = ['instagram', 'tiktok', 'email'];
+    const CANAIS = ['instagram', 'tiktok', 'email', 'telefone'];
+    const CANAIS_AGREGADOS = ['email', 'telefone'];
     const REDES = ['whatsapp', 'x', 'instagram', 'facebook'];
+    const TELEFONE_SELECOES = ['alvo_da_vez', 'escolher'];
+    const TELEFONE_EMAIL = ['obrigatorio', 'opcional', 'oculto'];
 
     /** @var PressaoPlugin_API */
     private $api;
@@ -39,13 +42,17 @@ class PressaoPlugin_Multicanal {
                 'titulo' => __('Email', 'pressao-plugin'),
                 'descricao' => __('Envie diretamente para os alvos', 'pressao-plugin'),
             ],
+            'telefone' => [
+                'titulo' => __('Telefone', 'pressao-plugin'),
+                'descricao' => __('Ligue e cobre uma posição', 'pressao-plugin'),
+            ],
         ];
         return $labels[$canal] ?? ['titulo' => ucfirst($canal), 'descricao' => ''];
     }
 
     /**
      * Alvo de um canal: o id informado (se for daquele canal) ou o primeiro do canal.
-     * No e-mail, sem id informado, prefere o alvo agregado.
+     * No e-mail e no telefone, sem id informado, prefere o alvo agregado.
      *
      * @param array  $alvos   Lista da API.
      * @param string $canal
@@ -66,7 +73,7 @@ class PressaoPlugin_Multicanal {
             return null;
         }
 
-        if ($canal === 'email') {
+        if (in_array($canal, self::CANAIS_AGREGADOS, true)) {
             foreach ($do_canal as $alvo) {
                 if (($alvo['modo'] ?? '') === 'agregado') {
                     return $alvo;
@@ -90,10 +97,13 @@ class PressaoPlugin_Multicanal {
     private function parse_atts($atts) {
         $atts = shortcode_atts([
             'campaign' => get_option('pressao_campaign_id', ''),
-            'canais' => 'instagram,tiktok,email',
+            'canais' => 'instagram,tiktok,email,telefone',
             'alvo_instagram' => '',
             'alvo_tiktok' => '',
             'alvo_email' => '',
+            'alvo_telefone' => '',
+            'telefone_selecao' => 'alvo_da_vez',
+            'telefone_email' => 'obrigatorio',
             'cache' => 0,
             'alvos' => __('candidatos', 'pressao-plugin'),
             'selo' => __('Faça sua cobrança aos candidatos', 'pressao-plugin'),
@@ -104,6 +114,7 @@ class PressaoPlugin_Multicanal {
             'tempo_instagram' => '2 min',
             'tempo_tiktok' => '2 min',
             'tempo_email' => '1 min',
+            'tempo_telefone' => '5 min',
             'ajuda_titulo' => '',
             'ajuda' => '',
             'redes' => 'whatsapp,x,instagram',
@@ -112,6 +123,8 @@ class PressaoPlugin_Multicanal {
         ], $atts, 'pressao_multicanal');
 
         $progresso = strtolower(trim((string) $atts['progresso']));
+        $telefone_selecao = strtolower(trim((string) $atts['telefone_selecao']));
+        $telefone_email = strtolower(trim((string) $atts['telefone_email']));
 
         return [
             'campanha_id' => sanitize_text_field($atts['campaign']),
@@ -120,7 +133,10 @@ class PressaoPlugin_Multicanal {
                 'instagram' => sanitize_text_field($atts['alvo_instagram']),
                 'tiktok' => sanitize_text_field($atts['alvo_tiktok']),
                 'email' => sanitize_text_field($atts['alvo_email']),
+                'telefone' => sanitize_text_field($atts['alvo_telefone']),
             ],
+            'telefone_selecao' => in_array($telefone_selecao, self::TELEFONE_SELECOES, true) ? $telefone_selecao : 'alvo_da_vez',
+            'telefone_email' => in_array($telefone_email, self::TELEFONE_EMAIL, true) ? $telefone_email : 'obrigatorio',
             'cache' => intval($atts['cache']),
             'alvos' => sanitize_text_field($atts['alvos']),
             'selo' => sanitize_text_field($atts['selo']),
@@ -132,6 +148,7 @@ class PressaoPlugin_Multicanal {
                 'instagram' => sanitize_text_field($atts['tempo_instagram']),
                 'tiktok' => sanitize_text_field($atts['tempo_tiktok']),
                 'email' => sanitize_text_field($atts['tempo_email']),
+                'telefone' => sanitize_text_field($atts['tempo_telefone']),
             ],
             'ajuda_titulo' => sanitize_text_field($atts['ajuda_titulo']),
             'ajuda' => wp_kses_post($atts['ajuda']),
@@ -154,7 +171,7 @@ class PressaoPlugin_Multicanal {
     /**
      * Config de um card a partir do alvo da API.
      */
-    private function canal_config($canal, array $alvo, $tempo) {
+    private function canal_config($canal, array $alvo, $tempo, array $o) {
         $labels = self::canal_labels($canal);
         $template = isset($alvo['template']) && is_array($alvo['template']) ? $alvo['template'] : [];
 
@@ -184,6 +201,26 @@ class PressaoPlugin_Multicanal {
             $config['total_membros'] = max($total, count($config['membros']), 1);
         }
 
+        if ($canal === 'telefone') {
+            $config['membros'] = [];
+            if (!empty($alvo['membros']) && is_array($alvo['membros'])) {
+                foreach ($alvo['membros'] as $membro) {
+                    if (!is_array($membro) || empty($membro['id']) || trim((string) ($membro['nome'] ?? '')) === '') {
+                        continue;
+                    }
+                    $config['membros'][] = [
+                        'id' => (string) $membro['id'],
+                        'nome' => trim((string) $membro['nome']),
+                        'cargo' => (string) ($membro['cargo'] ?? ''),
+                        'partido' => (string) ($membro['partido'] ?? ''),
+                    ];
+                }
+            }
+            $config['roteiro'] = $config['mensagem'];
+            $config['selecao'] = $o['telefone_selecao'];
+            $config['email_campo'] = $o['telefone_email'];
+        }
+
         return $config;
     }
 
@@ -203,8 +240,11 @@ class PressaoPlugin_Multicanal {
         $canais = [];
         foreach ($o['canais'] as $canal) {
             $alvo = self::encontrar_alvo($alvos, $canal, $o['alvo_ids'][$canal]);
+            if ($alvo && $canal === 'telefone' && ($alvo['modo'] ?? '') !== 'agregado') {
+                $alvo = null;
+            }
             if ($alvo) {
-                $canais[] = $this->canal_config($canal, $alvo, $o['tempos'][$canal]);
+                $canais[] = $this->canal_config($canal, $alvo, $o['tempos'][$canal], $o);
             }
         }
 
@@ -253,6 +293,7 @@ class PressaoPlugin_Multicanal {
             'countdown' => $o['countdown'],
             'redes' => $o['redes'],
             'share' => $share,
+            'privacidade_url' => function_exists('get_privacy_policy_url') ? get_privacy_policy_url() : '',
         ];
 
         $estados = [];

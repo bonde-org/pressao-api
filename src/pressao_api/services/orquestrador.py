@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,8 @@ from pressao_api.repositories.disparo_repository import DisparoRepository
 from pressao_api.repositories.template_repository import TemplateRepository
 from pressao_api.schemas.acao import CanalEnum, ProximoPassoTipoEnum, StatusAcaoEnum, TipoAcaoEnum
 from pressao_api.services.email_service import email_service
-from pressao_api.services.templates import sortear_template
+from pressao_api.services.telefone_ligacao import iniciar_tentativa
+from pressao_api.services.templates import aplicar_placeholders, sortear_template
 
 logger = structlog.get_logger()
 
@@ -38,6 +40,8 @@ class OrquestradorCanais:
         campanha: Campanha | None = None,
         template: Template | None = None,
         session: AsyncSession | None = None,
+        membro_id: UUID | None = None,
+        selecao: str | None = None,
     ) -> Acao:
         """Executa a estratégia do canal."""
         try:
@@ -59,6 +63,18 @@ class OrquestradorCanais:
                     raise ValueError("Sessão de banco obrigatória para ação multi_alvo")
                 await self._estrategia_email_multi_alvo(
                     acao, alvo=alvo, campanha=campanha, template=template, session=session
+                )
+            elif acao.tipo_acao == TipoAcaoEnum.MULTI_ALVO.value and canal == CanalEnum.TELEFONE:
+                if session is None:
+                    raise ValueError("Sessão de banco obrigatória para ação multi_alvo")
+                await self._estrategia_telefone_multi_alvo(
+                    acao,
+                    alvo=alvo,
+                    campanha=campanha,
+                    template=template,
+                    session=session,
+                    membro_id=membro_id,
+                    selecao=selecao,
                 )
             else:
                 await estrategia(acao, alvo=alvo, campanha=campanha, template=template)
@@ -170,6 +186,32 @@ class OrquestradorCanais:
             enviados=enviados,
             falhas=falhas,
             status=acao.status,
+        )
+
+    async def _estrategia_telefone_multi_alvo(
+        self,
+        acao: Acao,
+        alvo: Alvo | None = None,
+        campanha: Campanha | None = None,
+        template: Template | None = None,
+        session: AsyncSession | None = None,
+        membro_id: UUID | None = None,
+        selecao: str | None = None,
+    ):
+        """Estratégia para telefone multi-alvo: 1 ligação (disparo) para o alvo da vez."""
+        if session is None:
+            raise ValueError("Sessão de banco obrigatória para ação multi_alvo")
+        if alvo is None or campanha is None:
+            raise ValueError("Alvo agregado e campanha são obrigatórios para ação multi_alvo")
+
+        await iniciar_tentativa(
+            session,
+            acao,
+            agregado=alvo,
+            campanha=campanha,
+            membro_id=membro_id,
+            template=template,
+            selecao=selecao,
         )
 
     async def _estrategia_email(
@@ -355,15 +397,15 @@ class OrquestradorCanais:
     ) -> str:
         """Aplica os placeholders conhecidos ao texto social sorteado."""
         texto = template.conteudo if template else padrao
-        valores = {
-            "alvo_nome": alvo.nome if alvo else "",
-            "campanha_nome": campanha.nome if campanha else "Campanha de pressão",
-            "ativista_nome": "" if acao.anonimo else (acao.ativista_nome or ""),
-            "acao_id": str(acao.id),
-        }
-        for chave, valor in valores.items():
-            texto = texto.replace("{" + chave + "}", valor)
-        return texto
+        return aplicar_placeholders(
+            texto,
+            {
+                "alvo_nome": alvo.nome if alvo else "",
+                "campanha_nome": campanha.nome if campanha else "Campanha de pressão",
+                "ativista_nome": "" if acao.anonimo else (acao.ativista_nome or ""),
+                "acao_id": str(acao.id),
+            },
+        )
 
     def _resolver_url_postagem_social(
         self,

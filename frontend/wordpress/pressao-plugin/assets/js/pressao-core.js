@@ -327,8 +327,25 @@
     }
 
     /**
+     * POST com o nonce atual; só renova (postWithNonce) se ele vier inválido.
+     * Para chamadas repetidas, como o polling da ligação.
+     */
+    function postWithCurrentNonce(root, buildPayload, fallbackMessage) {
+        var nonce = root.dataset.nonce || data().nonce || '';
+        return postAjax(buildPayload(nonce)).then(function (response) {
+            if (response.success) {
+                return response;
+            }
+            if (isNonceError(responseMessage(response, ''))) {
+                return postWithNonce(root, buildPayload, fallbackMessage);
+            }
+            throw new Error(responseMessage(response, fallbackMessage));
+        });
+    }
+
+    /**
      * Cria a ação (pressao_realizar_acao).
-     * opts: { root, alvoId, campanhaId, canal, templateId, ativista }
+     * opts: { root, alvoId, campanhaId, canal, templateId, ativista, membroId?, selecao? }
      */
     function realizarAcao(opts) {
         var ativista = opts.ativista || null;
@@ -339,6 +356,8 @@
                 campanha_id: opts.campanhaId,
                 canal: opts.canal,
                 template_id: opts.templateId || '',
+                membro_id: opts.membroId || '',
+                selecao: opts.selecao || '',
                 nonce: nonce,
                 sessao_id: getOrCreateSessaoId(),
                 ativista_nome: (ativista && ativista.nome) || '',
@@ -346,6 +365,87 @@
                 ativista_telefone: (ativista && ativista.telefone) || ''
             };
         }, 'Erro ao criar ação');
+    }
+
+    /** Alvo da vez do agregado de telefone. opts: { root, alvoId } → { membro, roteiro } */
+    function proximoMembro(opts) {
+        return postWithNonce(opts.root, function (nonce) {
+            return { action: 'pressao_proximo_membro', alvo_id: opts.alvoId, nonce: nonce };
+        }, 'Não foi possível carregar o alvo da vez').then(function (response) {
+            return response.data || {};
+        });
+    }
+
+    /** Status da ligação. opts: { root, acaoId, campanhaId } → dados do handler */
+    function statusLigacao(opts) {
+        return postWithCurrentNonce(opts.root, function (nonce) {
+            return {
+                action: 'pressao_status_ligacao',
+                acao_id: opts.acaoId,
+                campanha_id: opts.campanhaId || '',
+                sessao_id: getOrCreateSessaoId(),
+                nonce: nonce
+            };
+        }, 'Não foi possível consultar a ligação').then(function (response) {
+            return response.data || {};
+        });
+    }
+
+    /** Nova tentativa na mesma ação. opts: { root, acaoId, telefone?, membroId? } */
+    function novaLigacao(opts) {
+        return postWithNonce(opts.root, function (nonce) {
+            return {
+                action: 'pressao_nova_ligacao',
+                acao_id: opts.acaoId,
+                telefone: opts.telefone || '',
+                membro_id: opts.membroId || '',
+                sessao_id: getOrCreateSessaoId(),
+                nonce: nonce
+            };
+        }, 'Não foi possível iniciar a ligação').then(function (response) {
+            return response.data || {};
+        });
+    }
+
+    /**
+     * Repete `tick` até ele resolver `true` ou `stop()` ser chamado.
+     * `tick` rejeitado não interrompe (rede instável); `intervalo(ms decorridos)` define a espera.
+     * Retorna { stop }.
+     */
+    function poll(tick, intervalo) {
+        var parado = false;
+        var timer = null;
+        var inicio = Date.now();
+
+        function agendar() {
+            if (parado) {
+                return;
+            }
+            timer = setTimeout(rodar, intervalo(Date.now() - inicio));
+        }
+
+        function rodar() {
+            if (parado) {
+                return;
+            }
+            Promise.resolve()
+                .then(tick)
+                .then(function (fim) {
+                    if (fim) {
+                        parado = true;
+                    } else {
+                        agendar();
+                    }
+                }, agendar);
+        }
+
+        rodar();
+        return {
+            stop: function () {
+                parado = true;
+                clearTimeout(timer);
+            }
+        };
     }
 
     /** opts: { root, acaoId, alvoId, campanhaId } */
@@ -754,6 +854,10 @@
         realizarAcao: realizarAcao,
         confirmarAcao: confirmarAcao,
         criarEConfirmarAcao: criarEConfirmarAcao,
+        proximoMembro: proximoMembro,
+        statusLigacao: statusLigacao,
+        novaLigacao: novaLigacao,
+        poll: poll,
         copyText: copyText,
         countdown: countdown,
         wait: wait,

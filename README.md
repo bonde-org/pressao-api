@@ -289,8 +289,12 @@ make docker-down
 | `SENDGRID_SANDBOX_MODE` | Se `true`, não entrega e-mails reais | `true` |
 | `SENDGRID_WEBHOOK_VERIFICATION_KEY` | Chave pública ECDSA do Event Webhook | `MFkwEwYH...` |
 | `SENDGRID_WEBHOOK_URL` | URL pública do webhook | `https://seu-dominio/api/v1/webhooks/sendgrid` |
-| `TWILIO_ACCOUNT_SID` | SID da conta Twilio | `ACxxxxx` |
-| `TWILIO_AUTH_TOKEN` | Token de autenticação Twilio | `xxxxx` |
+| `TWILIO_ACCOUNT_SID` | SID da conta Twilio (`AC...`, não o da API Key) | `ACxxxxx` |
+| `TWILIO_AUTH_TOKEN` | Auth Token da conta; valida `X-Twilio-Signature` (e autentica a API se não houver API Key) | `xxxxx` |
+| `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` | API Key Standard usada nas chamadas à API do Twilio | `SKxxxxx` / `xxxxx` |
+| `TWILIO_SANDBOX_MODE` | Se `true` (ou credenciais `mock-*`), ligações em dry-run | `true` |
+| `TWILIO_WEBHOOK_URL` | URL **pública https** dos webhooks do Twilio (base de TwiML e callbacks; a assinatura é validada sobre ela) | `https://seu-dominio/api/v1/webhooks/twilio` |
+| `TELEFONE_TIMEOUT_TOQUE_SEG` | Segundos de toque (ativista e alvo) antes de `no-answer` | `30` |
 | `LOG_LEVEL` | Nível de log | `INFO` / `DEBUG` |
 
 ### Configuração do Keycloak
@@ -491,7 +495,13 @@ Content-Type: application/json
 Retorna os alvos **para exibição** na campanha:
 
 - **E-mail:** um único item **agregado** (`modo=agregado`, nome padrão "Pressionar por E-mail") com `total_membros` e `membros` (só `nome` dos membros ativos, em ordem alfabética; sem contatos); os e-mails individuais **não** aparecem nesta lista.
-- **Outros canais** (WhatsApp, Instagram, telefone): um item por alvo (`modo=individual`).
+- **Telefone:** um único item **agregado** ("Pressionar por Telefone"), igual ao e-mail, mas `membros` traz `id`, `nome`, `cargo` e `partido` (de `metadados`), sem o número. `template` é o roteiro da ligação.
+- **Outros canais** (WhatsApp, Instagram, TikTok): um item por alvo (`modo=individual`).
+
+Fluxo de telefone: `GET /alvos/{agregado_id}/proximo-membro` (alvo da vez), `POST /acoes/` com
+`membro_id` opcional, `GET /acoes/{id}/ligacao` (status para o widget), `POST /acoes/{id}/ligacoes`
+(nova tentativa), os webhooks do Twilio (`/webhooks/twilio/...`, ver "Ligação de pressão (Twilio)") e
+`POST /webhooks/telefone/simular` (fora de produção, para o dry-run).
 
 ```http
 GET /api/v1/alvos/campanha/{campanha_id}
@@ -808,6 +818,70 @@ A API do SendGrid é mockada nos testes; com `SENDGRID_API_KEY=test-key` o sandb
 | 5s - 60s | **alta** | Resposta rápida e humana |
 | 60s - 120s | **media** | Resposta dentro do esperado |
 | > 120s | **baixa** | Resposta lenta |
+
+## 📞 Ligação de pressão (Twilio)
+
+"Ligamos para você": o Twilio liga para o ativista a partir do número da campanha (`campanhas.telefone_origem`).
+Quando ele atende, ouve "Para ligar agora para {alvo}, pressione 1" (protege contra caixa postal); com o 1, o
+Twilio disca para o alvo com o mesmo número como caller ID. Nada é gravado.
+
+### Endpoints chamados pelo Twilio (públicos, sem JWT, com `X-Twilio-Signature`)
+
+| Endpoint | Quando | Resposta |
+|----------|--------|----------|
+| `POST /api/v1/webhooks/twilio/twiml/{ligacao_id}` | Ativista atendeu | TwiML `<Gather>` "pressione 1" |
+| `POST /api/v1/webhooks/twilio/conectar/{ligacao_id}` | Resposta do `<Gather>` | `Digits=1` → `<Dial>` ao alvo; sem dígito → `FALHA` (`ativista`, `no-answer`) e `<Hangup>` |
+| `POST /api/v1/webhooks/twilio/status/{ligacao_id}/{ativista\|alvo}` | Status de cada perna | `204`; converte `CallStatus`/`CallDuration` em `EventoLigacao` (mesma máquina de estados do `/webhooks/telefone/simular`) |
+
+A assinatura é validada com `TWILIO_AUTH_TOKEN` sobre `TWILIO_WEBHOOK_URL` + caminho, e não sobre a URL que
+chega na API (o ingress/ngrok termina o TLS). Sem Auth Token real: aceito em development (warning), recusado em
+production.
+
+### Configuração (Console do Twilio, uma vez)
+
+1. **Account Info:** copiar Account SID (`AC...`) e Auth Token.
+2. **Account → API keys & tokens → Create API key** (Standard): copiar SID (`SK...`) e Secret (aparece uma vez).
+3. **Voice → Settings → Geo permissions:** habilitar Brazil; manter desligados países e serviços premium sem uso.
+4. **Phone Numbers → Active numbers:** número brasileiro com Voice e cadastro regulatório aprovado. Em "A call
+   comes in", um TwiML Bin com mensagem fixa (o número só origina ligações; `calls.create` passa o TwiML por chamada).
+5. **Usage triggers** (alerta de gasto diário de Voice) e **Monitor → Alerts** por e-mail (11200, 12100, 12300).
+
+### Ambiente local (ngrok)
+
+```bash
+ngrok http 8000            # ou --url=https://seu-dominio-estatico.ngrok-free.app
+```
+
+```bash
+# pressao-api/.env
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_API_KEY_SID=SK...
+TWILIO_API_KEY_SECRET=...
+TWILIO_SANDBOX_MODE=false
+TWILIO_WEBHOOK_URL=https://xxxx.ngrok-free.app/api/v1/webhooks/twilio
+```
+
+Reinicie a API depois de mudar o `.env` (o `--reload` só observa `.py`). Grave o número na campanha com
+`PUT /api/v1/campanhas/{id}` (`{"telefone_origem": "+55..."}`) e use alvos com celulares da equipe: **nunca**
+alvos reais no ambiente local. Sem domínio estático, a URL do ngrok muda a cada execução: atualize o `.env`.
+
+### Produção
+
+- Secret `pressao-api-app-prod`: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`.
+- Config (`argocd/application.yaml` / `helm/values-prod.yaml`): `TWILIO_SANDBOX_MODE: "false"` e
+  `TWILIO_WEBHOOK_URL: https://<host>/api/v1/webhooks/twilio`.
+- `TWILIO_SANDBOX_MODE: "true"` desliga as ligações reais sem deploy de código.
+
+### Troubleshooting
+
+| Sintoma | Causa provável |
+|---------|----------------|
+| Ação `FALHA` com `erro_provedor` e "TWILIO_WEBHOOK_URL precisa ser…" | URL relativa ou `http://` fora do dry-run |
+| `erro_provedor` "Twilio 20003" | Account SID/API Key errados (o SID da conta começa com `AC`) |
+| `erro_provedor` "Twilio 21215"/"13227" | Geo permissions sem Brasil |
+| Webhooks `403` no log | `TWILIO_WEBHOOK_URL` diferente da URL configurada no Twilio (ex.: ngrok reiniciado) ou Auth Token errado |
+| Alerta 11200 no Console | Twilio não alcança a API (ngrok parado, ingress bloqueando) |
 
 ## 🧪 Testes
 

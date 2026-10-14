@@ -12,16 +12,19 @@ from pressao_api.core.metrics import (
     acoes_tempo_confirmacao_seconds,
 )
 from pressao_api.core.security import get_current_user
-from pressao_api.models.alvo import ModoAlvo
+from pressao_api.models.alvo import ModoAlvo, TipoContato
+from pressao_api.models.ligacao import ETAPAS_TERMINAIS
 from pressao_api.repositories.acao_repository import AcaoRepository
 from pressao_api.repositories.alvo_membro_repository import AlvoMembroRepository
 from pressao_api.repositories.alvo_repository import AlvoRepository
 from pressao_api.repositories.campanha_repository import CampanhaRepository
 from pressao_api.repositories.disparo_repository import DisparoRepository
+from pressao_api.repositories.ligacao_repository import LigacaoRepository
 from pressao_api.repositories.template_repository import TemplateRepository
 from pressao_api.schemas.acao import (
     AcaoDetailResponse,
     AcaoStatusResponse,
+    CanalEnum,
     CriarAcaoRequest,
     DisparosResumoResponse,
     ProximoPassoResponse,
@@ -30,11 +33,14 @@ from pressao_api.schemas.acao import (
     StatusAcaoEnum,
     TipoAcaoEnum,
 )
+from pressao_api.schemas.alvo import AlvoMembroTelefonePublico
 from pressao_api.schemas.campanha import ConfirmacaoContadorResponse
-from pressao_api.services.alvo_agregado import AlvoAgregadoService
+from pressao_api.schemas.telefone import LigacaoStatusResponse, NovaTentativaLigacaoRequest
+from pressao_api.services.alvo_agregado import AlvoAgregadoService, membro_telefone_publico
 from pressao_api.services.confirmacao import incrementar_contador_se_confirmada
 from pressao_api.services.metricas import calculadora
 from pressao_api.services.orquestrador import orquestrador
+from pressao_api.services.telefone_ligacao import iniciar_tentativa
 from pressao_api.utils.validadores import (
     obter_mensagem_erro_compatibilidade,
     validar_compatibilidade_canal_alvo,
@@ -46,6 +52,42 @@ router = APIRouter(
     prefix="/acoes",
     tags=["Ações"],
 )
+
+
+async def _montar_resposta_acao(acao, db: AsyncSession) -> RespostaAcaoResponse:
+    disparos_resumo = None
+    if acao.tipo_acao == TipoAcaoEnum.MULTI_ALVO.value:
+        disparo_repo = DisparoRepository(db)
+        resumo = await disparo_repo.resumo_por_acao(acao.id)
+        disparos_resumo = DisparosResumoResponse(**resumo)
+
+    return RespostaAcaoResponse(
+        acao_id=acao.id,
+        ativista_id=acao.ativista_id,
+        ativista_nome=acao.ativista_nome,
+        ativista_email=acao.ativista_email,
+        ativista_telefone=acao.ativista_telefone,
+        anonimo=acao.anonimo,
+        campanha_id=acao.campanha_id,
+        alvo_id=acao.alvo_id,
+        tipo_acao=TipoAcaoEnum(acao.tipo_acao),
+        status_atual=acao.status,
+        proximo_passo=ProximoPassoResponse(
+            tipo=acao.proximo_passo_tipo,
+            instrucao=acao.proximo_passo_instrucao,
+            dados=acao.proximo_passo_dados or {},
+        ),
+        disparos_resumo=disparos_resumo,
+    )
+
+
+async def _buscar_acao_autorizada(acao_id: UUID, current_user: dict, db: AsyncSession):
+    acao = await AcaoRepository(db).buscar_por_id(acao_id)
+    if not acao:
+        raise HTTPException(status_code=404, detail="Ação não encontrada")
+    if acao.ativista_id != current_user["id"] and not current_user["is_admin"]:
+        raise HTTPException(status_code=403, detail="Sem permissão para acessar esta ação")
+    return acao
 
 
 @router.post(
@@ -123,8 +165,32 @@ async def criar_acao(
             if not template.ativo:
                 raise HTTPException(status_code=400, detail="Template inativo")
 
+        agregado_telefone = alvo.modo == ModoAlvo.AGREGADO and canal == CanalEnum.TELEFONE.value
+        if request.membro_id and not agregado_telefone:
+            raise HTTPException(
+                status_code=400,
+                detail="membro_id só é aceito para o alvo agregado de telefone",
+            )
+
         tipo_acao = TipoAcaoEnum.SIMPLES
-        if alvo.modo == ModoAlvo.AGREGADO and canal == "email":
+        if agregado_telefone:
+            tipo_acao = TipoAcaoEnum.MULTI_ALVO
+            agregado_service = AlvoAgregadoService(db)
+            await agregado_service.sincronizar_membros_tipo(
+                request.campanha_id, TipoContato.TELEFONE
+            )
+            membros = await AlvoMembroRepository(db).listar_membros_alvos(alvo.id)
+            if not membros:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Nenhum alvo de telefone ativo para esta ação",
+                )
+            if request.membro_id and request.membro_id not in {m.id for m in membros}:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Alvo escolhido não pertence a esta campanha ou está inativo",
+                )
+        elif alvo.modo == ModoAlvo.AGREGADO and canal == "email":
             tipo_acao = TipoAcaoEnum.MULTI_ALVO
             agregado_service = AlvoAgregadoService(db)
             await agregado_service.sincronizar_membros(request.campanha_id)
@@ -236,6 +302,8 @@ async def criar_acao(
                 campanha=campanha,
                 template=template,
                 session=db,
+                membro_id=request.membro_id,
+                selecao=request.selecao,
             )
             await repo.salvar(acao)
 
@@ -278,31 +346,7 @@ async def criar_acao(
         # Ação aguardando confirmação (se aplicável)
         acoes_aguardando_confirmacao.labels(campanha_id=str(request.campanha_id), canal=canal).inc()
 
-        # Prepara resposta
-        disparos_resumo = None
-        if acao.tipo_acao == TipoAcaoEnum.MULTI_ALVO.value:
-            disparo_repo = DisparoRepository(db)
-            resumo = await disparo_repo.resumo_por_acao(acao.id)
-            disparos_resumo = DisparosResumoResponse(**resumo)
-
-        return RespostaAcaoResponse(
-            acao_id=acao.id,
-            ativista_id=acao.ativista_id,
-            ativista_nome=acao.ativista_nome,
-            ativista_email=acao.ativista_email,
-            ativista_telefone=acao.ativista_telefone,
-            anonimo=acao.anonimo,
-            campanha_id=acao.campanha_id,
-            alvo_id=acao.alvo_id,
-            tipo_acao=TipoAcaoEnum(acao.tipo_acao),
-            status_atual=acao.status,
-            proximo_passo=ProximoPassoResponse(
-                tipo=acao.proximo_passo_tipo,
-                instrucao=acao.proximo_passo_instrucao,
-                dados=acao.proximo_passo_dados or {},
-            ),
-            disparos_resumo=disparos_resumo,
-        )
+        return await _montar_resposta_acao(acao, db)
     except HTTPException:
         if canal:
             # Métrica: Erro na criação
@@ -438,3 +482,96 @@ async def confirmar_acao(
     )
 
     return ConfirmacaoContadorResponse(acoes_confirmadas=novo_total or 0)
+
+
+@router.post(
+    "/{acao_id}/ligacoes",
+    response_model=RespostaAcaoResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Nova tentativa de ligação",
+)
+async def nova_tentativa_ligacao(
+    acao_id: UUID,
+    request: NovaTentativaLigacaoRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Cria uma nova ligação (e um novo disparo) na mesma ação de telefone.
+
+    Aceita trocar o membro (`membro_id`) e o telefone do ativista. Bloqueada com ligação
+    em andamento ou ação já concluída.
+    """
+    acao = await _buscar_acao_autorizada(acao_id, current_user, db)
+
+    if acao.canal != CanalEnum.TELEFONE.value or acao.tipo_acao != TipoAcaoEnum.MULTI_ALVO.value:
+        raise HTTPException(
+            status_code=400,
+            detail="Nova tentativa só é permitida para ações de telefone com alvo agregado",
+        )
+    if acao.status == StatusAcaoEnum.CONCLUIDA:
+        raise HTTPException(status_code=400, detail="Ação já concluída")
+
+    ultima = await LigacaoRepository(db).buscar_ultima_por_acao(acao.id)
+    if ultima is not None and ultima.etapa not in ETAPAS_TERMINAIS:
+        raise HTTPException(
+            status_code=409, detail="Já existe uma ligação em andamento para esta ação"
+        )
+
+    agregado = await AlvoRepository(db).buscar_por_id(acao.alvo_id)
+    campanha = await CampanhaRepository(db).buscar_por_id(acao.campanha_id)
+    if not agregado or not campanha:
+        raise HTTPException(status_code=404, detail="Alvo ou campanha da ação não encontrados")
+    if not campanha.ativa:
+        raise HTTPException(status_code=400, detail="Campanha inativa")
+
+    if request.telefone:
+        acao.ativista_telefone = request.telefone
+
+    try:
+        await iniciar_tentativa(db, acao, agregado, campanha, membro_id=request.membro_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    await AcaoRepository(db).salvar(acao)
+    logger.info("Nova tentativa de ligação", acao_id=str(acao.id))
+    return await _montar_resposta_acao(acao, db)
+
+
+@router.get(
+    "/{acao_id}/ligacao",
+    response_model=LigacaoStatusResponse,
+    summary="Status da ligação atual",
+)
+async def obter_ligacao_atual(
+    acao_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Status da última ligação da ação; o widget consulta em intervalos para trocar de tela."""
+    acao = await _buscar_acao_autorizada(acao_id, current_user, db)
+
+    ligacoes = await LigacaoRepository(db).listar_por_acao(acao.id)
+    if not ligacoes:
+        raise HTTPException(status_code=404, detail="Nenhuma ligação para esta ação")
+    ligacao = ligacoes[-1]
+
+    alvo = await AlvoRepository(db).buscar_por_id(ligacao.alvo_id)
+    if alvo is None:
+        raise HTTPException(status_code=404, detail="Alvo da ligação não encontrado")
+
+    return LigacaoStatusResponse(
+        ligacao_id=ligacao.id,
+        acao_id=acao.id,
+        acao_status=acao.status,
+        etapa=ligacao.etapa,
+        origem_falha=ligacao.origem_falha,
+        motivo_falha=ligacao.motivo_falha,
+        alvo=AlvoMembroTelefonePublico(**membro_telefone_publico(alvo)),
+        selecao=ligacao.selecao,
+        duracao_seg=ligacao.duracao_seg,
+        tentativas=len(ligacoes),
+        iniciada_em=ligacao.iniciada_em,
+        alvo_atendeu_em=ligacao.alvo_atendeu_em,
+        finalizada_em=ligacao.finalizada_em,
+    )

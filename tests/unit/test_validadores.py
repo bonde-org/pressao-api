@@ -1,5 +1,10 @@
+import pytest
+
 from pressao_api.utils.validadores import (
+    extrair_ddd,
+    normalizar_telefone_e164,
     obter_mensagem_erro_compatibilidade,
+    telefone_toll_free_br,
     validar_compatibilidade_canal_alvo,
     validar_email,
     validar_telefone,
@@ -27,6 +32,32 @@ class TestFormatoEmailTelefone:
         assert validar_telefone("12345") is False
         assert validar_telefone("abc") is False
         assert validar_telefone("") is False
+
+
+class TestTelefoneE164:
+    def test_normaliza_numero_nacional_com_ddi_padrao(self):
+        assert normalizar_telefone_e164("(11) 99999-9999") == "+5511999999999"
+        assert normalizar_telefone_e164("1133334444") == "+551133334444"
+
+    def test_preserva_numero_com_ddi(self):
+        assert normalizar_telefone_e164("+55 11 99999-9999") == "+5511999999999"
+        assert normalizar_telefone_e164("5511999999999") == "+5511999999999"
+        assert normalizar_telefone_e164("+1 415 123 4567") == "+14151234567"
+
+    def test_recusa_numero_invalido(self):
+        with pytest.raises(ValueError):
+            normalizar_telefone_e164("12345")
+        with pytest.raises(ValueError):
+            normalizar_telefone_e164("")
+
+    def test_extrai_ddd_de_numero_brasileiro(self):
+        assert extrair_ddd("+5521988887777") == "21"
+        assert extrair_ddd("+14151234567") is None
+        assert extrair_ddd(None) is None
+
+    def test_identifica_toll_free_brasileiro(self):
+        assert telefone_toll_free_br("+558001234567") is True
+        assert telefone_toll_free_br("+5511999999999") is False
 
 
 class TestCompatibilidadeCanalAlvo:

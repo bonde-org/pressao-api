@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     SENDGRID_WEBHOOK_URL: str = "/api/v1/webhooks/sendgrid"
     TWILIO_ACCOUNT_SID: str
     TWILIO_AUTH_TOKEN: str
+    TWILIO_API_KEY_SID: str = ""
+    TWILIO_API_KEY_SECRET: str = ""
+    TWILIO_SANDBOX_MODE: bool = True
+    # Absoluta e pública (https://host/api/v1/webhooks/twilio): o Twilio assina essa URL
+    TWILIO_WEBHOOK_URL: str = "/api/v1/webhooks/twilio"
+    TELEFONE_TIMEOUT_TOQUE_SEG: int = 30
 
     # Monitoring
     METRICS_ENABLED: bool = True

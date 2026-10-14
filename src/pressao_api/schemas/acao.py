@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import UUID4, BaseModel, Field, field_validator, model_validator
 
@@ -76,6 +76,17 @@ class CriarAcaoRequest(BaseModel):
     alvo_id: UUID4
     canal: CanalEnum
     template_id: UUID4 | None = None
+    membro_id: UUID4 | None = Field(
+        None,
+        description="Membro escolhido pelo ativista (apenas alvo agregado de telefone)",
+    )
+    selecao: Literal["automatica", "ativista"] | None = Field(
+        None,
+        description=(
+            "Quem escolheu o membro. `automatica` com `membro_id` registra o alvo da vez "
+            "sugerido por /alvos/{id}/proximo-membro; sem o campo, `membro_id` vale como ativista"
+        ),
+    )
 
     ativista: AtivistaInfo | None = None
     anonimo: bool = False

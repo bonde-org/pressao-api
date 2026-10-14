@@ -111,6 +111,12 @@ html.pressao-mc-lock body {
 .pressao-mc-ico--instagram { --mc-ico: var(--pressao-icon-instagram); }
 .pressao-mc-ico--tiktok { --mc-ico: var(--pressao-icon-tiktok); }
 .pressao-mc-ico--email { --mc-ico: var(--pressao-icon-email); }
+.pressao-mc-ico--telefone { --mc-ico: var(--pressao-icon-telefone); }
+.pressao-mc-ico--telefone-entrada { --mc-ico: var(--pressao-icon-telefone-entrada); }
+.pressao-mc-ico--lapis { --mc-ico: var(--pressao-icon-lapis); }
+.pressao-mc-ico--pessoas { --mc-ico: var(--pressao-icon-pessoas); }
+.pressao-mc-ico--info { --mc-ico: var(--pressao-icon-info); }
+.pressao-mc-ico--alerta { --mc-ico: var(--pressao-icon-alerta); }
 .pressao-mc-ico--x { --mc-ico: var(--pressao-icon-x); }
 .pressao-mc-ico--localizacao { --mc-ico: var(--pressao-icon-localizacao); color: #ff5d00; width: 13px; height: 13px; }
 .pressao-mc-ico--interrogacao { --mc-ico: var(--pressao-icon-interrogacao); }
@@ -1048,6 +1054,230 @@ html.pressao-mc-lock body {
   color: var(--mc-text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Telefone */
+
+.pressao-mc-tel-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+}
+
+.pressao-mc-tel-passos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pressao-mc-tel-passo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.pressao-mc-tel-passo-icon,
+.pressao-mc-tel-alvo-icon,
+.pressao-mc-tel-status-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--mc-black);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pressao-mc-tel-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--mc-soft);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mc-help);
+}
+
+.pressao-mc-tel-info .pressao-mc-ico {
+  margin-top: 2px;
+}
+
+.pressao-mc .pressao-mc-tel-label {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.pressao-mc-tel-alvo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--fluxo-border);
+  border-radius: 8px;
+}
+
+.pressao-mc-tel-alvo[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+.pressao-mc-tel-alvo-copy {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.pressao-mc-tel-alvo-copy span {
+  font-size: 14px;
+  color: var(--mc-muted);
+}
+
+.pressao-mc-tel-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--mc-success-soft);
+  color: var(--mc-success);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.pressao-mc .pressao-mc-field select {
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--fluxo-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: var(--fluxo-font);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--mc-text);
+  background: #fff;
+  margin: 0;
+}
+
+.pressao-mc .pressao-mc-field select:focus {
+  outline: none;
+  border-color: var(--mc-black);
+}
+
+.pressao-mc-tel-form .pressao-mc-btn .pressao-mc-ico,
+.pressao-mc-tel-erro ~ .pressao-mc-actions .pressao-mc-btn .pressao-mc-ico {
+  margin-right: 8px;
+}
+
+.pressao-mc-footnote a {
+  color: var(--mc-link);
+  text-decoration: underline;
+}
+
+.pressao-mc-tel-ligando .pressao-mc-feedback-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--mc-black);
+}
+
+.pressao-mc .pressao-mc-tel-ligando-fechar {
+  margin: 0 20px 20px;
+}
+
+.pressao-mc-tel-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--mc-soft);
+}
+
+.pressao-mc-tel-status strong {
+  font-size: 18px;
+  line-height: 24px;
+}
+
+.pressao-mc-tel-status p {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mc-help);
+}
+
+.pressao-mc-tel-erro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 16px 0 4px;
+}
+
+.pressao-mc-tel-erro-icon {
+  color: var(--fluxo-danger);
+}
+
+.pressao-mc-tel-erro-icon .pressao-mc-ico {
+  width: 32px;
+  height: 32px;
+}
+
+.pressao-mc .pressao-mc-tel-erro-titulo {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 700;
+}
+
+.pressao-mc-tel-erro-texto {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mc-help);
+}
+
+.pressao-mc-tel-numero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--mc-soft);
+}
+
+.pressao-mc-tel-numero-label {
+  flex-basis: 100%;
+  font-size: 14px;
+  color: var(--mc-muted);
+}
+
+.pressao-mc-tel-numero strong {
+  flex: 1;
+  font-size: 16px;
+}
+
+.pressao-mc .pressao-mc-tel-alterar {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mc-link);
+  text-decoration: underline;
+}
+
+.pressao-mc .pressao-mc-tel-numero input {
+  flex-basis: 100%;
+  height: 40px;
+  border: 1px solid var(--fluxo-border);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 16px;
+  background: #fff;
 }
 
 /* ---------------- Modais ---------------- */

@@ -16,6 +16,8 @@ class Campanha(Base):
     dominios_permitidos = Column(JSON, nullable=True, default=list)
     ativa = Column(Boolean, default=True)
     acoes_confirmadas = Column(BigInteger, default=0, nullable=False)
+    # Número Twilio (E.164) que liga para o ativista e aparece para o alvo
+    telefone_origem = Column(String(20), nullable=True, unique=True)
 
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -373,6 +373,14 @@ class PressaoPlugin_API {
         if (!empty($dados['sessao_id'])) {
             $payload['sessao_id'] = $dados['sessao_id'];
         }
+
+        if (!empty($dados['membro_id'])) {
+            $payload['membro_id'] = $dados['membro_id'];
+        }
+
+        if (!empty($dados['selecao']) && in_array($dados['selecao'], ['automatica', 'ativista'], true)) {
+            $payload['selecao'] = $dados['selecao'];
+        }
         
         // Adiciona dados do ativista se não for anônimo
         if (!empty($dados['ativista']) && is_array($dados['ativista']) && empty($dados['anonimo'])) {
@@ -468,7 +476,7 @@ class PressaoPlugin_API {
      * @param string|null $template_id ID do template (opcional)
      * @return array|WP_Error Resultado da criação
      */
-    public function criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id = null, $sessao_id = null) {
+    public function criar_acao_com_ativista($campanha_id, $alvo_id, $canal, $ativista, $template_id = null, $sessao_id = null, $extra = []) {
         $dados = [
             'campanha_id' => $campanha_id,
             'alvo_id' => $alvo_id,
@@ -480,6 +488,12 @@ class PressaoPlugin_API {
                 'telefone' => $ativista['telefone'] ?? ''
             ]
         ];
+
+        foreach (['membro_id', 'selecao'] as $campo) {
+            if (!empty($extra[$campo])) {
+                $dados[$campo] = $extra[$campo];
+            }
+        }
         
         if ($template_id) {
             $dados['template_id'] = $template_id;
@@ -551,5 +565,53 @@ class PressaoPlugin_API {
                 ? (int) $response['acoes_confirmadas']
                 : null,
         ];
+    }
+
+    /**
+     * Alvo da vez do agregado de telefone (não reserva o membro).
+     *
+     * @param string $alvo_id ID do alvo agregado de telefone
+     * @return array|WP_Error {membro: {id, nome, cargo, partido}, template}
+     */
+    public function get_proximo_membro($alvo_id) {
+        if (empty($alvo_id)) {
+            return new WP_Error('invalid_data', __('alvo_id é obrigatório', 'pressao-plugin'));
+        }
+        $endpoint = sprintf('/api/v1/alvos/%s/proximo-membro', rawurlencode($alvo_id));
+        return $this->api_request($endpoint, 'GET');
+    }
+
+    /**
+     * Status da última ligação de uma ação de telefone.
+     *
+     * @param string $acao_id ID da ação
+     * @return array|WP_Error LigacaoStatusResponse da API
+     */
+    public function get_status_ligacao($acao_id) {
+        if (empty($acao_id)) {
+            return new WP_Error('invalid_data', __('acao_id é obrigatório', 'pressao-plugin'));
+        }
+        $endpoint = sprintf('/api/v1/acoes/%s/ligacao', rawurlencode($acao_id));
+        return $this->api_request($endpoint, 'GET');
+    }
+
+    /**
+     * Nova tentativa de ligação na mesma ação.
+     *
+     * @param string      $acao_id   ID da ação
+     * @param string|null $telefone  Novo telefone do ativista (opcional)
+     * @param string|null $membro_id Membro escolhido pelo ativista (opcional)
+     * @return array|WP_Error RespostaAcaoResponse da API
+     */
+    public function nova_ligacao($acao_id, $telefone = null, $membro_id = null) {
+        if (empty($acao_id)) {
+            return new WP_Error('invalid_data', __('acao_id é obrigatório', 'pressao-plugin'));
+        }
+        $payload = [
+            'telefone' => $telefone ? $telefone : null,
+            'membro_id' => $membro_id ? $membro_id : null,
+        ];
+        $endpoint = sprintf('/api/v1/acoes/%s/ligacoes', rawurlencode($acao_id));
+        return $this->api_request($endpoint, 'POST', $payload);
     }
 }

@@ -18,6 +18,7 @@ from pressao_api.models.alvo import Alvo  # noqa: F401
 from pressao_api.models.alvo_membro import AlvoMembro  # noqa: F401
 from pressao_api.models.campanha import Campanha  # noqa: F401
 from pressao_api.models.disparo import Disparo  # noqa: F401
+from pressao_api.models.ligacao import Ligacao  # noqa: F401
 from pressao_api.models.template import Template  # noqa: F401
 
 # Configuração para testes
@@ -26,6 +27,22 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 # Engine para testes
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 TestingSessionLocal = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+
+TWILIO_WEBHOOK_TESTE = "https://teste.exemplo/api/v1/webhooks/twilio"
+
+
+@pytest.fixture(autouse=True)
+def twilio_isolado(monkeypatch):
+    """Nenhum teste usa as credenciais reais do .env nem liga de verdade."""
+    from pressao_api.core.config import settings
+
+    monkeypatch.setattr(settings, "TWILIO_SANDBOX_MODE", True)
+    monkeypatch.setattr(settings, "TWILIO_ACCOUNT_SID", "test-sid")
+    monkeypatch.setattr(settings, "TWILIO_AUTH_TOKEN", "test-token")
+    monkeypatch.setattr(settings, "TWILIO_API_KEY_SID", "")
+    monkeypatch.setattr(settings, "TWILIO_API_KEY_SECRET", "")
+    monkeypatch.setattr(settings, "TWILIO_WEBHOOK_URL", TWILIO_WEBHOOK_TESTE)
 
 
 @pytest.fixture

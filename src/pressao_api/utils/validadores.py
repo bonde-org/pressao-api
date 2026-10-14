@@ -22,6 +22,36 @@ def validar_telefone(telefone: str) -> bool:
     return 10 <= len(numeros) <= 15
 
 
+def normalizar_telefone_e164(telefone: str, ddi: str = "55") -> str:
+    """
+    Converte o telefone para E.164 (+DDI...).
+
+    Sem "+", zeros à esquerda (prefixo de discagem nacional, como em 0800) são descartados
+    e números com 10 ou 11 dígitos recebem o DDI padrão.
+    """
+    if not telefone or not validar_telefone(telefone):
+        raise ValueError("Formato de telefone inválido")
+
+    numeros = re.sub(r"\D", "", telefone)
+    if not telefone.strip().startswith("+"):
+        numeros = numeros.lstrip("0")
+        if len(numeros) in (10, 11):
+            numeros = f"{ddi}{numeros}"
+    return f"+{numeros}"
+
+
+def extrair_ddd(telefone_e164: str | None) -> str | None:
+    """DDD de um número brasileiro em E.164; None para outros países."""
+    if not telefone_e164 or not telefone_e164.startswith("+55"):
+        return None
+    return telefone_e164[3:5]
+
+
+def telefone_toll_free_br(telefone_e164: str) -> bool:
+    """0800 brasileiro, que não pode originar ligações de saída."""
+    return telefone_e164.startswith("+55800")
+
+
 COMPATIBILIDADE_CANAL_CONTATO = {
     "email": ["email"],
     "telefone": ["telefone"],

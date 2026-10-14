@@ -112,3 +112,73 @@ class TestAPICampanha:
         # Verifica que não existe mais
         get_response = client.get(f"/api/v1/campanhas/{campanha_id}")
         assert get_response.status_code == 404
+
+
+class TestCampanhaTelefoneOrigem:
+    def test_criar_campanha_normaliza_telefone_origem(self, client, db_session, mock_admin):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+
+        response = client.post(
+            "/api/v1/campanhas/",
+            json={"nome": "Campanha Telefone", "telefone_origem": "(21) 4002-8922"},
+        )
+        assert response.status_code == 201
+        assert response.json()["telefone_origem"] == "+552140028922"
+
+    def test_campanha_sem_telefone_origem(self, client, db_session, mock_admin):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+
+        response = client.post("/api/v1/campanhas/", json={"nome": "Campanha Sem Telefone"})
+        assert response.status_code == 201
+        assert response.json()["telefone_origem"] is None
+
+    def test_recusa_toll_free_brasileiro(self, client, db_session, mock_admin):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+
+        response = client.post(
+            "/api/v1/campanhas/",
+            json={"nome": "Campanha 0800", "telefone_origem": "0800 123 4567"},
+        )
+        assert response.status_code == 422
+        assert "0800" in response.text
+
+    def test_recusa_telefone_origem_repetido_em_outra_campanha(
+        self, client, db_session, mock_admin
+    ):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+
+        primeira = client.post(
+            "/api/v1/campanhas/",
+            json={"nome": "Campanha A", "telefone_origem": "+551140028922"},
+        )
+        assert primeira.status_code == 201
+
+        repetida = client.post(
+            "/api/v1/campanhas/",
+            json={"nome": "Campanha B", "telefone_origem": "11 4002-8922"},
+        )
+        assert repetida.status_code == 400
+        assert "número de origem" in repetida.text
+
+        outra = client.post("/api/v1/campanhas/", json={"nome": "Campanha C"}).json()
+        atualizada = client.put(
+            f"/api/v1/campanhas/{outra['id']}", json={"telefone_origem": "+551140028922"}
+        )
+        assert atualizada.status_code == 400
+
+    def test_atualizar_telefone_origem_da_propria_campanha(
+        self, client, db_session, mock_admin
+    ):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+
+        campanha = client.post(
+            "/api/v1/campanhas/",
+            json={"nome": "Campanha Própria", "telefone_origem": "+551140028922"},
+        ).json()
+
+        response = client.put(
+            f"/api/v1/campanhas/{campanha['id']}",
+            json={"telefone_origem": "+551140028922", "descricao": "nova"},
+        )
+        assert response.status_code == 200
+        assert response.json()["telefone_origem"] == "+551140028922"
