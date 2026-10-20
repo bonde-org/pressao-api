@@ -112,6 +112,21 @@ class PressaoPlugin_Render_Helpers {
 
         $link = isset($config['link']) ? trim((string) $config['link']) : '';
         $mensagem = isset($config['mensagem']) ? trim((string) $config['mensagem']) : '';
+        if ($link === '') {
+            $permalink = '';
+            if (function_exists('get_queried_object_id')) {
+                $qid = (int) get_queried_object_id();
+                if ($qid > 0) {
+                    $permalink = (string) get_permalink($qid);
+                }
+            }
+            if ($permalink === '' && function_exists('get_permalink')) {
+                $permalink = (string) get_permalink();
+            }
+            if ($permalink !== '' && $permalink !== '0') {
+                $link = $permalink;
+            }
+        }
         if ($require_ativo && $link === '' && $mensagem === '') {
             return null;
         }

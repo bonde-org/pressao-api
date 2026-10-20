@@ -49,9 +49,14 @@ docker compose up -d
 
 # O WordPress estará disponível em:
 # http://localhost:8181
+#
+# No celular (mesmo Tailscale): http://<IP-ou-MagicDNS-do-Mac>:8181
+# Ex.: http://100.x.x.x:8181  ou  http://seu-mac.tailXXXX.ts.net:8181
+# WP_HOME/SITEURL seguem o Host da requisição (não ficam fixos em localhost).
+# Opcional no .env: WORDPRESS_URL=http://100.x.x.x:8181 para fixar a URL.
 ```
 
-O `docker-compose.yml` monta esta pasta como volume em `wp-content/plugins/pressao-plugin`, então alterações em PHP/JS/CSS refletem sem rebuild.
+O `docker-compose.yml` monta esta pasta como volume em `wp-content/plugins/pressao-plugin`, então alterações em PHP/JS/CSS refletem sem rebuild. A porta `8181` escuta em `0.0.0.0` para acesso pela rede Tailscale.
 
 A Media Library grava em um volume Docker (`wordpress_data` → `/var/www/html/wp-content/uploads`). Se o upload falhar por permissão no ambiente local:
 
@@ -97,6 +102,7 @@ pressao-plugin/
 │   │   ├── Host_Grotesk/
 │   │   └── Funnel_Display/     # presente; não usada no [pressao_fluxo]
 │   ├── icons/                  # SVG de canais (inclui x e telefone), compartilhar/enviar, copiar, download, setas, check, fechar, chevron, localização, interrogação, raio e os do telefone (telefone-entrada, lapis, pessoas, info, alerta; Bootstrap Icons, MIT) (via CSS mask-image; URLs absolutas injetadas como --pressao-icon-*)
+│   ├── img/                    # GIFs de feedback do multicanal (loading.gif = espera social; telefone.gif = espera de ligação)
 │   ├── vendor/tom-select/      # Autocomplete do fluxo único (+ remoção no admin)
 │   ├── examples/               # CSV + scripts REST (apoiadores)
 │   └── js/
@@ -351,8 +357,12 @@ preenchida só sugere o próximo canal pendente. Estados: feito (verde), pulado 
 reabre o canal) e pendente.
 
 **Instagram/TikTok:** chips com todos os `@` de `pressao_candidatos`, mensagem `@a, @b` + template do alvo,
-"Copiar e abrir" (modal "Mensagem copiada!" com "Abrindo em N...") e confirmação "Sim, já publiquei!". A ação
-é criada e confirmada só no fim do canal, depois da captação de lead.
+"Copiar e abrir" (modal "Mensagem copiada!" com GIF `loading.gif` e "Abrindo em N...") e confirmação
+"Sim, já publiquei!". O passo "confirmar" fica em `sessionStorage` (`pressao_mc_social_{alvo_id}`) para
+retomar se a página recarregar ao abrir o app. `PressaoCore.openAppUrl` abre a URL em **nova aba**
+(mobile e desktop) e tenta devolver o foco à aba do widget; o SO pode ainda assim abrir o app a partir
+da aba nova (não dá para separar “só app” vs “só browser” na web). A ação é criada e confirmada só no
+fim do canal, depois da captação de lead.
 
 **Captação de lead** ("Quer acompanhar os próximos passos?"): aparece só se ainda não pedimos e-mail (sem
 `__lead` no cookie, sem e-mail em `pressao_ativista_data` e e-mail não feito). Modal no desktop, tela cheia no
@@ -365,25 +375,26 @@ mobile. "Agora não" registra a ação sem ativista.
 **Telefone** (Figma V2, "ligamos para você"): o card só aparece com o alvo **agregado** de telefone da API
 (alvo telefone individual é ignorado). Telas:
 
-1. "Como funciona" (3 passos) e, no alvo da vez, o aviso de que a próxima ligação pode ir para outro alvo.
-2. Formulário "Preencha seus dados para gente te ligar:": "Você vai ligar para:" com o alvo da vez
-   (`pressao_proximo_membro`, badge "Alvo da vez") ou um select com os membros (`telefone_selecao="escolher"`);
-   roteiro recolhível (template `telefone`, com `{alvo_nome}`, `{campanha_nome}` e `{ativista_nome}` trocados no
-   navegador); nome, telefone com DDD e e-mail conforme `telefone_email`. "Já pode me ligar" cria a ação com
-   `membro_id` e `selecao` (`automatica` no alvo da vez, `ativista` no select).
-3. Modal "Vamos te ligar em instantes" ("O número pode começar com (DDD)" do número de origem da campanha);
-   depois de 90 s aparece "Fechar e acompanhar depois".
-4. "Ligação em andamento" com o roteiro aberto, quando o ativista atende.
-5. Sucesso ("Ligação realizada com sucesso!", cookie da ação, contador, home ou compartilhar) ou uma das telas de
-   erro do Figma com "Iniciar ligação novamente" (`pressao_nova_ligacao`): erros do ativista mostram "Seu número" com
-   "Alterar"; erros do alvo (não atendeu, ocupado) sugerem compartilhar.
+1. "Como funciona": card do alvo da vez (quando `alvo_da_vez`), 4 passos (inclui "Você conversa com um
+   roteiro como guia"; ícones em cinza) e aviso de rotação de alvo.
+2. Formulário "Vamos te conectar com": card/select do alvo → nome, telefone e e-mail (`telefone_email`) →
+   roteiro recolhível (template `telefone`, placeholders `{alvo_nome}`, `{campanha_nome}`, `{ativista_nome}`).
+   "Já pode me ligar" cria a ação com `membro_id` e `selecao` (`automatica` / `ativista`).
+3. Modal "Vamos te ligar em instantes" com GIF `telefone.gif` (DDD de origem da campanha); depois de 90 s
+   aparece "Fechar e acompanhar depois" (volta à home; `sessionStorage` permanece).
+4. "Ligação em andamento" com o roteiro aberto (e o GIF), quando o ativista atende — ou ao **reabrir** o
+   card com ligação pendente (tela com seta voltar, sem modal bloqueante).
+5. Sucesso ("Ligação realizada com sucesso!", cookie da ação, contador, home ou compartilhar) ou telas de
+   erro com "Iniciar ligação novamente" (`pressao_nova_ligacao`): erros do ativista mostram "Seu número" /
+   "Alterar"; erros do alvo sugerem compartilhar.
 
 O status vem de `pressao_status_ligacao` a cada 2 s (5 s depois de 1 min); o polling para ao fechar a tela. A ação
-em andamento fica em `sessionStorage` (`pressao_mc_ligacao_{alvo_id}`) e é retomada ao reabrir o card. O cookie
-`pressao_acoes_realizadas` só é gravado quando a ligação conclui.
+em andamento fica em `sessionStorage` (`pressao_mc_ligacao_{alvo_id}`). O cookie `pressao_acoes_realizadas`
+só é gravado quando a ligação conclui.
 
-**Feedback:** "Legal, sua pressão já está valendo!" por 1 s; depois volta para a home ou, sem canal pendente,
-abre o compartilhar ("Convide mais pessoas": copiar link, redes de `redes`, imagens para postar).
+**Feedback:** "Legal, sua pressão já está valendo!" por **2 s**; depois volta para a home ou, sem canal
+pendente, abre o compartilhar ("Convide mais pessoas": link da página com fallback para a URL atual se o
+admin estiver vazio; redes de `redes` **ocultas** quando sem URL configurada; imagens para postar).
 
 | Atributo | Padrão | Descrição |
 |----------|--------|-----------|
@@ -401,14 +412,15 @@ abre o compartilhar ("Convide mais pessoas": copiar link, redes de `redes`, imag
 | `countdown` | `3` | Segundos de "Abrindo em N..." antes de abrir o app; `0` abre após 1,5 s |
 | `tempo_instagram` / `tempo_tiktok` / `tempo_email` / `tempo_telefone` | `2 min` / `2 min` / `1 min` / `5 min` | Tempo exibido nos cards |
 | `ajuda_titulo` / `ajuda` | `Como funciona?` / texto padrão | Modal `?`. Sem `ajuda`, usa o conteúdo de `pressao_fluxo_ajuda` se preenchido |
-| `redes` | `whatsapp,x,instagram` | Redes do compartilhar (aceita também `facebook`; rede sem link no admin fica desabilitada) |
+| `redes` | `whatsapp,x,instagram` | Redes do compartilhar (aceita também `facebook`; rede sem link no admin é omitida) |
 | `class` / `id` | — / gerado | Classe CSS extra e ID do container |
 
 Assets: `pressao-ui.css` + `multicanal.css` + `pressao-core.js` + `share-images.js` + `multicanal.js` (só
-quando o shortcode está na página). Reusa AJAX `pressao_realizar_acao` / `pressao_confirmar_acao`; o telefone
-usa também `pressao_proximo_membro`, `pressao_status_ligacao` e `pressao_nova_ligacao`. O config do widget leva
-`privacidade_url` (`get_privacy_policy_url()`) para o link do aviso de privacidade. Contador
-`.pressao-acoes-counter` animado por `PressaoCore.updateCounter`.
+quando o shortcode está na página) + GIFs em `assets/img/` (URLs em `config.assets`). Reusa AJAX
+`pressao_realizar_acao` / `pressao_confirmar_acao`; o telefone usa também `pressao_proximo_membro`,
+`pressao_status_ligacao` e `pressao_nova_ligacao`. O config do widget leva `privacidade_url`
+(`get_privacy_policy_url()`) para o link do aviso de privacidade. Contador `.pressao-acoes-counter`
+animado por `PressaoCore.updateCounter`.
 
 ### Shortcodes legados
 
@@ -505,7 +517,7 @@ Wizard isolado de `[pressao_alvos]`: seleção de candidatos → copiar/abrir In
 
 **Seleção de candidatos:** duas opções em acordeão (só uma aberta por vez). **Busque candidatos** (aberta por padrão) é o autocomplete por nome/@, que consulta o servidor a partir de 2 caracteres (`pressao_buscar_candidatos`, até 20 resultados; a base não é embutida na página). **Filtre por estado** tem checkboxes de cargo opcionais (cargos daquele estado; nenhum marcado = todos, marcados = união), select de estado e um segundo autocomplete desabilitado até escolher o estado; ao escolher estado/cargo, a mesma action devolve os candidatos daquele filtro (até 500) e o autocomplete filtra no navegador. Trocar estado/cargo remove só os selecionados que não batem mais. Ao começar a preencher uma opção, o que foi preenchido na outra é limpo. O “Continuar” usa os selecionados da opção aberta. Opções do autocomplete mostram nome + `@handle · cargo · partido`. Sem nenhum candidato com estado, só a busca aparece.
 
-**Abrir Instagram:** no mobile, “Copiar e abrir” tenta o **app** (Android Intent / iOS Universal Link) **sem nova aba**, para o X/voltar do app devolver à tela de confirmação do fluxo; no desktop abre a URL HTTPS em nova aba. A option `pressao_fluxo_countdown_abrir` (toast antes de abrir) permanece opcional.
+**Abrir Instagram:** “Copiar e abrir” abre a URL HTTPS em **nova aba** (o widget fica na aba atual e tenta recuperar o foco). O SO pode abrir o app a partir dessa aba; não há API web confiável para “só app se instalado” nem para forçar o botão voltar do app a pousar na aba do widget. A option `pressao_fluxo_countdown_abrir` (toast antes de abrir) permanece opcional.
 
 ```text
 [pressao_fluxo alvo_id="uuid-do-alvo" canal="instagram"]
@@ -576,9 +588,12 @@ Todos usam o TTL de `pressao_session_duration` e são limpos de uma vez por `cle
 | `pressao_acoes_realizadas` | Mapa `alvoId → {timestamp, acao_id, status, user_id}` — fonte de verdade do progresso e do estado SSR. Chaves sintéticas (sem `acao_id`): `__compartilhar` (compartilhou), `__naouso_{canal}` (clicou "Não uso" no `[pressao_multicanal]`; vale para a pessoa, não para a campanha) e `__lead` (já pedimos o e-mail no `[pressao_multicanal]`) |
 | `pressao_usuario_id` | ID anônimo do usuário (legado) |
 
-Fora dos cookies, o `[pressao_multicanal]` guarda a ligação de telefone em andamento em `sessionStorage`
-(`pressao_mc_ligacao_{alvo_id}` → `acaoId`, telefone, membro escolhido, DDD de origem, nome do alvo e roteiro). A
-chave some quando a ligação conclui ou falha, e com o fechamento da aba.
+Fora dos cookies, o `[pressao_multicanal]` usa `sessionStorage`:
+
+- `pressao_mc_ligacao_{alvo_id}` — ligação em andamento (`acaoId`, telefone, membro, DDD, nome do alvo, roteiro);
+  some em sucesso/falha ou ao fechar a aba.
+- `pressao_mc_social_{alvo_id}` — passo `confirmar` de Instagram/TikTok após "Copiar e abrir"; some ao
+  concluir a ação ou ao "Tentar novamente".
 
 O payload de `pressao_acoes_realizadas` é mantido enxuto de propósito: estourar ~4KB derruba os cookies de sessão do WordPress e o AJAX começa a responder 403 "Nonce inválido".
 

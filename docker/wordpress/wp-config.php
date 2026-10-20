@@ -18,9 +18,30 @@ define('WP_DEBUG_LOG', getenv('WORDPRESS_DEBUG_LOG') === 'true');
 define('WP_DEBUG_DISPLAY', getenv('WORDPRESS_DEBUG_DISPLAY') === 'true');
 define('SCRIPT_DEBUG', getenv('SCRIPT_DEBUG') === 'true');
 
-// Configurações adicionais
-define('WP_HOME', 'http://localhost:8181');
-define('WP_SITEURL', 'http://localhost:8181');
+// URL pública: permite acessar via localhost e via Tailscale (IP ou MagicDNS)
+// no celular. Prioridade: WORDPRESS_URL no .env → Host da requisição → localhost.
+if (!function_exists('pressao_wp_public_url')) {
+    function pressao_wp_public_url() {
+        $from_env = getenv('WORDPRESS_URL');
+        if (is_string($from_env) && $from_env !== '') {
+            return rtrim($from_env, '/');
+        }
+
+        $host = isset($_SERVER['HTTP_HOST']) ? (string) $_SERVER['HTTP_HOST'] : '';
+        // Host[:porta] apenas — evita Host header injection em ambiente local.
+        if ($host !== '' && preg_match('/^[a-zA-Z0-9.-]+(?::\d{1,5})?$/', $host)) {
+            $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+                || (isset($_SERVER['SERVER_PORT']) && (string) $_SERVER['SERVER_PORT'] === '443');
+            return ($https ? 'https' : 'http') . '://' . $host;
+        }
+
+        return 'http://localhost:8181';
+    }
+}
+$pressao_wp_url = pressao_wp_public_url();
+define('WP_HOME', $pressao_wp_url);
+define('WP_SITEURL', $pressao_wp_url);
 
 // Prefixo das tabelas
 $table_prefix = getenv('WORDPRESS_TABLE_PREFIX') ?: 'wp_';

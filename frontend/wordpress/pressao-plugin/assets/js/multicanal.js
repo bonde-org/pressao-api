@@ -16,11 +16,13 @@
     var NAOUSO_PREFIX = '__naouso_';
     var LEAD_KEY = '__lead';
     var SHARE_KEY = '__compartilhar';
-    var FEEDBACK_MS = 1000;
+    var FEEDBACK_MS = 2000;
     var ABRIR_SEM_CONTAGEM_MS = 1500;
     var TRANSICAO_MS = 280;
     var CHIPS_VISIVEIS = 3;
     var DESKTOP_MQ = window.matchMedia('(min-width: 768px)');
+    var COARSE_MQ = window.matchMedia('(pointer: coarse)');
+    var SOCIAL_STORAGE_PREFIX = 'pressao_mc_social_';
 
     var CANAL_TEXTOS = {
         instagram: {
@@ -162,6 +164,21 @@
         return (
             '<div class="pressao-mc-feedback">' +
             '<span class="pressao-mc-feedback-icon" aria-hidden="true">' + ico('check') + '</span>' +
+            '<h3 class="pressao-mc-feedback-title">' + esc(titulo) + '</h3>' +
+            (texto ? '<p class="pressao-mc-feedback-text" data-mc-feedback-text>' + esc(texto) + '</p>' : '') +
+            '</div>' +
+            (extraHtml || '')
+        );
+    }
+
+    /** Feedback com GIF animado (loading / telefone). */
+    function feedbackAnimHtml(titulo, texto, gifUrl, variante, extraHtml) {
+        var cls = 'pressao-mc-feedback-anim' + (variante ? ' pressao-mc-feedback-anim--' + variante : '');
+        return (
+            '<div class="pressao-mc-feedback">' +
+            (gifUrl
+                ? '<img class="' + cls + '" src="' + escAttr(gifUrl) + '" alt="" width="64" height="64" />'
+                : '<span class="pressao-mc-feedback-icon" aria-hidden="true">' + ico('check') + '</span>') +
             '<h3 class="pressao-mc-feedback-title">' + esc(titulo) + '</h3>' +
             (texto ? '<p class="pressao-mc-feedback-text" data-mc-feedback-text>' + esc(texto) + '</p>' : '') +
             '</div>' +
@@ -480,7 +497,8 @@
                 onMount(screen);
             }
             var titulo = screen.querySelector('[data-mc-screen-title]');
-            if (titulo) {
+            // No mobile/touch, focus() marca o título como selecionado.
+            if (titulo && !COARSE_MQ.matches && DESKTOP_MQ.matches) {
                 titulo.focus({ preventScroll: true });
             }
             if (DESKTOP_MQ.matches && panel) {
@@ -625,26 +643,65 @@
             );
         }
 
+        function socialStorageKey(c) {
+            return SOCIAL_STORAGE_PREFIX + c.alvo_id;
+        }
+
+        function salvarSocialPasso(c, passo) {
+            try {
+                window.sessionStorage.setItem(
+                    socialStorageKey(c),
+                    JSON.stringify({ passo: passo, canal: c.canal })
+                );
+            } catch (e) { /* ignore */ }
+        }
+
+        function lerSocialPasso(c) {
+            try {
+                var raw = window.sessionStorage.getItem(socialStorageKey(c));
+                var salvo = raw ? JSON.parse(raw) : null;
+                return salvo && salvo.passo === 'confirmar' ? 'confirmar' : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function limparSocialPasso(c) {
+            try {
+                window.sessionStorage.removeItem(socialStorageKey(c));
+            } catch (e) { /* ignore */ }
+        }
+
         function abrirSocial(c, passo) {
             var t = CANAL_TEXTOS[c.canal];
+            if (passo === 'confirmar') {
+                salvarSocialPasso(c, 'confirmar');
+            } else {
+                limparSocialPasso(c);
+            }
             var corpo = passo === 'confirmar' ? socialConfirmarHtml(c) : socialCopiarHtml(c);
             openScreen(navHtml(c.canal, t.nome) + corpo, c.canal);
         }
 
         function copiarEAbrir(c, btn) {
             var t = CANAL_TEXTOS[c.canal];
+            var loadingGif = (config.assets && config.assets.loading) || '';
             setLoading(btn, true);
             Core.copyText(mensagemSocial(c)).then(function () {
                 var segundos = parseInt(config.countdown, 10) || 0;
+                // Persiste antes de abrir o app: se a página recarregar, retoma "confirmar".
+                salvarSocialPasso(c, 'confirmar');
                 openModal({
                     label: 'Mensagem copiada',
                     className: 'pressao-mc-modal-dialog--feedback',
                     dismissable: false,
-                    html: feedbackHtml(
+                    html: feedbackAnimHtml(
                         'Mensagem copiada! Abrindo o ' + t.nome + '...',
                         segundos > 0
                             ? 'Abrindo em ' + segundos + '... Agora é só colar nos comentários e voltar aqui para confirmar.'
-                            : 'Agora é só colar nos comentários e voltar aqui para confirmar.'
+                            : 'Agora é só colar nos comentários e voltar aqui para confirmar.',
+                        loadingGif,
+                        'loading'
                     )
                 });
                 var espera = segundos > 0
@@ -742,6 +799,7 @@
                 status: 'CONCLUIDA'
             });
             desfazerNaoUso(c.canal);
+            limparSocialPasso(c);
         }
 
         function contadorDe(response) {
@@ -975,17 +1033,80 @@
             );
         }
 
+        function alvoCardHtml(busy) {
+            return (
+                '<div class="pressao-mc-tel-alvo" data-mc-tel-alvo' + (busy ? ' aria-busy="true"' : '') + '>' +
+                '<span class="pressao-mc-tel-alvo-icon" aria-hidden="true">' + ico('telefone') + '</span>' +
+                '<span class="pressao-mc-tel-alvo-copy"><strong data-mc-tel-alvo-nome>' +
+                (busy ? 'Carregando o alvo da vez...' : '') +
+                '</strong><span data-mc-tel-alvo-meta></span></span>' +
+                '<span class="pressao-mc-tel-badge">Alvo da vez</span></div>'
+            );
+        }
+
+        function preencherAlvoCard(container, membro) {
+            var box = container.querySelector('[data-mc-tel-alvo]');
+            if (!box || !membro) {
+                return;
+            }
+            box.removeAttribute('aria-busy');
+            var nome = box.querySelector('[data-mc-tel-alvo-nome]');
+            var meta = box.querySelector('[data-mc-tel-alvo-meta]');
+            if (nome) {
+                nome.textContent = membro.nome || '';
+            }
+            if (meta) {
+                meta.textContent = cargoPartido(membro);
+            }
+        }
+
+        function carregarAlvoDaVez(container, c, onReady) {
+            if (c.selecao === 'escolher') {
+                if (typeof onReady === 'function') {
+                    onReady(null);
+                }
+                return;
+            }
+            Core.proximoMembro({ root: root, alvoId: c.alvo_id })
+                .then(function (r) {
+                    if (!r.membro) {
+                        throw new Error('Nenhum candidato disponível para ligação no momento.');
+                    }
+                    preencherAlvoCard(container, r.membro);
+                    if (typeof onReady === 'function') {
+                        onReady(r);
+                    }
+                })
+                .catch(function (err) {
+                    var box = container.querySelector('[data-mc-tel-alvo]');
+                    if (box) {
+                        box.hidden = true;
+                    }
+                    mostrarErro(container, (err && err.message) || 'Não foi possível carregar o alvo da vez.');
+                    if (typeof onReady === 'function') {
+                        onReady(null);
+                    }
+                });
+        }
+
         function telefoneIntroHtml(c) {
             var passos = [
                 ['lapis', 'Você informa seus dados telefônicos'],
                 ['telefone-entrada', 'Você recebe uma ligação nossa em instantes'],
-                ['pessoas', 'A gente te conecta com a equipe do alvo']
+                ['pessoas', 'A gente te conecta com a equipe do alvo'],
+                ['info', 'Você conversa com um roteiro como guia']
             ];
+            var alvoSection = c.selecao === 'escolher'
+                ? ''
+                : '<section class="pressao-mc-block"><p class="pressao-mc-tel-label">Você vai se comunicar com:</p>' +
+                  alvoCardHtml(true) +
+                  '</section>';
             return (
                 navHtml('telefone', CANAL_TEXTOS.telefone.nome) +
                 '<div class="pressao-mc-screen-body">' +
                 bannerFeitoHtml('telefone') +
                 '<h4 class="pressao-mc-block-title">Como funciona</h4>' +
+                alvoSection +
                 '<ol class="pressao-mc-tel-passos">' +
                 passos
                     .map(function (p) {
@@ -996,6 +1117,7 @@
                 (c.selecao === 'escolher'
                     ? ''
                     : infoHtml('Na próxima ligação, você pode ser direcionado para outro alvo. Assim, equilibramos as ligações entre todos os candidatos da campanha.')) +
+                erroHtml() +
                 '<div class="pressao-mc-actions">' +
                 '<button type="button" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-tel-preencher>Preencher dados telefônicos</button>' +
                 '</div></div>'
@@ -1020,11 +1142,7 @@
                       })
                       .join('') +
                   '</select></label>'
-                : '<div class="pressao-mc-tel-alvo" data-mc-tel-alvo aria-busy="true">' +
-                  '<span class="pressao-mc-tel-alvo-icon" aria-hidden="true">' + ico('telefone') + '</span>' +
-                  '<span class="pressao-mc-tel-alvo-copy"><strong data-mc-tel-alvo-nome>Carregando o alvo da vez...</strong>' +
-                  '<span data-mc-tel-alvo-meta></span></span>' +
-                  '<span class="pressao-mc-tel-badge">Alvo da vez</span></div>';
+                : alvoCardHtml(true);
 
             var campoEmail = emailCampo === 'oculto'
                 ? ''
@@ -1045,9 +1163,8 @@
                 navHtml('telefone', CANAL_TEXTOS.telefone.nome) +
                 '<div class="pressao-mc-screen-body">' +
                 '<form class="pressao-mc-tel-form" data-mc-tel-form novalidate>' +
-                '<h4 class="pressao-mc-block-title">Preencha seus dados para gente te ligar:</h4>' +
-                '<section class="pressao-mc-block"><p class="pressao-mc-tel-label">Você vai ligar para:</p>' + alvoHtml + '</section>' +
-                roteiroHtml(c.roteiro || '', false) +
+                '<h4 class="pressao-mc-block-title">Vamos te conectar com</h4>' +
+                '<section class="pressao-mc-block">' + alvoHtml + '</section>' +
                 '<div class="pressao-mc-fields">' +
                 '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Nome completo <span class="pressao-mc-required">*</span></span>' +
                 '<input type="text" name="nome" required autocomplete="name" placeholder="Seu nome completo"' + value(ativista.nome) + ' /></label>' +
@@ -1056,6 +1173,7 @@
                 value(ativista.telefone ? Core.formatPhoneMask(ativista.telefone) : '') + ' /></label>' +
                 campoEmail +
                 '</div>' +
+                roteiroHtml(c.roteiro || '', false) +
                 erroHtml() +
                 '<div class="pressao-mc-actions">' +
                 '<button type="submit" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-tel-ligar>' + ico('telefone') + 'Já pode me ligar</button>' +
@@ -1066,15 +1184,18 @@
         }
 
         function abrirTelefone(c) {
+            var salvo = lerLigacao(c);
+            // Ligação em andamento: tela de andamento (com voltar), sem modal bloqueante.
+            if (salvo) {
+                acompanharLigacao(c, salvo, true);
+                return;
+            }
             openScreen(telefoneIntroHtml(c), 'telefone', function (container) {
                 container.querySelector('[data-mc-tel-preencher]').addEventListener('click', function () {
                     abrirTelefoneForm(c);
                 });
+                carregarAlvoDaVez(container, c);
             });
-            var salvo = lerLigacao(c);
-            if (salvo) {
-                acompanharLigacao(c, salvo, true);
-            }
         }
 
         function abrirTelefoneForm(c) {
@@ -1087,6 +1208,10 @@
 
                 function atualizarRoteiro() {
                     var det = form.querySelector('[data-mc-tel-roteiro]');
+                    if (!det) {
+                        return;
+                    }
+                    // Mantém o accordion visível; só esconde se realmente não houver roteiro.
                     det.hidden = !estado.roteiro;
                     det.querySelector('[data-mc-tel-roteiro-texto]').textContent = roteiroTexto(
                         estado.roteiro,
@@ -1107,27 +1232,18 @@
                     });
                 } else {
                     btn.disabled = true;
-                    Core.proximoMembro({ root: root, alvoId: c.alvo_id })
-                        .then(function (r) {
-                            if (!r.membro) {
-                                throw new Error('Nenhum candidato disponível para ligação no momento.');
-                            }
-                            estado.membro = r.membro;
-                            if (r.roteiro) {
-                                estado.roteiro = r.roteiro;
-                                estado.templateId = r.template_id || '';
-                            }
-                            var box = form.querySelector('[data-mc-tel-alvo]');
-                            box.removeAttribute('aria-busy');
-                            box.querySelector('[data-mc-tel-alvo-nome]').textContent = r.membro.nome;
-                            box.querySelector('[data-mc-tel-alvo-meta]').textContent = cargoPartido(r.membro);
-                            btn.disabled = false;
-                            atualizarRoteiro();
-                        })
-                        .catch(function (err) {
-                            form.querySelector('[data-mc-tel-alvo]').hidden = true;
-                            mostrarErro(form, (err && err.message) || 'Não foi possível carregar o alvo da vez.');
-                        });
+                    carregarAlvoDaVez(form, c, function (r) {
+                        if (!r || !r.membro) {
+                            return;
+                        }
+                        estado.membro = r.membro;
+                        if (r.roteiro) {
+                            estado.roteiro = r.roteiro;
+                            estado.templateId = r.template_id || '';
+                        }
+                        btn.disabled = false;
+                        atualizarRoteiro();
+                    });
                 }
                 atualizarRoteiro();
 
@@ -1211,23 +1327,23 @@
 
         function ligandoHtml(salvo) {
             var t = ligandoTextos(salvo);
+            var gifUrl = (config.assets && config.assets.telefone) || '';
             return (
-                '<div class="pressao-mc-feedback pressao-mc-tel-ligando">' +
-                '<span class="pressao-mc-feedback-icon" aria-hidden="true">' + ico('telefone-entrada') + '</span>' +
-                '<h3 class="pressao-mc-feedback-title">' + esc(t.titulo) + '</h3>' +
-                '<p class="pressao-mc-feedback-text">' + esc(t.texto) + '</p>' +
-                '</div>' +
+                feedbackAnimHtml(t.titulo, t.texto, gifUrl, 'telefone') +
                 '<button type="button" class="pressao-mc-btn pressao-mc-btn-secondary pressao-mc-tel-ligando-fechar" data-mc-tel-fechar hidden>Fechar e acompanhar depois</button>'
             );
         }
 
         function andamentoHtml(etapa, salvo) {
             var t = andamentoTextos(etapa, salvo);
+            var gifUrl = (config.assets && config.assets.telefone) || '';
             return (
                 navHtml('telefone', CANAL_TEXTOS.telefone.nome) +
                 '<div class="pressao-mc-screen-body">' +
                 '<div class="pressao-mc-tel-status" role="status">' +
-                '<span class="pressao-mc-tel-status-icon" aria-hidden="true">' + ico('telefone') + '</span>' +
+                (gifUrl
+                    ? '<img class="pressao-mc-feedback-anim pressao-mc-feedback-anim--telefone" src="' + escAttr(gifUrl) + '" alt="" width="48" height="48" />'
+                    : '<span class="pressao-mc-tel-status-icon" aria-hidden="true">' + ico('telefone') + '</span>') +
                 '<div><strong data-mc-tel-status-titulo>' + esc(t.titulo) + '</strong>' +
                 '<p data-mc-tel-status-texto>' + esc(t.texto) + '</p></div></div>' +
                 roteiroHtml(salvo.roteiro || '', true) +
@@ -1238,7 +1354,7 @@
         /**
          * Acompanha a ligação por polling: modal "Vamos te ligar" até o ativista atender, tela
          * "Ligação em andamento" com o roteiro enquanto fala com o alvo, depois sucesso ou erro.
-         * `retomando`: reabertura do canal; espera o primeiro status antes de escolher a tela.
+         * `retomando`: reabertura do canal — abre tela de andamento (com voltar), sem modal bloqueante.
          */
         function acompanharLigacao(c, salvo, retomando) {
             pararAcompanhamento();
@@ -1255,13 +1371,14 @@
                 closeAllModals();
                 openModal({
                     label: 'Vamos te ligar em instantes',
-                    className: 'pressao-mc-modal-dialog--feedback',
+                    className: 'pressao-mc-modal-dialog--feedback pressao-mc-tel-ligando',
                     dismissable: false,
                     html: ligandoHtml(salvo),
                     onMount: function (d) {
                         var fechar = d.querySelector('[data-mc-tel-fechar]');
                         fechar.hidden = !fecharVisivel;
                         fechar.addEventListener('click', function () {
+                            // Volta à home; sessionStorage permanece para status ao reabrir.
                             closeAllModals();
                             closeScreen();
                         });
@@ -1287,7 +1404,10 @@
                 }
             }
 
-            if (!retomando) {
+            if (retomando) {
+                // Tela dismissível (seta voltar → home); polling continua em background.
+                mostrarAndamento('CHAMANDO_ALVO');
+            } else {
                 abrirLigando();
             }
             atual.poller = Core.poll(
@@ -1310,8 +1430,10 @@
                             }
                             if (st.etapa === 'CHAMANDO_ALVO' || st.etapa === 'EM_ANDAMENTO') {
                                 mostrarAndamento(st.etapa);
-                            } else if (fase !== 'ligando') {
+                            } else if (fase !== 'ligando' && !retomando) {
                                 abrirLigando();
+                            } else if (fase !== 'andamento' && retomando) {
+                                mostrarAndamento(st.etapa || 'CHAMANDO_ALVO');
                             }
                             if (!fecharVisivel && Date.now() - inicio > LIGACAO_FECHAR_APOS_MS) {
                                 fecharVisivel = true;
@@ -1518,7 +1640,7 @@
             } else if (canal === 'telefone') {
                 abrirTelefone(c);
             } else {
-                abrirSocial(c, 'copiar');
+                abrirSocial(c, lerSocialPasso(c) || 'copiar');
             }
         }
 

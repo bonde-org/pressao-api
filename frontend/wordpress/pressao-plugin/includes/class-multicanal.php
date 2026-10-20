@@ -294,6 +294,10 @@ class PressaoPlugin_Multicanal {
             'redes' => $o['redes'],
             'share' => $share,
             'privacidade_url' => function_exists('get_privacy_policy_url') ? get_privacy_policy_url() : '',
+            'assets' => [
+                'loading' => PRESSAO_PLUGIN_URL . 'assets/img/loading.gif',
+                'telefone' => PRESSAO_PLUGIN_URL . 'assets/img/telefone.gif',
+            ],
         ];
 
         $estados = [];
