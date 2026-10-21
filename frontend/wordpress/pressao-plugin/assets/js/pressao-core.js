@@ -53,10 +53,46 @@
         return parseInt(data().sessionDuration, 10) || 86400;
     }
 
+    /**
+     * UUID v4. `crypto.randomUUID` só existe em contexto seguro (HTTPS);
+     * em HTTP (ex. Tailscale no celular) usamos getRandomValues / fallback.
+     */
+    function generateUuid() {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+        if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+            var bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+            bytes[6] = (bytes[6] & 0x0f) | 0x40;
+            bytes[8] = (bytes[8] & 0x3f) | 0x80;
+            var hex = [];
+            for (var i = 0; i < 16; i++) {
+                hex.push((bytes[i] + 0x100).toString(16).substring(1));
+            }
+            return (
+                hex.slice(0, 4).join('') +
+                '-' +
+                hex.slice(4, 6).join('') +
+                '-' +
+                hex.slice(6, 8).join('') +
+                '-' +
+                hex.slice(8, 10).join('') +
+                '-' +
+                hex.slice(10, 16).join('')
+            );
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            var r = (Math.random() * 16) | 0;
+            var v = c === 'x' ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+        });
+    }
+
     function getOrCreateSessaoId() {
         var id = getCookie(SESSAO_COOKIE);
         if (!id) {
-            id = crypto.randomUUID();
+            id = generateUuid();
             setCookie(SESSAO_COOKIE, id, sessionDuration());
         }
         return id;
@@ -541,43 +577,62 @@
     }
 
     /**
-     * Mobile: tenta abrir o app sem nova aba do browser, para o X/voltar do
-     * app devolver à página do widget. Android usa Intent; iOS dispara
-     * Universal Link via <a> sem target. Desktop: window.open em nova aba.
+     * Abre a URL da postagem/perfil em **nova aba** (mobile e desktop).
+     *
+     * Não dá para detectar com certeza se o app está instalado nem impedir o
+     * SO de abrir o app a partir dessa aba. O widget permanece na aba atual;
+     * tentamos devolver o foco a ela (o “voltar” nativo do app ainda pode
+     * pousar na aba do Instagram — limitação do iOS/Android, não controlável
+     * pela página). O passo “confirmar” fica em sessionStorage para retomar.
+     *
+     * `androidPackage` é aceito por compatibilidade, mas o fluxo unificado
+     * usa sempre nova aba (HTTPS), para o deep link/Universal Link partir
+     * do navegador sem substituir o widget.
      *
      * @param {string} webUrl
-     * @param {string} androidPackage pacote Android ou chave de ANDROID_PACKAGES
+     * @param {string} [androidPackage]
      */
     function openAppUrl(webUrl, androidPackage) {
         if (!webUrl) {
             return;
         }
 
-        if (!isMobileBrowser()) {
-            window.open(webUrl, '_blank', 'noopener,noreferrer');
-            return;
+        // Sem noopener: mantém relação opener↔filho para poder focar a aba do widget.
+        var child = window.open(webUrl, '_blank');
+
+        function focarWidget() {
+            try {
+                window.focus();
+            } catch (e) { /* ignore */ }
+            try {
+                if (child && typeof child.blur === 'function') {
+                    child.blur();
+                }
+            } catch (e2) { /* cross-origin após o redirect */ }
         }
 
-        var pkg = ANDROID_PACKAGES[androidPackage] || androidPackage || '';
-        if (isAndroidBrowser() && pkg) {
-            var path = webUrl.replace(/^https?:\/\//i, '');
-            window.location.href =
-                'intent://' +
-                path +
-                '#Intent;scheme=https;package=' +
-                pkg +
-                ';S.browser_fallback_url=' +
-                encodeURIComponent(webUrl) +
-                ';end';
-            return;
+        // Devolve o foco à aba do widget o quanto antes (e de novo se o SO
+        // trouxe o app e o usuário voltou pelo app switcher).
+        focarWidget();
+        setTimeout(focarWidget, 300);
+        setTimeout(focarWidget, 1000);
+
+        if (isMobileBrowser()) {
+            var onVoltar = function () {
+                if (document.visibilityState === 'visible') {
+                    focarWidget();
+                }
+            };
+            document.addEventListener('visibilitychange', onVoltar);
+            window.addEventListener('pageshow', onVoltar);
+            setTimeout(function () {
+                document.removeEventListener('visibilitychange', onVoltar);
+                window.removeEventListener('pageshow', onVoltar);
+            }, 120000);
         }
 
-        var anchor = document.createElement('a');
-        anchor.href = webUrl;
-        anchor.rel = 'noopener noreferrer';
-        document.body.appendChild(anchor);
-        anchor.click();
-        document.body.removeChild(anchor);
+        // Silencia lint/uso: pacote Android não entra neste caminho unificado.
+        void androidPackage;
     }
 
     // ------------------------------------------------------------------
@@ -614,36 +669,28 @@
         var d = 'data-' + (opts.dataPrefix || 'fluxo') + '-';
         var redes = opts.redes || ['whatsapp', 'instagram', 'messenger'];
         var onShared = typeof opts.onShared === 'function' ? opts.onShared : function () {};
+        var pageLink = share.link || (typeof window !== 'undefined' ? window.location.href : '');
 
+        // Rede sem URL configurada fica oculta (não desabilitada).
         var socialHtml = redes
             .filter(function (canal) {
-                if (!SHARE_REDES[canal]) {
-                    return false;
-                }
-                return !opts.ocultarSemLink || !!share[SHARE_REDES[canal].urlKey];
+                return !!(SHARE_REDES[canal] && share[SHARE_REDES[canal].urlKey]);
             })
             .map(function (canal) {
                 var rede = SHARE_REDES[canal];
                 var url = share[rede.urlKey] || '';
-                var tagOpen = url
-                    ? '<a class="' + p + '-share-social" data-canal="' +
-                      escapeAttr(canal) +
-                      '" href="' +
-                      escapeAttr(url) +
-                      '" target="_blank" rel="noopener noreferrer">'
-                    : '<span class="' + p + '-share-social is-disabled" data-canal="' +
-                      escapeAttr(canal) +
-                      '" aria-disabled="true" title="Configure o link em Compartilhamento">';
-                var tagClose = url ? '</a>' : '</span>';
                 return (
-                    tagOpen +
+                    '<a class="' + p + '-share-social" data-canal="' +
+                    escapeAttr(canal) +
+                    '" href="' +
+                    escapeAttr(url) +
+                    '" target="_blank" rel="noopener noreferrer">' +
                     '<span class="' + p + '-share-social-icon" data-canal="' +
                     escapeAttr(canal) +
                     '" aria-hidden="true"></span>' +
                     '<span class="' + p + '-share-social-label">' +
                     escapeHtml(rede.label) +
-                    '</span>' +
-                    tagClose
+                    '</span></a>'
                 );
             })
             .join('');
@@ -706,7 +753,7 @@
             '</p>' +
             '<button type="button" class="' + p + '-link-row" ' + d + 'copy-link aria-label="Copiar link">' +
             '<span class="' + p + '-link-text">' +
-            escapeHtml(share.link || '') +
+            escapeHtml(pageLink) +
             '</span>' +
             '<span class="' + p + '-copy-link" ' + d + 'copy-btn>' +
             '<span class="' + p + '-copy-icon" aria-hidden="true"></span>' +
@@ -755,7 +802,7 @@
         if (copyRow) {
             copyRow.addEventListener('click', function (e) {
                 e.preventDefault();
-                var link = share.link || '';
+                var link = pageLink || '';
                 if (!link) {
                     return;
                 }

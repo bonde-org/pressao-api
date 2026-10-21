@@ -46,6 +46,13 @@
   margin: 0;
   letter-spacing: normal;
   text-transform: none;
+  color: inherit;
+}
+
+.pressao-mc h2,
+.pressao-mc h3,
+.pressao-mc h4 {
+  color: var(--mc-text);
 }
 
 .pressao-mc ul,
@@ -301,6 +308,7 @@ html.pressao-mc-lock body {
   font-size: 16px;
   line-height: 24px;
   font-weight: 700;
+  color: var(--mc-text);
 }
 
 .pressao-mc-cards {
@@ -461,8 +469,8 @@ html.pressao-mc-lock body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 14px;
+  line-height: 20px;
   padding: 4px 0;
 }
 
@@ -481,7 +489,7 @@ html.pressao-mc-lock body {
   border-radius: 80px !important;
   background: #fff !important;
   font-size: 14px !important;
-  font-weight: 500;
+  font-weight: 700;
   color: var(--mc-black) !important;
 }
 
@@ -656,7 +664,15 @@ html.pressao-mc-lock body {
   font-size: 18px;
   line-height: 24px;
   font-weight: 700;
+  color: var(--mc-text);
   outline: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.pressao-mc [data-mc-screen-title] {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .pressao-mc-nav-title .pressao-mc-ico {
@@ -983,6 +999,7 @@ html.pressao-mc-lock body {
   font-size: 24px;
   line-height: 28px;
   font-weight: 700;
+  color: var(--mc-text);
   outline: none;
 }
 
@@ -1079,15 +1096,27 @@ html.pressao-mc-lock body {
   line-height: 24px;
 }
 
-.pressao-mc-tel-passo-icon,
+.pressao-mc-tel-passo-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--mc-soft-2);
+  color: var(--mc-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
 .pressao-mc-tel-alvo-icon,
 .pressao-mc-tel-status-icon {
   flex-shrink: 0;
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--mc-black);
-  color: #fff;
+  background: var(--mc-soft-2);
+  color: var(--mc-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1182,10 +1211,9 @@ html.pressao-mc-lock body {
   text-decoration: underline;
 }
 
-.pressao-mc-tel-ligando .pressao-mc-feedback-icon {
-  width: 48px;
-  height: 48px;
-  background: var(--mc-black);
+.pressao-mc-tel-ligando .pressao-mc-feedback-anim {
+  width: 72px;
+  height: 72px;
 }
 
 .pressao-mc .pressao-mc-tel-ligando-fechar {
@@ -1199,6 +1227,12 @@ html.pressao-mc-lock body {
   padding: 16px;
   border-radius: 8px;
   background: var(--mc-soft);
+}
+
+.pressao-mc-tel-status .pressao-mc-feedback-anim {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
 }
 
 .pressao-mc-tel-status strong {
@@ -1339,6 +1373,7 @@ html.pressao-mc-lock body {
   font-size: 18px;
   line-height: 24px;
   font-weight: 700;
+  color: var(--mc-text);
 }
 
 .pressao-mc-modal-body {
@@ -1420,10 +1455,24 @@ html.pressao-mc-lock body {
   justify-content: center;
 }
 
+.pressao-mc-feedback-anim {
+  width: 64px;
+  height: 64px;
+  display: block;
+  object-fit: contain;
+  margin: 0 auto;
+}
+
+.pressao-mc-feedback-anim--telefone {
+  width: 72px;
+  height: 72px;
+}
+
 .pressao-mc .pressao-mc-feedback-title {
   font-size: 20px;
   line-height: 26px;
   font-weight: 700;
+  color: var(--mc-text);
 }
 
 .pressao-mc-feedback-text {
@@ -1442,7 +1491,7 @@ html.pressao-mc-lock body {
   justify-content: center;
   gap: 8px;
   font-size: 14px !important;
-  font-weight: 500;
+  font-weight: 700;
   align-self: center;
   padding: 4px 8px !important;
 }
@@ -1469,6 +1518,7 @@ html.pressao-mc-lock body {
   font-size: 24px;
   line-height: 28px;
   font-weight: 700;
+  color: var(--mc-text);
   outline: none;
 }
 
