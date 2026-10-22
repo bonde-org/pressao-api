@@ -540,7 +540,7 @@ class PressaoPlugin_Multicanal {
             <p class="pressao-mc-modal-text"><?php echo esc_html($texto); ?></p>
             <ul class="pressao-mc-lista">
                 <?php foreach ($candidatos as $c) : ?>
-                    <?php $meta = array_filter([$c['instagram'], $c['cargo'], $c['partido']]); ?>
+                    <?php $meta = array_filter([$c['instagram'], $c['tiktok'], $c['cargo'], $c['partido']]); ?>
                     <li class="pressao-mc-lista-item">
                         <?php echo PressaoPlugin_Render_Helpers::render_avatares([$c], 'pressao-mc-avatar pressao-mc-avatar--lista'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                         <span class="pressao-mc-lista-copy">

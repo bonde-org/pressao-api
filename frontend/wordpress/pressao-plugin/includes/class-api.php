@@ -409,6 +409,122 @@ class PressaoPlugin_API {
     }
 
     /**
+     * @param string $campanha_id
+     */
+    public function invalidar_cache_alvos($campanha_id) {
+        delete_transient('pressao_alvos_' . md5($campanha_id . serialize([])));
+    }
+
+    /**
+     * @param array $dados
+     * @return array|WP_Error
+     */
+    public function criar_alvo($dados) {
+        $result = $this->api_request('/api/v1/alvos/', 'POST', $dados);
+        if (!is_wp_error($result) && !empty($dados['campanha_id'])) {
+            $this->invalidar_cache_alvos($dados['campanha_id']);
+        }
+        return $result;
+    }
+
+    /**
+     * @param string $alvo_id
+     * @param array  $dados
+     * @param string $campanha_id
+     * @return array|WP_Error
+     */
+    public function atualizar_alvo($alvo_id, $dados, $campanha_id = '') {
+        if (empty($alvo_id)) {
+            return new WP_Error(
+                'invalid_alvo',
+                __('ID do alvo não informado', 'pressao-plugin')
+            );
+        }
+        $result = $this->api_request(sprintf('/api/v1/alvos/%s', $alvo_id), 'PUT', $dados);
+        if (!is_wp_error($result) && $campanha_id !== '') {
+            $this->invalidar_cache_alvos($campanha_id);
+        }
+        return $result;
+    }
+
+    /**
+     * @param string $campanha_id
+     * @param string $canal
+     * @return array|WP_Error
+     */
+    public function listar_templates($campanha_id, $canal = '') {
+        if (empty($campanha_id)) {
+            return new WP_Error(
+                'invalid_campaign',
+                __('ID da campanha não informado', 'pressao-plugin')
+            );
+        }
+        $endpoint = sprintf('/api/v1/templates/campanha/%s', $campanha_id);
+        if ($canal !== '') {
+            $endpoint .= '?canal=' . rawurlencode($canal);
+        }
+        $response = $this->api_request($endpoint, 'GET');
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        return is_array($response) ? $response : [];
+    }
+
+    /**
+     * @param array $dados
+     * @return array|WP_Error
+     */
+    public function criar_template($dados) {
+        $result = $this->api_request('/api/v1/templates/', 'POST', $dados);
+        if (!is_wp_error($result) && !empty($dados['campanha_id'])) {
+            $this->invalidar_cache_alvos($dados['campanha_id']);
+        }
+        return $result;
+    }
+
+    /**
+     * @param string $template_id
+     * @param array  $dados
+     * @param string $campanha_id
+     * @return array|WP_Error
+     */
+    public function atualizar_template($template_id, $dados, $campanha_id = '') {
+        if (empty($template_id)) {
+            return new WP_Error(
+                'invalid_template',
+                __('ID do texto não informado', 'pressao-plugin')
+            );
+        }
+        $result = $this->api_request(sprintf('/api/v1/templates/%s', $template_id), 'PUT', $dados);
+        if (!is_wp_error($result) && $campanha_id !== '') {
+            $this->invalidar_cache_alvos($campanha_id);
+        }
+        return $result;
+    }
+
+    /**
+     * @param string $template_id
+     * @param string $campanha_id
+     * @return true|WP_Error
+     */
+    public function deletar_template($template_id, $campanha_id = '') {
+        if (empty($template_id)) {
+            return new WP_Error(
+                'invalid_template',
+                __('ID do texto não informado', 'pressao-plugin')
+            );
+        }
+        $result = $this->api_request(sprintf('/api/v1/templates/%s', $template_id), 'DELETE');
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        if ($campanha_id !== '') {
+            $this->invalidar_cache_alvos($campanha_id);
+        }
+        return true;
+    }
+
+    /**
      * Cria uma nova ação para um alvo
      * 
      * @param array $dados Dados da ação

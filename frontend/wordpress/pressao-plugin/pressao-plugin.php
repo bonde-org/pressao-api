@@ -451,6 +451,10 @@ final class PressaoPlugin {
             'campaignNoResults' => __('Não encontramos resultados para sua busca', 'pressao-plugin'),
             'campaignActive' => __('Ativa', 'pressao-plugin'),
             'campaignInactive' => __('Inativa', 'pressao-plugin'),
+            'redesSaveError' => __('Não foi possível salvar.', 'pressao-plugin'),
+            'redesDeleteConfirm' => __('Remover este texto?', 'pressao-plugin'),
+            'redesForaSorteio' => __('Fora do sorteio', 'pressao-plugin'),
+            'redesCriar' => __('Criar', 'pressao-plugin'),
         ]);
     }
 }

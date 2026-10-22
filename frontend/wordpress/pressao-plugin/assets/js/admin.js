@@ -30,6 +30,7 @@
             partido: $fields.find('[data-field="partido"]').val() || '',
             estado: $fields.find('[data-field="estado"]').val() || '',
             link_url: $fields.find('[data-field="link_url"]').val() || '',
+            tiktok: $fields.find('[data-field="tiktok"]').val() || '',
             descricao: $fields.find('[data-field="descricao"]').val() || '',
             imagem_id: $fields.find('[data-field="imagem_id"]').val() || '0'
         };
@@ -41,6 +42,7 @@
         $row.find('[data-field="partido"]').text(item.partido || '');
         $row.find('[data-field="estado"]').text(item.estado || '');
         $row.find('[data-field="link_url"]').text(item.link_url || '');
+        $row.find('[data-field="tiktok"]').text(item.tiktok || '');
 
         const $thumb = $row.find('.pressao-admin-list-thumb');
         if (thumb) {
@@ -674,8 +676,164 @@
         });
     }
 
+    function initRedesSociais() {
+        const $root = $('.pressao-redes');
+        if (!$root.length) {
+            return;
+        }
+        const L = labels();
+
+        function nonce() {
+            return $root.attr('data-nonce') || '';
+        }
+
+        function post(data) {
+            return $.post(ajaxUrl(), $.extend({ nonce: nonce() }, data));
+        }
+
+        function ajaxMsg(resp, xhr, fallback) {
+            if (resp && resp.data && resp.data.message) {
+                return resp.data.message;
+            }
+            if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                return xhr.responseJSON.data.message;
+            }
+            return fallback;
+        }
+
+        function closeEditors() {
+            $root.find('.pressao-redes-editor').attr('hidden', true);
+            $root.find('.pressao-redes-balao').removeClass('is-open');
+        }
+
+        function fillEditor($editor, data) {
+            $editor.find('[data-field="template-id"]').val(data.id || '');
+            $editor.find('[data-field="titulo"]').val(data.titulo || '');
+            $editor.find('[data-field="conteudo"]').val(data.conteudo || '');
+            $editor.find('[data-field="ativo"]').prop('checked', data.ativo !== false && data.ativo !== '0');
+            $editor.find('[data-action="remover-texto"]').prop('hidden', !data.id);
+            $editor.find('.pressao-redes-editor-status').text('').removeClass('is-error');
+        }
+
+        $root.on('click', '[data-action="salvar-alvo"]', function () {
+            const $card = $(this).closest('.pressao-redes-card');
+            const $status = $card.find('.pressao-redes-alvo-status');
+            const $btn = $(this);
+            $status.text(L.saving || 'Salvando…').removeClass('is-error');
+            $btn.prop('disabled', true);
+            post({
+                action: 'pressao_admin_salvar_alvo_social',
+                canal: $card.attr('data-canal'),
+                id: $card.find('[data-field="alvo-id"]').val() || '',
+                nome: $card.find('[data-field="nome"]').val() || '',
+                contato: $card.find('[data-field="contato"]').val() || ''
+            })
+                .done(function (resp) {
+                    if (!resp || !resp.success) {
+                        $status.text(ajaxMsg(resp, null, L.redesSaveError)).addClass('is-error');
+                        return;
+                    }
+                    const alvo = (resp.data && resp.data.alvo) || {};
+                    $card.find('[data-field="alvo-id"]').val(alvo.id || '');
+                    $card.find('.pressao-redes-vazio').remove();
+                    $btn.text($btn.attr('data-label-saved') || L.campaignSave || 'Salvar alterações');
+                    $status.text(L.saved || 'Salvo.').removeClass('is-error');
+                })
+                .fail(function (xhr) {
+                    $status.text(ajaxMsg(null, xhr, L.redesSaveError)).addClass('is-error');
+                })
+                .always(function () {
+                    $btn.prop('disabled', false);
+                });
+        });
+
+        $root.on('click', '.pressao-redes-balao:not(.pressao-redes-balao-add)', function () {
+            const $balao = $(this);
+            const $card = $balao.closest('.pressao-redes-card');
+            const $editor = $card.find('.pressao-redes-editor');
+            closeEditors();
+            $balao.addClass('is-open');
+            fillEditor($editor, {
+                id: $balao.attr('data-id'),
+                titulo: $balao.attr('data-titulo'),
+                conteudo: $balao.attr('data-conteudo'),
+                ativo: $balao.attr('data-ativo')
+            });
+            $editor.removeAttr('hidden');
+        });
+
+        $root.on('click', '[data-action="novo-texto"]', function () {
+            const $card = $(this).closest('.pressao-redes-card');
+            const $editor = $card.find('.pressao-redes-editor');
+            closeEditors();
+            fillEditor($editor, { ativo: true });
+            $editor.removeAttr('hidden');
+        });
+
+        $root.on('click', '[data-action="cancelar-texto"]', function () {
+            closeEditors();
+        });
+
+        $root.on('click', '[data-action="salvar-texto"]', function () {
+            const $card = $(this).closest('.pressao-redes-card');
+            const $editor = $card.find('.pressao-redes-editor');
+            const $status = $editor.find('.pressao-redes-editor-status');
+            const $btn = $(this);
+            $status.text(L.saving || 'Salvando…').removeClass('is-error');
+            $btn.prop('disabled', true);
+            post({
+                action: 'pressao_admin_salvar_template_social',
+                canal: $card.attr('data-canal'),
+                id: $editor.find('[data-field="template-id"]').val() || '',
+                titulo: $editor.find('[data-field="titulo"]').val() || '',
+                conteudo: $editor.find('[data-field="conteudo"]').val() || '',
+                ativo: $editor.find('[data-field="ativo"]').is(':checked') ? '1' : '0'
+            })
+                .done(function (resp) {
+                    if (!resp || !resp.success) {
+                        $status.text(ajaxMsg(resp, null, L.redesSaveError)).addClass('is-error');
+                        return;
+                    }
+                    window.location.reload();
+                })
+                .fail(function (xhr) {
+                    $status.text(ajaxMsg(null, xhr, L.redesSaveError)).addClass('is-error');
+                })
+                .always(function () {
+                    $btn.prop('disabled', false);
+                });
+        });
+
+        $root.on('click', '[data-action="remover-texto"]', function () {
+            const msg = L.redesDeleteConfirm || 'Remover este texto?';
+            if (!window.confirm(msg)) {
+                return;
+            }
+            const $card = $(this).closest('.pressao-redes-card');
+            const $editor = $card.find('.pressao-redes-editor');
+            const $status = $editor.find('.pressao-redes-editor-status');
+            const id = $editor.find('[data-field="template-id"]').val() || '';
+            $status.text(L.saving || 'Salvando…').removeClass('is-error');
+            post({
+                action: 'pressao_admin_deletar_template_social',
+                id: id
+            })
+                .done(function (resp) {
+                    if (!resp || !resp.success) {
+                        $status.text(ajaxMsg(resp, null, L.redesSaveError)).addClass('is-error');
+                        return;
+                    }
+                    window.location.reload();
+                })
+                .fail(function (xhr) {
+                    $status.text(ajaxMsg(null, xhr, L.redesSaveError)).addClass('is-error');
+                });
+        });
+    }
+
     $(function() {
         initCampanhaPicker();
+        initRedesSociais();
 
         const $removeSelect = $('#pressao-apoiadores-remove-select');
         if ($removeSelect.length && typeof TomSelect !== 'undefined') {

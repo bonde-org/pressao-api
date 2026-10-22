@@ -137,20 +137,20 @@ clicável.
 1. Sem Keycloak + API, só **Conexão** e **Documentação**.
 2. Com as credenciais, **Campanha** libera. **Conexão** vira cartão de status (conectado /
    sem conexão); **Editar credenciais** só se algum campo não vier de constante no `wp-config.php`.
-3. Com uma campanha vinculada (`pressao_campaign_id` UUID), liberam Geral, Candidatos,
+3. Com uma campanha vinculada (`pressao_campaign_id` UUID), liberam Geral, Redes Sociais,
    Apoiadores e Compartilhamento.
 
 | Aba | Conteúdo |
 |-----|----------|
 | **Conexão** | Setup na primeira vez; depois status da API (token Keycloak + `GET /api/v1/campanhas/`) |
 | **Campanha** | Busca por nome (autocomplete), criar e editar na API; vincula o UUID ao site na hora |
-| **Geral** | Título do widget, privacidade, sessão/identificação do ativista |
-| **Candidatos** | Lista a pressionar + limite / countdown / ajuda do `[pressao_fluxo]` |
+| **Geral** | Título do widget, privacidade, sessão/identificação do ativista + opções provisórias do `[pressao_fluxo]` |
+| **Redes Sociais** | Instagram e TikTok (um alvo cada + textos em balões) e lista **Quem marcar** |
 | **Apoiadores** | Lista “já apoiam” + import/remover CSV |
 | **Compartilhamento** | Botão e overlay de compartilhar em `[pressao_alvos]` |
 | **Documentação** | Shortcodes (“Como usar”) e nota sobre LGPD |
 
-Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não sobrescrever as demais. **Campanha**, **Candidatos** e **Apoiadores** não passam pelo `options.php`: Campanha grava `pressao_campaign_id` via AJAX; as listas usam tabela + CRUD via `admin-ajax`. **Alvos** e **Templates** da API ainda são geridos fora do painel; no futuro entram como abas de primeiro nível (não dentro de Geral).
+Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não sobrescrever as demais. **Campanha**, **Redes Sociais** e **Apoiadores** não passam pelo `options.php`: Campanha grava `pressao_campaign_id` via AJAX; Instagram/TikTok (alvo + templates) usam AJAX contra a API; as listas editoriais usam tabela + CRUD via `admin-ajax`. `?tab=candidatos` redireciona para `redes-sociais`.
 
 | Campo | Option WP | Aba | Descrição |
 |-------|-----------|-----|-----------|
@@ -165,11 +165,11 @@ Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não
 | Intervalo confirmar identidade | `pressao_ativista_confirm_interval` | Geral | Minutos até perguntar de novo (padrão `10`) |
 | Título do formulário | `pressao_ativista_form_title` | Geral | Título do formulário de identificação |
 | Duração da sessão | `pressao_session_duration` | Geral | TTL dos cookies em segundos (padrão `86400`) |
-| Candidatos a pressionar | `pressao_candidatos` | Candidatos | Lista AJAX (busca/paginação); usada na busca e no filtro por estado do `[pressao_fluxo]` |
-| Índice de filtros | `pressao_candidatos_filtros` | Candidatos | Gerado (não editável): estados e cargos do “Filtre por estado”; recalculado a cada gravação de `pressao_candidatos` ou pelo botão **Regenerar filtros** |
-| Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Candidatos | Máximo de @ por mensagem (padrão `5`) — salvo pelo botão Salvar da aba |
-| Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Candidatos | Se ligado: toast com countdown antes de abrir; se desligado (padrão): abre no clique. Mobile tenta o app; desktop abre nova aba |
-| Ajuda do fluxo | `pressao_fluxo_ajuda` | Candidatos | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
+| Quem marcar | `pressao_candidatos` | Redes Sociais | Lista AJAX (busca/paginação); Instagram em `link_url`, TikTok em `tiktok`; usada na busca e no filtro por estado do `[pressao_fluxo]` e nos comentários do `[pressao_multicanal]` |
+| Índice de filtros | `pressao_candidatos_filtros` | Redes Sociais | Gerado (não editável): estados e cargos do “Filtre por estado”; recalculado a cada gravação de `pressao_candidatos` ou pelo botão **Regenerar filtros** |
+| Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Geral | Máximo de @ por mensagem (padrão `5`) — moradia temporária nesta aba |
+| Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Geral | Se ligado: toast com countdown antes de abrir; se desligado (padrão): abre no clique. Mobile tenta o app; desktop abre nova aba |
+| Ajuda do fluxo | `pressao_fluxo_ajuda` | Geral | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
 | Candidatos apoiadores | `pressao_candidatos_apoiadores` | Apoiadores | Lista AJAX + import/remover CSV; botão/lista “já apoiam”, `[pressao_candidatos]` |
 | Compartilhamento | `pressao_compartilhamento` | Compartilhamento | Textos, links, deep links e imagens do botão de compartilhar |
 
@@ -205,12 +205,12 @@ Há **duas bases** no WordPress:
 
 | Base | Option | Uso |
 |------|--------|-----|
-| A pressionar | `pressao_candidatos` | Busca/seleção (Tom Select) no `[pressao_fluxo]` |
+| Quem marcar (a pressionar) | `pressao_candidatos` | Busca/seleção (Tom Select) no `[pressao_fluxo]`; handles do `[pressao_multicanal]` (Instagram e TikTok) |
 | Apoiadores | `pressao_candidatos_apoiadores` | Botão “já apoiam”, overlay da lista, shortcode `[pressao_candidatos]` |
 
 No admin, as duas listas usam o **mesmo padrão de listagem** (`PressaoPlugin_Candidatos_Admin_List`):
 
-- Tabela com colunas: foto, nome, cargo, partido, Instagram (+ **estado** só na base a pressionar)
+- Tabela com colunas: foto, nome, cargo, partido, Instagram (+ **estado** e **TikTok** só em Quem marcar)
 - Clique / **Editar** expande o formulário na linha; **Salvar item** grava via AJAX
 - Busca (`cs`) e paginação (`cpage`, 20 por página) no servidor
 - Actions: `pressao_candidato_save`, `pressao_candidato_delete`, `pressao_candidato_add`
@@ -222,8 +222,9 @@ Campos por candidato (iguais nas duas):
 - `partido`
 - `descricao`
 - `link_url` — **Instagram (@)** (handle; aceita `@user` ou URL de perfil; sanitizado no save)
+- `tiktok` — **TikTok (@)** só em Quem marcar (aceita `@user` ou URL de perfil; sanitizado no save)
 - `imagem_id`
-- `estado` — sigla UF (select das 27 UFs; só editável na base **a pressionar**; valor inválido vira vazio)
+- `estado` — sigla UF (select das 27 UFs; só editável em **Quem marcar**; valor inválido vira vazio)
 
 As imagens manuais usam a Biblioteca de Mídia do WordPress (`attachment ID` + `wp_get_attachment_image()`).
 
@@ -235,7 +236,7 @@ O “Filtre por estado” do `[pressao_fluxo]` usa um índice pré-calculado (`P
 
 - Só estados com pelo menos um candidato (com `@`), ordenados pelo nome.
 - Cargos = distinct do texto `cargo` **por estado**, agrupado ignorando maiúsculas, acentos e espaços extras; o rótulo é a primeira grafia encontrada. Cargo vazio não vira opção.
-- Regenerado automaticamente nos hooks `add_option_pressao_candidatos` / `update_option_pressao_candidatos` (salvar, adicionar ou remover item). Na aba **Candidatos**, o bloco **Filtros por estado** mostra o resumo e o botão **Regenerar filtros** (`admin-post` `pressao_regenerar_filtros`).
+- Regenerado automaticamente nos hooks `add_option_pressao_candidatos` / `update_option_pressao_candidatos` (salvar, adicionar ou remover item). Na aba **Redes Sociais**, o bloco **Filtros por estado** mostra o resumo e o botão **Regenerar filtros** (`admin-post` `pressao_regenerar_filtros`).
 - Candidatos sem estado aparecem só na busca por nome.
 
 #### Import CSV (apoiadores)

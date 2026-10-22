@@ -600,19 +600,30 @@
 
         // ---------------- Canais sociais ----------------
 
-        function handlesItens() {
-            return candidatos.map(function (c) {
-                return { label: c.instagram, imagem: c.imagem };
-            });
+        function handleDoCanal(pessoa, canal) {
+            if (canal === 'tiktok') {
+                return pessoa.tiktok || '';
+            }
+            return pessoa.instagram || '';
+        }
+
+        function handlesItens(canal) {
+            return candidatos
+                .map(function (c) {
+                    return { label: handleDoCanal(c, canal), imagem: c.imagem };
+                })
+                .filter(function (item) {
+                    return !!item.label;
+                });
         }
 
         function mensagemSocial(c) {
-            return Core.montarMensagemComHandles(
-                candidatos.map(function (x) {
-                    return x.instagram;
-                }),
-                c.mensagem
-            );
+            var handles = candidatos
+                .map(function (x) {
+                    return handleDoCanal(x, c.canal);
+                })
+                .filter(Boolean);
+            return Core.montarMensagemComHandles(handles, c.mensagem);
         }
 
         function socialCopiarHtml(c) {
@@ -620,9 +631,9 @@
             return (
                 '<div class="pressao-mc-screen-body">' +
                 bannerFeitoHtml(c.canal) +
-                (candidatos.length
-                    ? '<section class="pressao-mc-block"><h4 class="pressao-mc-block-title">Candidatos selecionados</h4>' +
-                      chipsHtml(handlesItens()) + '</section><hr class="pressao-mc-divider" />'
+                (handlesItens(c.canal).length
+                    ? '<section class="pressao-mc-block"><h4 class="pressao-mc-block-title">Quem marcar</h4>' +
+                      chipsHtml(handlesItens(c.canal)) + '</section><hr class="pressao-mc-divider" />'
                     : '') +
                 '<section class="pressao-mc-block">' +
                 '<h4 class="pressao-mc-block-title">Copie o texto</h4>' +

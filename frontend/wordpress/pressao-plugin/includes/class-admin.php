@@ -13,6 +13,7 @@ class PressaoPlugin_Admin {
 
     const CONEXAO_STATUS_TRANSIENT = 'pressao_conexao_status';
     const NONCE_CAMPANHA = 'pressao_admin_campanha';
+    const NONCE_REDES = 'pressao_admin_redes';
     const CONEXAO_FIELDS = [
         'pressao_keycloak_url',
         'pressao_realm',
@@ -29,6 +30,9 @@ class PressaoPlugin_Admin {
         add_action('wp_ajax_pressao_admin_criar_campanha', [$this, 'ajax_criar_campanha']);
         add_action('wp_ajax_pressao_admin_atualizar_campanha', [$this, 'ajax_atualizar_campanha']);
         add_action('wp_ajax_pressao_admin_vincular_campanha', [$this, 'ajax_vincular_campanha']);
+        add_action('wp_ajax_pressao_admin_salvar_alvo_social', [$this, 'ajax_salvar_alvo_social']);
+        add_action('wp_ajax_pressao_admin_salvar_template_social', [$this, 'ajax_salvar_template_social']);
+        add_action('wp_ajax_pressao_admin_deletar_template_social', [$this, 'ajax_deletar_template_social']);
     }
     
     public function add_admin_menu() {
@@ -105,7 +109,6 @@ class PressaoPlugin_Admin {
 
     /**
      * Abas da página de configurações (slug => rótulo).
-     * Futuro: Alvos e Templates como abas de 1º nível (CRUD da API), não filhas de Geral.
      *
      * @return array<string, string>
      */
@@ -114,7 +117,7 @@ class PressaoPlugin_Admin {
             'conexao' => __('Conexão', 'pressao-plugin'),
             'campanha' => __('Campanha', 'pressao-plugin'),
             'geral' => __('Geral', 'pressao-plugin'),
-            'candidatos' => __('Candidatos', 'pressao-plugin'),
+            'redes-sociais' => __('Redes Sociais', 'pressao-plugin'),
             'apoiadores' => __('Apoiadores', 'pressao-plugin'),
             'compartilhamento' => __('Compartilhamento', 'pressao-plugin'),
             'documentacao' => __('Documentação', 'pressao-plugin'),
@@ -127,6 +130,9 @@ class PressaoPlugin_Admin {
     public function get_current_tab() {
         $tabs = $this->get_settings_tabs();
         $tab = isset($_GET['tab']) ? sanitize_key(wp_unslash($_GET['tab'])) : 'conexao';
+        if ($tab === 'candidatos') {
+            $tab = 'redes-sociais';
+        }
         return isset($tabs[$tab]) ? $tab : 'conexao';
     }
 
@@ -302,19 +308,17 @@ class PressaoPlugin_Admin {
             'pressao_ativista_section'
         );
 
-        // Candidatos a pressionar: lista via AJAX; form só opções do fluxo
-        $page_candidatos = $this->get_settings_page_for_tab('candidatos');
-        $group_candidatos = $this->get_option_group_for_tab('candidatos');
-        register_setting($group_candidatos, 'pressao_fluxo_limite_candidatos', [
+        // Opções do [pressao_fluxo] — moradia temporária na Geral (a revisar).
+        register_setting($group_geral, 'pressao_fluxo_limite_candidatos', [
             'sanitize_callback' => [$this, 'sanitize_fluxo_limite_candidatos'],
             'default' => 5,
         ]);
-        register_setting($group_candidatos, 'pressao_fluxo_countdown_abrir', [
+        register_setting($group_geral, 'pressao_fluxo_countdown_abrir', [
             'type' => 'boolean',
             'sanitize_callback' => [$this, 'sanitize_fluxo_countdown_abrir'],
             'default' => 0,
         ]);
-        register_setting($group_candidatos, 'pressao_fluxo_ajuda', [
+        register_setting($group_geral, 'pressao_fluxo_ajuda', [
             'sanitize_callback' => [$this, 'sanitize_fluxo_ajuda'],
             'default' => [
                 'titulo' => '',
@@ -323,34 +327,34 @@ class PressaoPlugin_Admin {
         ]);
 
         add_settings_section(
-            'pressao_candidatos_fluxo_section',
+            'pressao_fluxo_section',
             __('Opções do fluxo', 'pressao-plugin'),
             [$this, 'render_candidatos_pressao_section'],
-            $page_candidatos
+            $page_geral
         );
 
         add_settings_field(
             'pressao_fluxo_limite_candidatos',
-            __('Limite de candidatos por marcação (fluxo)', 'pressao-plugin'),
+            __('Limite de marcação (fluxo)', 'pressao-plugin'),
             [$this, 'render_fluxo_limite_field'],
-            $page_candidatos,
-            'pressao_candidatos_fluxo_section'
+            $page_geral,
+            'pressao_fluxo_section'
         );
 
         add_settings_field(
             'pressao_fluxo_countdown_abrir',
             __('Contador antes de abrir Instagram', 'pressao-plugin'),
             [$this, 'render_fluxo_countdown_abrir_field'],
-            $page_candidatos,
-            'pressao_candidatos_fluxo_section'
+            $page_geral,
+            'pressao_fluxo_section'
         );
 
         add_settings_field(
             'pressao_fluxo_ajuda',
             __('Ajuda do fluxo (?)', 'pressao-plugin'),
             [$this, 'render_fluxo_ajuda_field'],
-            $page_candidatos,
-            'pressao_candidatos_fluxo_section'
+            $page_geral,
+            'pressao_fluxo_section'
         );
 
         // Apoiadores: listagem AJAX (sem options.php); tools CSV abaixo
@@ -532,18 +536,8 @@ class PressaoPlugin_Admin {
                     <?php PressaoPlugin_Apoiadores_Imagens_Fila::render_admin_card(); ?>
                     <?php PressaoPlugin_Candidatos_Admin_List::render(PressaoPlugin_Candidatos_Admin_List::OPTION_APOIADORES); ?>
                     <?php $this->render_apoiadores_tools(); ?>
-                <?php elseif ($current_tab === 'candidatos') : ?>
-                    <h2><?php esc_html_e('Candidatos a pressionar', 'pressao-plugin'); ?></h2>
-                    <p><?php esc_html_e('Base usada na busca/seleção do [pressao_fluxo] (candidatos a pressionar).', 'pressao-plugin'); ?></p>
-                    <?php PressaoPlugin_Candidatos_Admin_List::render(PressaoPlugin_Candidatos_Admin_List::OPTION_PRESSIONAR); ?>
-                    <?php PressaoPlugin_Candidatos_Filtros::render_admin_tools(); ?>
-                    <form method="post" action="options.php" class="pressao-settings-fluxo-form">
-                        <?php
-                        settings_fields($this->get_option_group_for_tab('candidatos'));
-                        do_settings_sections($this->get_settings_page_for_tab('candidatos'));
-                        submit_button();
-                        ?>
-                    </form>
+                <?php elseif ($current_tab === 'redes-sociais') : ?>
+                    <?php $this->render_redes_sociais_tab($api); ?>
                 <?php else : ?>
                     <form method="post" action="options.php">
                         <?php
@@ -940,12 +934,308 @@ class PressaoPlugin_Admin {
         wp_send_json_success(['id' => $id]);
     }
 
+    /**
+     * @param array|mixed $alvos
+     * @param string      $tipo
+     * @return array<string, mixed>|null
+     */
+    private static function primeiro_alvo_tipo($alvos, $tipo) {
+        if (!is_array($alvos)) {
+            return null;
+        }
+        foreach ($alvos as $alvo) {
+            if (!is_array($alvo)) {
+                continue;
+            }
+            if (($alvo['tipo_contato'] ?? '') === $tipo && ($alvo['ativo'] ?? true)) {
+                return $alvo;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @param PressaoPlugin_API $api
+     */
+    private function render_redes_sociais_tab(PressaoPlugin_API $api) {
+        $campanha_id = (string) get_option('pressao_campaign_id', '');
+        $alvos = [];
+        $erro = '';
+        $templates = [
+            'instagram' => [],
+            'tiktok' => [],
+        ];
+        if ($campanha_id !== '' && wp_is_uuid($campanha_id)) {
+            $lista = $api->get_alvos($campanha_id);
+            if (is_wp_error($lista)) {
+                $erro = $lista->get_error_message();
+            } else {
+                $alvos = is_array($lista) ? $lista : [];
+            }
+            foreach (['instagram', 'tiktok'] as $canal) {
+                $tpl = $api->listar_templates($campanha_id, $canal);
+                $templates[$canal] = is_wp_error($tpl) ? [] : $tpl;
+            }
+        }
+        $plataformas = [
+            'instagram' => [
+                'titulo' => __('Instagram', 'pressao-plugin'),
+                'url_label' => __('URL da postagem', 'pressao-plugin'),
+                'vazio' => __('Ainda não há publicação do Instagram nesta campanha.', 'pressao-plugin'),
+                'salvar' => __('Salvar Instagram', 'pressao-plugin'),
+            ],
+            'tiktok' => [
+                'titulo' => __('TikTok', 'pressao-plugin'),
+                'url_label' => __('URL do vídeo', 'pressao-plugin'),
+                'vazio' => __('Ainda não há vídeo do TikTok nesta campanha.', 'pressao-plugin'),
+                'salvar' => __('Salvar TikTok', 'pressao-plugin'),
+            ],
+        ];
+        ?>
+        <div class="pressao-redes"
+             data-nonce="<?php echo esc_attr(wp_create_nonce(self::NONCE_REDES)); ?>"
+             data-campaign-id="<?php echo esc_attr($campanha_id); ?>">
+            <h2><?php esc_html_e('Redes Sociais', 'pressao-plugin'); ?></h2>
+            <p><?php esc_html_e('Defina a publicação e os textos do Instagram e do TikTok. No fim da página, quem marcar nos comentários.', 'pressao-plugin'); ?></p>
+
+            <?php if ($erro !== '') : ?>
+                <div class="notice notice-warning inline">
+                    <p><?php echo esc_html($erro); ?></p>
+                </div>
+            <?php endif; ?>
+
+            <div class="pressao-redes-duo">
+                <?php foreach ($plataformas as $canal => $meta) : ?>
+                    <?php
+                    $alvo = self::primeiro_alvo_tipo($alvos, $canal);
+                    $alvo_id = is_array($alvo) ? (string) ($alvo['id'] ?? '') : '';
+                    $nome = is_array($alvo) ? (string) ($alvo['nome'] ?? '') : '';
+                    $contato = is_array($alvo) ? (string) ($alvo['contato'] ?? '') : '';
+                    $tpls = isset($templates[$canal]) && is_array($templates[$canal]) ? $templates[$canal] : [];
+                    ?>
+                    <section class="pressao-redes-card" data-canal="<?php echo esc_attr($canal); ?>">
+                        <h3><?php echo esc_html($meta['titulo']); ?></h3>
+                        <?php if ($alvo_id === '') : ?>
+                            <p class="description pressao-redes-vazio"><?php echo esc_html($meta['vazio']); ?></p>
+                        <?php endif; ?>
+                        <div class="pressao-redes-alvo">
+                            <input type="hidden" data-field="alvo-id" value="<?php echo esc_attr($alvo_id); ?>">
+                            <p>
+                                <label><?php esc_html_e('Nome do perfil', 'pressao-plugin'); ?></label>
+                                <input type="text" class="regular-text" data-field="nome" value="<?php echo esc_attr($nome); ?>">
+                            </p>
+                            <p>
+                                <label><?php echo esc_html($meta['url_label']); ?></label>
+                                <input type="url" class="regular-text" data-field="contato" value="<?php echo esc_attr($contato); ?>">
+                            </p>
+                            <p class="pressao-redes-alvo-status" role="status"></p>
+                            <p>
+                                <button type="button"
+                                        class="button button-primary"
+                                        data-action="salvar-alvo"
+                                        data-label-saved="<?php echo esc_attr($meta['salvar']); ?>">
+                                    <?php echo esc_html($alvo_id === '' ? __('Criar', 'pressao-plugin') : $meta['salvar']); ?>
+                                </button>
+                            </p>
+                        </div>
+                        <h4><?php esc_html_e('Textos do comentário', 'pressao-plugin'); ?></h4>
+                        <p class="description">
+                            <?php esc_html_e('A cada visita o widget sorteia um destes textos. Placeholders: {alvo_nome}, {campanha_nome}.', 'pressao-plugin'); ?>
+                        </p>
+                        <div class="pressao-redes-baloes">
+                            <?php foreach ($tpls as $tpl) : ?>
+                                <?php
+                                if (!is_array($tpl)) {
+                                    continue;
+                                }
+                                $preview = wp_strip_all_tags((string) ($tpl['conteudo'] ?? ''));
+                                if (function_exists('mb_substr')) {
+                                    $preview = mb_substr($preview, 0, 120);
+                                } else {
+                                    $preview = substr($preview, 0, 120);
+                                }
+                                $ativo = !empty($tpl['ativo']);
+                                ?>
+                                <button type="button"
+                                        class="pressao-redes-balao<?php echo $ativo ? '' : ' is-inativo'; ?>"
+                                        data-id="<?php echo esc_attr((string) ($tpl['id'] ?? '')); ?>"
+                                        data-titulo="<?php echo esc_attr((string) ($tpl['titulo'] ?? '')); ?>"
+                                        data-conteudo="<?php echo esc_attr((string) ($tpl['conteudo'] ?? '')); ?>"
+                                        data-ativo="<?php echo $ativo ? '1' : '0'; ?>">
+                                    <span class="pressao-redes-balao-preview"><?php echo esc_html($preview !== '' ? $preview : '…'); ?></span>
+                                    <?php if (!$ativo) : ?>
+                                        <span class="pressao-redes-balao-selo"><?php esc_html_e('Fora do sorteio', 'pressao-plugin'); ?></span>
+                                    <?php endif; ?>
+                                </button>
+                            <?php endforeach; ?>
+                            <button type="button" class="pressao-redes-balao pressao-redes-balao-add" data-action="novo-texto">
+                                <?php esc_html_e('+ Novo texto', 'pressao-plugin'); ?>
+                            </button>
+                        </div>
+                        <div class="pressao-redes-editor" hidden>
+                            <input type="hidden" data-field="template-id" value="">
+                            <p>
+                                <label><?php esc_html_e('Nome interno', 'pressao-plugin'); ?></label>
+                                <input type="text" class="regular-text" data-field="titulo">
+                            </p>
+                            <p>
+                                <label><?php esc_html_e('Texto do comentário', 'pressao-plugin'); ?></label>
+                                <textarea class="large-text" rows="5" data-field="conteudo"></textarea>
+                            </p>
+                            <p>
+                                <label>
+                                    <input type="checkbox" data-field="ativo" value="1" checked>
+                                    <?php esc_html_e('Usar no sorteio', 'pressao-plugin'); ?>
+                                </label>
+                            </p>
+                            <p class="pressao-redes-editor-status" role="status"></p>
+                            <p class="pressao-redes-editor-actions">
+                                <button type="button" class="button button-primary" data-action="salvar-texto"><?php esc_html_e('Salvar texto', 'pressao-plugin'); ?></button>
+                                <button type="button" class="button" data-action="cancelar-texto"><?php esc_html_e('Cancelar', 'pressao-plugin'); ?></button>
+                                <button type="button" class="button-link link-delete" data-action="remover-texto" hidden><?php esc_html_e('Remover', 'pressao-plugin'); ?></button>
+                            </p>
+                        </div>
+                    </section>
+                <?php endforeach; ?>
+            </div>
+
+            <?php PressaoPlugin_Candidatos_Filtros::render_admin_tools(); ?>
+
+            <h2><?php esc_html_e('Quem marcar', 'pressao-plugin'); ?></h2>
+            <p><?php esc_html_e('Pessoas a marcar nos comentários do Instagram e do TikTok. Salve cada item na lista (não pelo botão Salvar de outras abas).', 'pressao-plugin'); ?></p>
+            <?php PressaoPlugin_Candidatos_Admin_List::render(PressaoPlugin_Candidatos_Admin_List::OPTION_PRESSIONAR); ?>
+        </div>
+        <?php
+    }
+
+    private function assert_can_manage_redes() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Sem permissão.', 'pressao-plugin')], 403);
+        }
+        check_ajax_referer(self::NONCE_REDES, 'nonce');
+    }
+
+    /**
+     * @return string
+     */
+    private function campanha_id_atual() {
+        $id = (string) get_option('pressao_campaign_id', '');
+        if ($id === '' || !wp_is_uuid($id)) {
+            wp_send_json_error(['message' => __('Vincule uma campanha antes de editar as redes.', 'pressao-plugin')], 400);
+        }
+        return $id;
+    }
+
+    /**
+     * @return string
+     */
+    private function canal_social_do_post() {
+        $canal = isset($_POST['canal']) ? sanitize_key(wp_unslash($_POST['canal'])) : '';
+        if (!in_array($canal, ['instagram', 'tiktok'], true)) {
+            wp_send_json_error(['message' => __('Plataforma inválida.', 'pressao-plugin')], 400);
+        }
+        return $canal;
+    }
+
+    public function ajax_salvar_alvo_social() {
+        $this->assert_can_manage_redes();
+        $campanha_id = $this->campanha_id_atual();
+        $canal = $this->canal_social_do_post();
+        $nome = isset($_POST['nome']) ? sanitize_text_field(wp_unslash($_POST['nome'])) : '';
+        $contato = isset($_POST['contato']) ? esc_url_raw(wp_unslash($_POST['contato'])) : '';
+        $nome = trim($nome);
+        $contato = trim($contato);
+        if ($nome === '' || $contato === '') {
+            wp_send_json_error(
+                ['message' => __('Informe o nome do perfil e a URL.', 'pressao-plugin')],
+                400
+            );
+        }
+        $id = isset($_POST['id']) ? sanitize_text_field(wp_unslash($_POST['id'])) : '';
+        $api = new PressaoPlugin_API();
+        if ($id !== '' && wp_is_uuid($id)) {
+            $alvo = $api->atualizar_alvo($id, [
+                'nome' => $nome,
+                'contato' => $contato,
+            ], $campanha_id);
+        } else {
+            $alvo = $api->criar_alvo([
+                'campanha_id' => $campanha_id,
+                'nome' => $nome,
+                'contato' => $contato,
+                'tipo_contato' => $canal,
+                'ativo' => true,
+            ]);
+        }
+        if (is_wp_error($alvo)) {
+            wp_send_json_error(['message' => $alvo->get_error_message()], 400);
+        }
+        wp_send_json_success(['alvo' => $alvo]);
+    }
+
+    public function ajax_salvar_template_social() {
+        $this->assert_can_manage_redes();
+        $campanha_id = $this->campanha_id_atual();
+        $canal = $this->canal_social_do_post();
+        $conteudo = isset($_POST['conteudo']) ? wp_kses_post(wp_unslash($_POST['conteudo'])) : '';
+        $conteudo = trim($conteudo);
+        if ($conteudo === '') {
+            wp_send_json_error(['message' => __('O texto do comentário não pode ficar vazio.', 'pressao-plugin')], 400);
+        }
+        $titulo = isset($_POST['titulo']) ? sanitize_text_field(wp_unslash($_POST['titulo'])) : '';
+        $titulo = trim($titulo);
+        if ($titulo === '') {
+            $titulo = function_exists('mb_substr') ? mb_substr(wp_strip_all_tags($conteudo), 0, 40) : substr(wp_strip_all_tags($conteudo), 0, 40);
+        }
+        if ($titulo === '') {
+            $titulo = $canal;
+        }
+        $ativo_raw = isset($_POST['ativo']) ? wp_unslash($_POST['ativo']) : '1';
+        $ativo = !($ativo_raw === '0' || $ativo_raw === 'false' || $ativo_raw === '');
+        $id = isset($_POST['id']) ? sanitize_text_field(wp_unslash($_POST['id'])) : '';
+        $api = new PressaoPlugin_API();
+        if ($id !== '' && wp_is_uuid($id)) {
+            $tpl = $api->atualizar_template($id, [
+                'titulo' => $titulo,
+                'conteudo' => $conteudo,
+                'ativo' => $ativo,
+            ], $campanha_id);
+        } else {
+            $tpl = $api->criar_template([
+                'campanha_id' => $campanha_id,
+                'canal' => $canal,
+                'titulo' => $titulo,
+                'conteudo' => $conteudo,
+                'ativo' => $ativo,
+            ]);
+        }
+        if (is_wp_error($tpl)) {
+            wp_send_json_error(['message' => $tpl->get_error_message()], 400);
+        }
+        wp_send_json_success(['template' => $tpl]);
+    }
+
+    public function ajax_deletar_template_social() {
+        $this->assert_can_manage_redes();
+        $campanha_id = $this->campanha_id_atual();
+        $id = isset($_POST['id']) ? sanitize_text_field(wp_unslash($_POST['id'])) : '';
+        if ($id === '' || !wp_is_uuid($id)) {
+            wp_send_json_error(['message' => __('ID do texto inválido.', 'pressao-plugin')], 400);
+        }
+        $api = new PressaoPlugin_API();
+        $ok = $api->deletar_template($id, $campanha_id);
+        if (is_wp_error($ok)) {
+            wp_send_json_error(['message' => $ok->get_error_message()], 400);
+        }
+        wp_send_json_success(['id' => $id]);
+    }
+
     private function render_documentacao_tab() {
         $shortcodes = [
             [
                 'tag' => '[pressao_multicanal]',
                 'title' => __('Widget padrão multicanal', 'pressao-plugin'),
-                'body' => __('Shortcode recomendado: home com os canais da campanha (Instagram, TikTok, e-mail), barra de progresso e compartilhamento. Marca todos os candidatos da aba Candidatos nos canais sociais e cria a ação ao fim de cada canal.', 'pressao-plugin'),
+                'body' => __('Shortcode recomendado: home com os canais da campanha (Instagram, TikTok, e-mail), barra de progresso e compartilhamento. Marca quem está em Redes Sociais nos comentários e cria a ação ao fim de cada canal.', 'pressao-plugin'),
                 'example' => '[pressao_multicanal campaign="uuid" canais="instagram,tiktok,email" countdown="3"]',
             ],
             [
@@ -957,7 +1247,7 @@ class PressaoPlugin_Admin {
             [
                 'tag' => '[pressao_fluxo]',
                 'title' => __('Fluxo sequencial (Instagram)', 'pressao-plugin'),
-                'body' => __('Wizard isolado por alvo/canal: marcar candidatos a pressionar, copiar/abrir Instagram, confirmar e opcionalmente deixar contato. Usa as bases das abas Candidatos e Apoiadores. Requer alvo_id e canal.', 'pressao-plugin'),
+                'body' => __('Wizard isolado por alvo/canal: marcar quem pressionar, copiar/abrir Instagram, confirmar e opcionalmente deixar contato. Usa as bases das abas Redes Sociais e Apoiadores. Requer alvo_id e canal.', 'pressao-plugin'),
                 'example' => '[pressao_fluxo alvo_id="uuid-do-alvo" canal="instagram"]',
             ],
             [
@@ -1092,7 +1382,7 @@ class PressaoPlugin_Admin {
 
     public function render_candidatos_pressao_section() {
         echo '<p>' . esc_html__(
-            'Preferências do [pressao_fluxo] (lista de candidatos fica acima e salva item a item).',
+            'Preferências do [pressao_fluxo]. Moradia temporária nesta aba; a lista de quem marcar fica em Redes Sociais.',
             'pressao-plugin'
         ) . '</p>';
     }

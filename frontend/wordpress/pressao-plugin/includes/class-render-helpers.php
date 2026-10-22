@@ -30,11 +30,9 @@ class PressaoPlugin_Render_Helpers {
             if (!is_array($candidato)) {
                 continue;
             }
-            $handle = isset($candidato['link_url']) ? trim((string) $candidato['link_url']) : '';
-            if ($handle !== '' && strpos($handle, '@') !== 0) {
-                $handle = '@' . ltrim($handle, '@');
-            }
-            if ($handle === '') {
+            $instagram = self::prefixar_handle($candidato['link_url'] ?? '');
+            $tiktok = self::prefixar_handle($candidato['tiktok'] ?? '');
+            if ($instagram === '' && $tiktok === '') {
                 continue;
             }
             $imagem_id = absint($candidato['imagem_id'] ?? 0);
@@ -50,12 +48,28 @@ class PressaoPlugin_Render_Helpers {
                 'cargo_chave' => PressaoPlugin_Candidatos_Filtros::normalize_cargo($candidato['cargo'] ?? ''),
                 'partido' => $candidato['partido'] ?? '',
                 'estado' => PressaoPlugin_Candidatos_Filtros::sanitize_uf($candidato['estado'] ?? ''),
-                'instagram' => $handle,
+                'instagram' => $instagram,
+                'tiktok' => $tiktok,
                 'imagem' => $imagem_url ? $imagem_url : '',
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * @param mixed $valor
+     * @return string
+     */
+    private static function prefixar_handle($valor) {
+        $handle = trim((string) $valor);
+        if ($handle === '') {
+            return '';
+        }
+        if (strpos($handle, '@') !== 0) {
+            $handle = '@' . ltrim($handle, '@');
+        }
+        return $handle;
     }
 
     /**
