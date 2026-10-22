@@ -442,6 +442,15 @@ final class PressaoPlugin {
             'filaConcluidaErros' => __('Processamento terminado com erros. Corrija a URL no CSV ou tente novamente.', 'pressao-plugin'),
             'filaFalhaRede' => __('A conexão falhou algumas vezes seguidas. Clique em Continuar para retomar.', 'pressao-plugin'),
             'filaSaindo' => __('Ainda há imagens na fila. Se sair, o processamento continua quando você voltar à aba Apoiadores.', 'pressao-plugin'),
+            'campaignCreate' => __('Criar campanha', 'pressao-plugin'),
+            'campaignSave' => __('Salvar alterações', 'pressao-plugin'),
+            'campaignSearchError' => __('Não foi possível buscar campanhas.', 'pressao-plugin'),
+            'campaignSaveError' => __('Não foi possível salvar a campanha.', 'pressao-plugin'),
+            'campaignLinkError' => __('Não foi possível vincular a campanha.', 'pressao-plugin'),
+            'campaignPhoneEmpty' => __('Não definido', 'pressao-plugin'),
+            'campaignNoResults' => __('Não encontramos resultados para sua busca', 'pressao-plugin'),
+            'campaignActive' => __('Ativa', 'pressao-plugin'),
+            'campaignInactive' => __('Inativa', 'pressao-plugin'),
         ]);
     }
 }

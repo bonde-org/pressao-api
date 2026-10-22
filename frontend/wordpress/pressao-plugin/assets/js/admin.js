@@ -433,7 +433,250 @@
         }
     }
 
+    function initCampanhaPicker() {
+        const $root = $('.pressao-campanha-picker');
+        if (!$root.length) {
+            return;
+        }
+
+        const L = labels();
+        const $card = $root.find('.pressao-campanha-card');
+        const $busca = $root.find('.pressao-campanha-busca');
+        const $form = $root.find('.pressao-campanha-form');
+        const $status = $root.find('.pressao-campanha-form-status');
+        const $salvar = $root.find('[data-action="salvar-form"]');
+        const $select = $root.find('#pressao-campanha-select');
+        let origemForm = 'busca';
+        let linking = false;
+        let ts = null;
+
+        function nonce() {
+            return $root.attr('data-nonce') || '';
+        }
+
+        function currentCampaign() {
+            try {
+                return JSON.parse($root.attr('data-campaign') || '{}') || {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function setCampaign(c) {
+            $root.attr('data-campaign', JSON.stringify(c || {}));
+        }
+
+        function post(data) {
+            return $.post(ajaxUrl(), $.extend({ nonce: nonce() }, data));
+        }
+
+        function show($el) {
+            $el.removeAttr('hidden');
+        }
+
+        function hide($el) {
+            $el.attr('hidden', true);
+        }
+
+        function showState(state) {
+            hide($card);
+            hide($busca);
+            hide($form);
+            if (state === 'cartao') {
+                show($card);
+            } else if (state === 'form') {
+                show($form);
+            } else {
+                show($busca);
+            }
+        }
+
+        function fillCard(c) {
+            $card.find('.pressao-campanha-nome').text(c.nome || '');
+            const $desc = $card.find('.pressao-campanha-descricao');
+            $desc.text(c.descricao || '');
+            if (c.descricao) {
+                $desc.removeAttr('hidden');
+            } else {
+                $desc.attr('hidden', true);
+            }
+            $card.find('.pressao-campanha-telefone span').text(
+                c.telefone_origem || L.campaignPhoneEmpty || 'Não definido'
+            );
+            const $badge = $card.find('.pressao-campanha-badge');
+            const ativa = c.ativa !== false;
+            $badge
+                .text(ativa ? (L.campaignActive || 'Ativa') : (L.campaignInactive || 'Inativa'))
+                .toggleClass('is-ativa', ativa)
+                .toggleClass('is-inativa', !ativa)
+                .removeAttr('hidden');
+        }
+
+        function fillForm(c) {
+            $form.find('[data-field="id"]').val(c && c.id ? c.id : '');
+            $form.find('[data-field="nome"]').val(c && c.nome ? c.nome : '');
+            $form.find('[data-field="telefone_origem"]').val(c && c.telefone_origem ? c.telefone_origem : '');
+            $form.find('[data-field="descricao"]').val(c && c.descricao ? c.descricao : '');
+            $form.find('[data-field="ativa"]').prop('checked', !c || c.ativa !== false);
+            $status.text('').removeClass('is-error');
+            $salvar.text(
+                c && c.id
+                    ? (L.campaignSave || 'Salvar alterações')
+                    : (L.campaignCreate || 'Criar campanha')
+            );
+        }
+
+        function formData() {
+            return {
+                id: $form.find('[data-field="id"]').val() || '',
+                nome: $form.find('[data-field="nome"]').val() || '',
+                telefone_origem: $form.find('[data-field="telefone_origem"]').val() || '',
+                descricao: $form.find('[data-field="descricao"]').val() || '',
+                ativa: $form.find('[data-field="ativa"]').is(':checked') ? '1' : '0'
+            };
+        }
+
+        function ajaxErrorMessage(resp, fallback) {
+            return (resp && resp.data && resp.data.message) || fallback;
+        }
+
+        if ($select.length && typeof TomSelect !== 'undefined') {
+            ts = new TomSelect('#pressao-campanha-select', {
+                maxItems: 1,
+                maxOptions: null,
+                valueField: 'id',
+                labelField: 'text',
+                searchField: ['text'],
+                placeholder: $select.attr('placeholder') || 'Digite o nome da campanha',
+                preload: false,
+                persist: false,
+                loadThrottle: 300,
+                shouldLoad: function (input) {
+                    return input.length >= 2;
+                },
+                load: function (query, callback) {
+                    post({ action: 'pressao_admin_buscar_campanhas', q: query })
+                        .done(function (resp) {
+                            if (!resp || !resp.success) {
+                                callback();
+                                return;
+                            }
+                            callback((resp.data && resp.data.results) || []);
+                        })
+                        .fail(function () {
+                            callback();
+                        });
+                },
+                render: {
+                    no_results: function () {
+                        return '<div class="no-results">' +
+                            (L.campaignNoResults || 'Não encontramos resultados para sua busca') +
+                            '</div>';
+                    }
+                },
+                onChange: function (value) {
+                    if (!value || linking) {
+                        return;
+                    }
+                    linking = true;
+                    post({ action: 'pressao_admin_vincular_campanha', id: value })
+                        .done(function (resp) {
+                            if (!resp || !resp.success) {
+                                linking = false;
+                                window.alert(ajaxErrorMessage(resp, L.campaignLinkError));
+                                ts.clear(true);
+                                return;
+                            }
+                            window.location.reload();
+                        })
+                        .fail(function () {
+                            linking = false;
+                            window.alert(L.campaignLinkError || 'Erro');
+                            ts.clear(true);
+                        });
+                }
+            });
+        }
+
+        $root.on('click', '[data-action="criar"]', function () {
+            origemForm = 'busca';
+            fillForm({});
+            showState('form');
+        });
+
+        $root.on('click', '[data-action="editar"]', function () {
+            origemForm = 'cartao';
+            fillForm(currentCampaign());
+            showState('form');
+        });
+
+        $root.on('click', '[data-action="trocar"]', function () {
+            origemForm = 'busca';
+            if (ts) {
+                linking = true;
+                ts.clear(true);
+                linking = false;
+            }
+            $root.find('[data-action="voltar"]').removeAttr('hidden');
+            showState('busca');
+        });
+
+        $root.on('click', '[data-action="voltar"]', function () {
+            showState('cartao');
+        });
+
+        $root.on('click', '[data-action="cancelar"]', function () {
+            showState(origemForm === 'cartao' ? 'cartao' : 'busca');
+        });
+
+        $root.on('click', '[data-action="salvar-form"]', function () {
+            const data = formData();
+            const editing = !!data.id;
+            $status.text(L.saving || 'Salvando…').removeClass('is-error');
+            $salvar.prop('disabled', true);
+
+            const payload = {
+                action: editing ? 'pressao_admin_atualizar_campanha' : 'pressao_admin_criar_campanha',
+                nome: data.nome,
+                descricao: data.descricao,
+                telefone_origem: data.telefone_origem,
+                ativa: data.ativa
+            };
+            if (editing) {
+                payload.id = data.id;
+            }
+
+            post(payload)
+                .done(function (resp) {
+                    if (!resp || !resp.success) {
+                        $status.text(ajaxErrorMessage(resp, L.campaignSaveError)).addClass('is-error');
+                        return;
+                    }
+                    if (editing) {
+                        const c = (resp.data && resp.data.campanha) || data;
+                        setCampaign(c);
+                        fillCard(c);
+                        showState('cartao');
+                        return;
+                    }
+                    window.location.reload();
+                })
+                .fail(function (xhr) {
+                    let msg = L.campaignSaveError || 'Erro';
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                        msg = xhr.responseJSON.data.message;
+                    }
+                    $status.text(msg).addClass('is-error');
+                })
+                .always(function () {
+                    $salvar.prop('disabled', false);
+                });
+        });
+    }
+
     $(function() {
+        initCampanhaPicker();
+
         const $removeSelect = $('#pressao-apoiadores-remove-select');
         if ($removeSelect.length && typeof TomSelect !== 'undefined') {
             new TomSelect('#pressao-apoiadores-remove-select', {

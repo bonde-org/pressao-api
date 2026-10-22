@@ -130,21 +130,27 @@ docker compose exec wordpress wp plugin activate pressao-plugin
 
 ### Configurando
 
-Acesse **Pressão** no menu raiz do wp-admin (ícone de megafone). Sem Keycloak + API, só **Conexão**
-e **Documentação** são clicáveis; as demais abas ficam desabilitadas. Com as credenciais
-preenchidas, **Conexão** vira um cartão de status (conectado / sem conexão); **Editar credenciais**
-só aparece se algum campo não vier de constante no `wp-config.php`. A página usa abas:
+Acesse **Pressão** no menu raiz do wp-admin (ícone de megafone). O setup é em sequência:
+abas bloqueadas aparecem desabilitadas (não redirecionam). **Documentação** continua sempre
+clicável.
+
+1. Sem Keycloak + API, só **Conexão** e **Documentação**.
+2. Com as credenciais, **Campanha** libera. **Conexão** vira cartão de status (conectado /
+   sem conexão); **Editar credenciais** só se algum campo não vier de constante no `wp-config.php`.
+3. Com uma campanha vinculada (`pressao_campaign_id` UUID), liberam Geral, Candidatos,
+   Apoiadores e Compartilhamento.
 
 | Aba | Conteúdo |
 |-----|----------|
 | **Conexão** | Setup na primeira vez; depois status da API (token Keycloak + `GET /api/v1/campanhas/`) |
-| **Geral** | ID da campanha, título do widget, sessão/identificação do ativista |
+| **Campanha** | Busca por nome (autocomplete), criar e editar na API; vincula o UUID ao site na hora |
+| **Geral** | Título do widget, privacidade, sessão/identificação do ativista |
 | **Candidatos** | Lista a pressionar + limite / countdown / ajuda do `[pressao_fluxo]` |
 | **Apoiadores** | Lista “já apoiam” + import/remover CSV |
 | **Compartilhamento** | Botão e overlay de compartilhar em `[pressao_alvos]` |
 | **Documentação** | Shortcodes (“Como usar”) e nota sobre LGPD |
 
-Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não sobrescrever as demais. As listas de **Candidatos** e **Apoiadores** não passam pelo `options.php`: usam tabela com busca/paginação e CRUD via `admin-ajax` (`class-candidatos-admin-list.php`). **Alvos** e **Templates** da API ainda são geridos fora do painel; no futuro entram como abas de primeiro nível (não dentro de Geral).
+Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não sobrescrever as demais. **Campanha**, **Candidatos** e **Apoiadores** não passam pelo `options.php`: Campanha grava `pressao_campaign_id` via AJAX; as listas usam tabela + CRUD via `admin-ajax`. **Alvos** e **Templates** da API ainda são geridos fora do painel; no futuro entram como abas de primeiro nível (não dentro de Geral).
 
 | Campo | Option WP | Aba | Descrição |
 |-------|-----------|-----|-----------|
@@ -153,7 +159,7 @@ Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não
 | Client ID | `pressao_client_id` | Conexão | ID do client configurado |
 | Client Secret | `pressao_client_secret` | Conexão | Secret do client |
 | URL da API | `pressao_api_url` | Conexão | Endereço da API Pressão |
-| ID da Campanha | `pressao_campaign_id` | Geral | Campanha padrão dos shortcodes |
+| Campanha | `pressao_campaign_id` | Campanha | UUID da campanha na API (busca/criar/editar; padrão dos shortcodes) |
 | Título do Widget | `pressao_widget_title` | Geral | Título exibido em `[pressao_widget]` |
 | Política de Privacidade | `pressao_privacidade_url` | Geral | URL do aviso abaixo do submit em **qualquer** formulário do widget. Vazio: página de privacidade do WordPress |
 | Intervalo confirmar identidade | `pressao_ativista_confirm_interval` | Geral | Minutos até perguntar de novo (padrão `10`) |
@@ -640,6 +646,17 @@ Todos registrados nas variantes logada e `nopriv`:
 | `pressao_buscar_candidatos` | — | Nenhum: busca em `pressao_candidatos` para o autocomplete do `[pressao_fluxo]` (`q` com 2+ caracteres; ou `estado` + `cargos[]` opcionais do "Filtre por estado") |
 
 `pressao_realizar_acao` e `pressao_confirmar_acao` invalidam o transient do contador (`invalidar_cache_contador`) quando recebem `campanha_id` no POST.
+
+Handlers **só admin** (`wp_ajax_`, `manage_options`, nonce `pressao_admin_campanha`) da aba Campanha:
+
+| Action | Método em `PressaoPlugin_API` | Endpoint da API |
+|--------|-------------------------------|-----------------|
+| `pressao_admin_buscar_campanhas` | `listar_campanhas` | `GET /api/v1/campanhas/?q=&limit=20` (a partir de 2 caracteres) |
+| `pressao_admin_criar_campanha` | `criar_campanha` | `POST /api/v1/campanhas/` (nome, descrição, telefone, `ativa`; grava `pressao_campaign_id`) |
+| `pressao_admin_atualizar_campanha` | `atualizar_campanha` | `PUT /api/v1/campanhas/{id}` (nome, descrição, telefone de origem, `ativa`) |
+| `pressao_admin_vincular_campanha` | — | Nenhum: grava o UUID em `pressao_campaign_id` |
+
+O **telefone de origem** da campanha é o número Twilio que liga para o ativista e o que o alvo vê na chamada. Pode ficar vazio e ser preenchido depois, quando o canal telefone estiver em uso.
 
 **Posse da ligação:** a service account do plugin enxerga qualquer ação na API. Por isso `pressao_realizar_acao`
 (telefone) e `pressao_nova_ligacao` gravam o transient `pressao_ligacao_{md5(acao_id)}` = `sessao_id` (1 h), e

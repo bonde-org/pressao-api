@@ -404,3 +404,107 @@
 	gap: 8px;
 	margin: 1.25rem 0 0;
 }
+
+/* Aba Campanha */
+
+.pressao-campanha-picker {
+	max-width: 40rem;
+}
+
+.pressao-campanha-aviso {
+	margin: 0 0 1rem;
+}
+
+.pressao-campanha-card {
+	padding: 1.25rem 1.5rem;
+	border: 1px solid #c3c4c7;
+	border-left: 4px solid #2271b1;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.pressao-campanha-badge {
+	display: inline-block;
+	margin: 0 0 0.4rem;
+	padding: 2px 8px;
+	border-radius: 2px;
+	color: #fff;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.7;
+}
+
+.pressao-campanha-badge.is-ativa {
+	background: #00a32a;
+}
+
+.pressao-campanha-badge.is-inativa {
+	background: #646970;
+}
+
+.pressao-campanha-nome {
+	margin: 0;
+	font-size: 1.2em;
+}
+
+.pressao-campanha-descricao {
+	margin: 0.5rem 0 0;
+	color: #50575e;
+}
+
+.pressao-campanha-telefone {
+	margin: 0.75rem 0 0;
+	font-size: 13px;
+}
+
+.pressao-campanha-telefone strong {
+	display: inline-block;
+	margin-right: 0.4rem;
+}
+
+.pressao-campanha-actions,
+.pressao-campanha-form-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 1.25rem 0 0;
+}
+
+.pressao-campanha-busca .ts-wrapper {
+	max-width: 32rem;
+}
+
+.pressao-campanha-form-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0 1.25rem;
+}
+
+.pressao-campanha-form-row .description,
+.pressao-campanha-ativa .description {
+	display: block;
+	margin-top: 0.35rem;
+}
+
+.pressao-campanha-ativa label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.pressao-campanha-form-status {
+	min-height: 1.4em;
+	margin: 0.5rem 0 0;
+}
+
+.pressao-campanha-form-status.is-error {
+	color: #d63638;
+}
+
+@media (max-width: 782px) {
+	.pressao-campanha-form-row {
+		grid-template-columns: 1fr;
+	}
+}

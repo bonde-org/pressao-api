@@ -221,6 +221,60 @@ class PressaoPlugin_API {
     }
     
     /**
+     * Lista campanhas. Com $q, filtra pelo nome (limit 20).
+     *
+     * @param string $q
+     * @return array|WP_Error
+     */
+    public function listar_campanhas($q) {
+        $q = trim((string) $q);
+        if ($q === '') {
+            return [];
+        }
+        $endpoint = sprintf(
+            '/api/v1/campanhas/?q=%s&limit=20',
+            rawurlencode($q)
+        );
+        $response = $this->api_request($endpoint, 'GET');
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        return is_array($response) ? $response : [];
+    }
+
+    /**
+     * Cria campanha na API (admin/service account).
+     *
+     * @param array $dados
+     * @return array|WP_Error
+     */
+    public function criar_campanha($dados) {
+        return $this->api_request('/api/v1/campanhas/', 'POST', $dados);
+    }
+
+    /**
+     * Atualiza campanha na API (admin/service account).
+     *
+     * @param string $campanha_id
+     * @param array  $dados
+     * @return array|WP_Error
+     */
+    public function atualizar_campanha($campanha_id, $dados) {
+        if (empty($campanha_id)) {
+            return new WP_Error(
+                'invalid_campaign',
+                __('ID da campanha não informado', 'pressao-plugin')
+            );
+        }
+        $endpoint = sprintf('/api/v1/campanhas/%s', $campanha_id);
+        $result = $this->api_request($endpoint, 'PUT', $dados);
+        if (!is_wp_error($result)) {
+            delete_transient('pressao_campanha_' . md5($campanha_id));
+        }
+        return $result;
+    }
+
+    /**
      * Obtém dados de uma campanha específica
      */
     public function get_campanha($campanha_id) {

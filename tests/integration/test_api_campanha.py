@@ -56,6 +56,39 @@ class TestAPICampanha:
         data = response.json()
         assert isinstance(data, list)
 
+    def test_listar_campanhas_filtra_por_q(self, client, db_session, mock_admin):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+
+        client.post("/api/v1/campanhas/", json={"nome": "Amazônia Viva"})
+        client.post("/api/v1/campanhas/", json={"nome": "Clima Já"})
+
+        response = client.get("/api/v1/campanhas/", params={"q": "amaz"})
+        assert response.status_code == 200
+        nomes = [c["nome"] for c in response.json()]
+        assert nomes == ["Amazônia Viva"]
+
+    def test_listar_campanhas_sem_q_lista_todas(self, client, db_session, mock_admin):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+
+        client.post("/api/v1/campanhas/", json={"nome": "Campanha Alpha"})
+        client.post("/api/v1/campanhas/", json={"nome": "Campanha Beta"})
+
+        response = client.get("/api/v1/campanhas/")
+        assert response.status_code == 200
+        nomes = {c["nome"] for c in response.json()}
+        assert "Campanha Alpha" in nomes
+        assert "Campanha Beta" in nomes
+
+    def test_listar_campanhas_aplica_limit(self, client, db_session, mock_admin):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+
+        for i in range(5):
+            client.post("/api/v1/campanhas/", json={"nome": f"Alpha Campanha {i}"})
+
+        response = client.get("/api/v1/campanhas/", params={"q": "Alpha", "limit": 2})
+        assert response.status_code == 200
+        assert len(response.json()) == 2
+
     def test_buscar_campanha_por_id(self, client, db_session, mock_admin):
         """Busca campanha por ID"""
         app.dependency_overrides[get_current_user] = lambda: mock_admin

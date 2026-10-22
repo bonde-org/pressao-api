@@ -12,6 +12,7 @@ if (!defined('ABSPATH')) {
 class PressaoPlugin_Admin {
 
     const CONEXAO_STATUS_TRANSIENT = 'pressao_conexao_status';
+    const NONCE_CAMPANHA = 'pressao_admin_campanha';
     const CONEXAO_FIELDS = [
         'pressao_keycloak_url',
         'pressao_realm',
@@ -24,6 +25,10 @@ class PressaoPlugin_Admin {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
         add_filter('wp_redirect', [$this, 'preserve_settings_tab_on_redirect']);
+        add_action('wp_ajax_pressao_admin_buscar_campanhas', [$this, 'ajax_buscar_campanhas']);
+        add_action('wp_ajax_pressao_admin_criar_campanha', [$this, 'ajax_criar_campanha']);
+        add_action('wp_ajax_pressao_admin_atualizar_campanha', [$this, 'ajax_atualizar_campanha']);
+        add_action('wp_ajax_pressao_admin_vincular_campanha', [$this, 'ajax_vincular_campanha']);
     }
     
     public function add_admin_menu() {
@@ -48,6 +53,30 @@ class PressaoPlugin_Admin {
     public static function settings_url(array $args = []) {
         $args = array_merge(['page' => 'pressao-settings'], $args);
         return add_query_arg($args, admin_url('admin.php'));
+    }
+
+    /**
+     * Campanha vinculada a este site (UUID gravado, sem probe à API).
+     */
+    public static function has_campaign() {
+        $id = get_option('pressao_campaign_id', '');
+        return is_string($id) && $id !== '' && wp_is_uuid($id);
+    }
+
+    /**
+     * @param string $slug
+     * @param bool   $conexao_ok
+     * @param bool   $campanha_ok
+     * @return bool
+     */
+    private function tab_esta_liberada($slug, $conexao_ok, $campanha_ok) {
+        if (in_array($slug, ['conexao', 'documentacao'], true)) {
+            return true;
+        }
+        if ($slug === 'campanha') {
+            return $conexao_ok;
+        }
+        return $conexao_ok && $campanha_ok;
     }
 
     /**
@@ -83,6 +112,7 @@ class PressaoPlugin_Admin {
     public function get_settings_tabs() {
         return [
             'conexao' => __('Conexão', 'pressao-plugin'),
+            'campanha' => __('Campanha', 'pressao-plugin'),
             'geral' => __('Geral', 'pressao-plugin'),
             'candidatos' => __('Candidatos', 'pressao-plugin'),
             'apoiadores' => __('Apoiadores', 'pressao-plugin'),
@@ -185,10 +215,9 @@ class PressaoPlugin_Admin {
             ['field' => 'pressao_api_url', 'type' => 'url']
         );
 
-        // Geral (widget + ativista)
+        // Geral (widget + ativista) — campaign_id vive na aba Campanha via AJAX
         $page_geral = $this->get_settings_page_for_tab('geral');
         $group_geral = $this->get_option_group_for_tab('geral');
-        register_setting($group_geral, 'pressao_campaign_id');
         register_setting($group_geral, 'pressao_widget_title');
         register_setting($group_geral, 'pressao_privacidade_url', [
             'type' => 'string',
@@ -205,18 +234,9 @@ class PressaoPlugin_Admin {
 
         add_settings_section(
             'pressao_widget_section',
-            __('Widget e campanha do site', 'pressao-plugin'),
+            __('Widget do site', 'pressao-plugin'),
             [$this, 'render_geral_widget_section'],
             $page_geral
-        );
-
-        add_settings_field(
-            'pressao_campaign_id',
-            __('ID da Campanha', 'pressao-plugin'),
-            [$this, 'render_text_field'],
-            $page_geral,
-            'pressao_widget_section',
-            ['field' => 'pressao_campaign_id']
         );
 
         add_settings_field(
@@ -463,15 +483,16 @@ class PressaoPlugin_Admin {
 
         $api = new PressaoPlugin_API();
         $configured = $api->is_configured();
+        $campanha_ok = self::has_campaign();
         $tabs = $this->get_settings_tabs();
         $current_tab = $this->get_current_tab();
-        $tab_liberada = ['conexao', 'documentacao'];
-        if (!$configured && !in_array($current_tab, $tab_liberada, true)) {
-            $current_tab = 'conexao';
+        if (!$this->tab_esta_liberada($current_tab, $configured, $campanha_ok)) {
+            $current_tab = $configured ? 'campanha' : 'conexao';
         }
 
         $base_url = self::settings_url();
-        $bloqueio_titulo = __('Configure a conexão com a API para usar esta aba.', 'pressao-plugin');
+        $bloqueio_conexao = __('Configure a conexão com a API para usar esta aba.', 'pressao-plugin');
+        $bloqueio_campanha = __('Vincule uma campanha para usar esta aba.', 'pressao-plugin');
         ?>
         <div class="wrap pressao-settings-wrap">
             <h1><?php esc_html_e('Pressão', 'pressao-plugin'); ?></h1>
@@ -480,7 +501,8 @@ class PressaoPlugin_Admin {
                 <?php foreach ($tabs as $slug => $label) : ?>
                     <?php
                     $ativa = $current_tab === $slug;
-                    $liberada = $configured || in_array($slug, $tab_liberada, true);
+                    $liberada = $this->tab_esta_liberada($slug, $configured, $campanha_ok);
+                    $bloqueio_titulo = $configured ? $bloqueio_campanha : $bloqueio_conexao;
                     ?>
                     <?php if ($liberada) : ?>
                         <a href="<?php echo esc_url(add_query_arg('tab', $slug, $base_url)); ?>"
@@ -502,6 +524,8 @@ class PressaoPlugin_Admin {
                     <?php $this->render_documentacao_tab(); ?>
                 <?php elseif ($current_tab === 'conexao') : ?>
                     <?php $this->render_conexao_tab($api, $configured); ?>
+                <?php elseif ($current_tab === 'campanha') : ?>
+                    <?php $this->render_campanha_tab($api); ?>
                 <?php elseif ($current_tab === 'apoiadores') : ?>
                     <h2><?php esc_html_e('Candidatos apoiadores', 'pressao-plugin'); ?></h2>
                     <p><?php esc_html_e('Base dos que já apoiam a pauta: botão/lista do [pressao_fluxo] e shortcode [pressao_candidatos]. Use as ferramentas abaixo para importar CSV ou remover da base.', 'pressao-plugin'); ?></p>
@@ -654,6 +678,268 @@ class PressaoPlugin_Admin {
         <?php
     }
 
+    /**
+     * @param array<string, mixed> $campanha
+     * @return array{id: string, nome: string, descricao: string, telefone_origem: string, ativa: bool}
+     */
+    private static function campanha_payload($campanha) {
+        return [
+            'id' => isset($campanha['id']) ? (string) $campanha['id'] : '',
+            'nome' => isset($campanha['nome']) ? (string) $campanha['nome'] : '',
+            'descricao' => isset($campanha['descricao']) ? (string) $campanha['descricao'] : '',
+            'telefone_origem' => isset($campanha['telefone_origem']) ? (string) $campanha['telefone_origem'] : '',
+            'ativa' => !empty($campanha['ativa']),
+        ];
+    }
+
+    /**
+     * @param PressaoPlugin_API $api
+     */
+    private function render_campanha_tab(PressaoPlugin_API $api) {
+        $campaign_id = (string) get_option('pressao_campaign_id', '');
+        $vinculada = $campaign_id !== '' && wp_is_uuid($campaign_id);
+        $campanha = null;
+        $erro = '';
+        if ($vinculada) {
+            $result = $api->get_campanha($campaign_id);
+            if (is_wp_error($result)) {
+                $erro = $result->get_error_message();
+            } else {
+                $campanha = is_array($result) ? $result : null;
+            }
+        }
+        $payload = $campanha
+            ? self::campanha_payload($campanha)
+            : [
+                'id' => $vinculada ? $campaign_id : '',
+                'nome' => '',
+                'descricao' => '',
+                'telefone_origem' => '',
+                'ativa' => true,
+            ];
+        $mostrar_cartao = $campanha !== null;
+        $telefone_ajuda = __(
+            'Número Twilio desta campanha: é o que liga para o ativista e o que o alvo vê na chamada. Pode ficar vazio e ser preenchido depois, quando o canal telefone estiver em uso.',
+            'pressao-plugin'
+        );
+        ?>
+        <div class="pressao-campanha-picker"
+             data-nonce="<?php echo esc_attr(wp_create_nonce(self::NONCE_CAMPANHA)); ?>"
+             data-campaign="<?php echo esc_attr(wp_json_encode($payload)); ?>">
+            <h2><?php esc_html_e('Campanha deste site', 'pressao-plugin'); ?></h2>
+            <p><?php esc_html_e('Busque uma campanha na API ou crie uma nova. O vínculo é gravado na hora e libera as demais abas.', 'pressao-plugin'); ?></p>
+
+            <?php if ($erro !== '') : ?>
+                <div class="notice notice-warning inline pressao-campanha-aviso">
+                    <p>
+                        <?php if ($vinculada) : ?>
+                            <?php esc_html_e('A campanha vinculada não foi encontrada na API. Busque outra ou crie uma nova — o vínculo atual segue válido até você escolher.', 'pressao-plugin'); ?>
+                            <?php if ($erro !== '') : ?>
+                                <br><?php echo esc_html($erro); ?>
+                            <?php endif; ?>
+                        <?php else : ?>
+                            <?php echo esc_html($erro); ?>
+                        <?php endif; ?>
+                    </p>
+                </div>
+            <?php endif; ?>
+
+            <div class="pressao-campanha-card" <?php echo $mostrar_cartao ? '' : 'hidden'; ?>>
+                <p class="pressao-campanha-badge <?php echo empty($payload['ativa']) ? 'is-inativa' : 'is-ativa'; ?>">
+                    <?php echo empty($payload['ativa']) ? esc_html__('Inativa', 'pressao-plugin') : esc_html__('Ativa', 'pressao-plugin'); ?>
+                </p>
+                <h3 class="pressao-campanha-nome"><?php echo esc_html($payload['nome']); ?></h3>
+                <p class="pressao-campanha-descricao" <?php echo $payload['descricao'] === '' ? 'hidden' : ''; ?>>
+                    <?php echo esc_html($payload['descricao']); ?>
+                </p>
+                <p class="pressao-campanha-telefone">
+                    <strong><?php esc_html_e('Telefone de origem', 'pressao-plugin'); ?></strong>
+                    <span><?php echo $payload['telefone_origem'] !== '' ? esc_html($payload['telefone_origem']) : esc_html__('Não definido', 'pressao-plugin'); ?></span>
+                </p>
+                <p class="pressao-campanha-actions">
+                    <button type="button" class="button" data-action="editar"><?php esc_html_e('Editar campanha', 'pressao-plugin'); ?></button>
+                    <button type="button" class="button" data-action="trocar"><?php esc_html_e('Trocar campanha', 'pressao-plugin'); ?></button>
+                </p>
+            </div>
+
+            <div class="pressao-campanha-busca" <?php echo $mostrar_cartao ? 'hidden' : ''; ?>>
+                <p>
+                    <label for="pressao-campanha-select"><?php esc_html_e('Buscar campanha', 'pressao-plugin'); ?></label>
+                </p>
+                <select id="pressao-campanha-select"
+                        placeholder="<?php esc_attr_e('Digite o nome da campanha', 'pressao-plugin'); ?>"></select>
+                <p>
+                    <button type="button" class="button button-secondary" data-action="criar">
+                        <?php esc_html_e('Adicionar nova campanha', 'pressao-plugin'); ?>
+                    </button>
+                    <button type="button" class="button" data-action="voltar" hidden>
+                        <?php esc_html_e('Voltar', 'pressao-plugin'); ?>
+                    </button>
+                </p>
+            </div>
+
+            <div class="pressao-campanha-form" hidden>
+                <input type="hidden" data-field="id" value="">
+                <div class="pressao-campanha-form-row">
+                    <p>
+                        <label for="pressao-campanha-nome"><?php esc_html_e('Nome', 'pressao-plugin'); ?></label>
+                        <input id="pressao-campanha-nome" type="text" class="regular-text" data-field="nome" maxlength="200" required>
+                    </p>
+                    <p>
+                        <label for="pressao-campanha-telefone"><?php esc_html_e('Telefone de origem', 'pressao-plugin'); ?></label>
+                        <input id="pressao-campanha-telefone" type="text" class="regular-text" data-field="telefone_origem">
+                        <span class="description"><?php echo esc_html($telefone_ajuda); ?></span>
+                    </p>
+                </div>
+                <p>
+                    <label for="pressao-campanha-descricao"><?php esc_html_e('Descrição', 'pressao-plugin'); ?></label>
+                    <textarea id="pressao-campanha-descricao" class="large-text" rows="3" data-field="descricao"></textarea>
+                </p>
+                <p class="pressao-campanha-ativa">
+                    <label for="pressao-campanha-ativa">
+                        <input id="pressao-campanha-ativa" type="checkbox" data-field="ativa" value="1" checked>
+                        <?php esc_html_e('Campanha ativa', 'pressao-plugin'); ?>
+                    </label>
+                    <span class="description"><?php esc_html_e('Desmarque para pausar a campanha na API. Este site continua vinculado.', 'pressao-plugin'); ?></span>
+                </p>
+                <p class="pressao-campanha-form-status" role="status"></p>
+                <p class="pressao-campanha-form-actions">
+                    <button type="button" class="button button-primary" data-action="salvar-form">
+                        <?php esc_html_e('Criar campanha', 'pressao-plugin'); ?>
+                    </button>
+                    <button type="button" class="button" data-action="cancelar">
+                        <?php esc_html_e('Cancelar', 'pressao-plugin'); ?>
+                    </button>
+                </p>
+            </div>
+        </div>
+        <?php
+    }
+
+    private function assert_can_manage_campanha() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Sem permissão.', 'pressao-plugin')], 403);
+        }
+        check_ajax_referer(self::NONCE_CAMPANHA, 'nonce');
+    }
+
+    /**
+     * @param array<string, mixed> $campanha
+     * @return array<string, mixed>
+     */
+    private static function campanha_ajax_item($campanha) {
+        $payload = self::campanha_payload($campanha);
+        $text = $payload['nome'];
+        if (!$payload['ativa']) {
+            $text .= ' (' . __('inativa', 'pressao-plugin') . ')';
+        }
+        $payload['text'] = $text;
+        return $payload;
+    }
+
+    /**
+     * @return array{nome: string, descricao: string, telefone_origem: string, ativa: bool}
+     */
+    private function campanha_dados_do_post() {
+        $nome = isset($_POST['nome']) ? sanitize_text_field(wp_unslash($_POST['nome'])) : '';
+        $nome = trim($nome);
+        if (strlen($nome) < 3 || strlen($nome) > 200) {
+            wp_send_json_error(
+                ['message' => __('O nome da campanha precisa ter entre 3 e 200 caracteres.', 'pressao-plugin')],
+                400
+            );
+        }
+        $ativa_raw = isset($_POST['ativa']) ? wp_unslash($_POST['ativa']) : '1';
+        $ativa = !($ativa_raw === '0' || $ativa_raw === 'false' || $ativa_raw === '');
+        return [
+            'nome' => $nome,
+            'descricao' => isset($_POST['descricao']) ? sanitize_textarea_field(wp_unslash($_POST['descricao'])) : '',
+            'telefone_origem' => isset($_POST['telefone_origem']) ? sanitize_text_field(wp_unslash($_POST['telefone_origem'])) : '',
+            'ativa' => $ativa,
+        ];
+    }
+
+    public function ajax_buscar_campanhas() {
+        $this->assert_can_manage_campanha();
+        $q = isset($_POST['q']) ? sanitize_text_field(wp_unslash($_POST['q'])) : '';
+        $q = trim($q);
+        if (strlen($q) < 2) {
+            wp_send_json_success(['results' => []]);
+        }
+        $api = new PressaoPlugin_API();
+        $lista = $api->listar_campanhas($q);
+        if (is_wp_error($lista)) {
+            wp_send_json_error(['message' => $lista->get_error_message()], 400);
+        }
+        $results = [];
+        foreach ($lista as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $results[] = self::campanha_ajax_item($item);
+        }
+        wp_send_json_success(['results' => $results]);
+    }
+
+    public function ajax_criar_campanha() {
+        $this->assert_can_manage_campanha();
+        $dados = $this->campanha_dados_do_post();
+        $payload = [
+            'nome' => $dados['nome'],
+            'ativa' => $dados['ativa'],
+        ];
+        if ($dados['descricao'] !== '') {
+            $payload['descricao'] = $dados['descricao'];
+        }
+        if ($dados['telefone_origem'] !== '') {
+            $payload['telefone_origem'] = $dados['telefone_origem'];
+        }
+        $api = new PressaoPlugin_API();
+        $campanha = $api->criar_campanha($payload);
+        if (is_wp_error($campanha)) {
+            wp_send_json_error(['message' => $campanha->get_error_message()], 400);
+        }
+        $id = isset($campanha['id']) ? (string) $campanha['id'] : '';
+        if ($id === '' || !wp_is_uuid($id)) {
+            wp_send_json_error(['message' => __('A API não devolveu um ID de campanha válido.', 'pressao-plugin')], 400);
+        }
+        update_option('pressao_campaign_id', $id, false);
+        wp_send_json_success(['campanha' => self::campanha_ajax_item($campanha)]);
+    }
+
+    public function ajax_atualizar_campanha() {
+        $this->assert_can_manage_campanha();
+        $id = isset($_POST['id']) ? sanitize_text_field(wp_unslash($_POST['id'])) : '';
+        if ($id === '' || !wp_is_uuid($id)) {
+            wp_send_json_error(['message' => __('ID da campanha inválido.', 'pressao-plugin')], 400);
+        }
+        $dados = $this->campanha_dados_do_post();
+        $payload = [
+            'nome' => $dados['nome'],
+            'descricao' => $dados['descricao'],
+            'ativa' => $dados['ativa'],
+        ];
+        if ($dados['telefone_origem'] !== '') {
+            $payload['telefone_origem'] = $dados['telefone_origem'];
+        }
+        $api = new PressaoPlugin_API();
+        $campanha = $api->atualizar_campanha($id, $payload);
+        if (is_wp_error($campanha)) {
+            wp_send_json_error(['message' => $campanha->get_error_message()], 400);
+        }
+        wp_send_json_success(['campanha' => self::campanha_ajax_item($campanha)]);
+    }
+
+    public function ajax_vincular_campanha() {
+        $this->assert_can_manage_campanha();
+        $id = isset($_POST['id']) ? sanitize_text_field(wp_unslash($_POST['id'])) : '';
+        if ($id === '' || !wp_is_uuid($id)) {
+            wp_send_json_error(['message' => __('ID da campanha inválido.', 'pressao-plugin')], 400);
+        }
+        update_option('pressao_campaign_id', $id, false);
+        wp_send_json_success(['id' => $id]);
+    }
+
     private function render_documentacao_tab() {
         $shortcodes = [
             [
@@ -716,10 +1002,10 @@ class PressaoPlugin_Admin {
             <header class="pressao-docs-intro">
                 <h2><?php esc_html_e('Como usar', 'pressao-plugin'); ?></h2>
                 <p>
-                    <?php esc_html_e('O Pressão Plugin conecta este site à API de pressão multicanal. Configure a conexão (Keycloak + API) e o ID da campanha nas abas Conexão e Geral; depois insira os shortcodes nas páginas ou posts.', 'pressao-plugin'); ?>
+                    <?php esc_html_e('O Pressão Plugin conecta este site à API de pressão multicanal. Configure a conexão (Keycloak + API) e vincule uma campanha nas abas Conexão e Campanha; depois insira os shortcodes nas páginas ou posts.', 'pressao-plugin'); ?>
                 </p>
                 <p class="description">
-                    <?php esc_html_e('Atributos como campaign usam o ID da campanha da aba Geral quando omitidos. Detalhes completos de atributos estão no README do plugin.', 'pressao-plugin'); ?>
+                    <?php esc_html_e('Atributos como campaign usam a campanha da aba Campanha quando omitidos. Detalhes completos de atributos estão no README do plugin.', 'pressao-plugin'); ?>
                 </p>
             </header>
 
@@ -748,7 +1034,7 @@ class PressaoPlugin_Admin {
 
     public function render_geral_widget_section() {
         echo '<p>' . esc_html__(
-            'Vínculo deste site à campanha na API e textos do widget. Alvos e templates da campanha continuam sendo geridos pela API (abas futuras no admin).',
+            'Textos do widget neste site. A campanha da API é escolhida na aba Campanha. Alvos e templates continuam sendo geridos pela API (abas futuras no admin).',
             'pressao-plugin'
         ) . '</p>';
     }
