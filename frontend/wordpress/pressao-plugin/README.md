@@ -130,7 +130,7 @@ docker compose exec wordpress wp plugin activate pressao-plugin
 
 ### Configurando
 
-Acesse **Configurações → Pressão Plugin**. A página usa abas:
+Acesse **Pressão** no menu raiz do wp-admin (ícone de megafone). A página usa abas:
 
 | Aba | Conteúdo |
 |-----|----------|

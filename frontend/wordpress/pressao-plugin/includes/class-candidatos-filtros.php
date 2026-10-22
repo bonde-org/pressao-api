@@ -187,7 +187,7 @@ class PressaoPlugin_Candidatos_Filtros {
         $index = self::regenerate();
         set_transient(self::NOTICE_TRANSIENT, self::summary($index), 60);
 
-        wp_safe_redirect(admin_url('options-general.php?page=pressao-settings&tab=candidatos'));
+        wp_safe_redirect(PressaoPlugin_Admin::settings_url(['tab' => 'candidatos']));
         exit;
     }
 

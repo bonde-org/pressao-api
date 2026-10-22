@@ -18,13 +18,27 @@ class PressaoPlugin_Admin {
     }
     
     public function add_admin_menu() {
-        add_options_page(
-            __('Pressão Plugin', 'pressao-plugin'),
-            __('Pressão Plugin', 'pressao-plugin'),
+        add_menu_page(
+            __('Pressão', 'pressao-plugin'),
+            __('Pressão', 'pressao-plugin'),
             'manage_options',
             'pressao-settings',
-            [$this, 'render_settings_page']
+            [$this, 'render_settings_page'],
+            'dashicons-megaphone',
+            58
         );
+        remove_submenu_page('pressao-settings', 'pressao-settings');
+    }
+
+    /**
+     * URL do painel Pressão (admin.php?page=pressao-settings).
+     *
+     * @param array<string, mixed> $args Query extra (ex.: tab, cpage).
+     * @return string
+     */
+    public static function settings_url(array $args = []) {
+        $args = array_merge(['page' => 'pressao-settings'], $args);
+        return add_query_arg($args, admin_url('admin.php'));
     }
 
     /**
@@ -383,7 +397,7 @@ class PressaoPlugin_Admin {
 
         $tabs = $this->get_settings_tabs();
         $current_tab = $this->get_current_tab();
-        $base_url = admin_url('options-general.php?page=pressao-settings');
+        $base_url = self::settings_url();
         ?>
         <div class="wrap pressao-settings-wrap">
             <h1><?php esc_html_e('Pressão Plugin - Configurações', 'pressao-plugin'); ?></h1>

@@ -281,16 +281,12 @@ class PressaoPlugin_Candidatos_Admin_List {
         $page = (int) ceil(($index + 1) / self::PER_PAGE);
         $tab = self::tab_for_option($option);
 
-        $url = add_query_arg(
-            [
-                'page' => 'pressao-settings',
-                'tab' => $tab,
-                'cpage' => $page,
-                'cs' => '',
-                'expand' => $index,
-            ],
-            admin_url('options-general.php')
-        );
+        $url = PressaoPlugin_Admin::settings_url([
+            'tab' => $tab,
+            'cpage' => $page,
+            'cs' => '',
+            'expand' => $index,
+        ]);
 
         wp_send_json_success([
             'index' => $index,
@@ -323,7 +319,7 @@ class PressaoPlugin_Candidatos_Admin_List {
         $filtered = self::filter_items($all, $search);
         $paged = self::paginate($filtered, $page, self::PER_PAGE);
 
-        $base_url = admin_url('options-general.php');
+        $base_url = admin_url('admin.php');
         $nonce = wp_create_nonce(self::NONCE_ACTION);
         ?>
         <div class="pressao-admin-list"
@@ -347,7 +343,7 @@ class PressaoPlugin_Candidatos_Admin_List {
                     <?php submit_button(__('Buscar', 'pressao-plugin'), 'secondary', '', false); ?>
                     <?php if ($search !== '') : ?>
                         <a class="button"
-                           href="<?php echo esc_url(add_query_arg(['page' => 'pressao-settings', 'tab' => $tab], $base_url)); ?>">
+                           href="<?php echo esc_url(PressaoPlugin_Admin::settings_url(['tab' => $tab])); ?>">
                             <?php esc_html_e('Limpar', 'pressao-plugin'); ?>
                         </a>
                     <?php endif; ?>
