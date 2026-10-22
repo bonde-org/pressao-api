@@ -138,19 +138,23 @@ clicável.
 2. Com as credenciais, **Campanha** libera. **Conexão** vira cartão de status (conectado /
    sem conexão); **Editar credenciais** só se algum campo não vier de constante no `wp-config.php`.
 3. Com uma campanha vinculada (`pressao_campaign_id` UUID), liberam Geral, Redes Sociais,
-   Apoiadores e Compartilhamento.
+   E-mail, Telefone, Apoiadores e Compartilhamento.
 
 | Aba | Conteúdo |
 |-----|----------|
 | **Conexão** | Setup na primeira vez; depois status da API (token Keycloak + `GET /api/v1/campanhas/`) |
 | **Campanha** | Busca por nome (autocomplete), criar e editar na API; vincula o UUID ao site na hora |
-| **Geral** | Título do widget, privacidade, sessão/identificação do ativista + opções provisórias do `[pressao_fluxo]` |
 | **Redes Sociais** | Instagram e TikTok (um alvo cada + textos em balões) e lista **Quem marcar** |
-| **Apoiadores** | Lista “já apoiam” + import/remover CSV |
+| **E-mail** | Textos (assunto + corpo em balões) e destinatários (membros do agregado) |
+| **Telefone** | Roteiros em balões, **Quem ligar** (lista + como o widget escolhe) e atalho do número de origem |
 | **Compartilhamento** | Botão e overlay de compartilhar em `[pressao_alvos]` |
 | **Documentação** | Shortcodes (“Como usar”) e nota sobre LGPD |
+| **Geral** | Título do widget, privacidade, sessão/identificação do ativista + opções provisórias do `[pressao_fluxo]` |
+| **Apoiadores** | Lista “já apoiam” + import/remover CSV |
 
-Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não sobrescrever as demais. **Campanha**, **Redes Sociais** e **Apoiadores** não passam pelo `options.php`: Campanha grava `pressao_campaign_id` via AJAX; Instagram/TikTok (alvo + templates) usam AJAX contra a API; as listas editoriais usam tabela + CRUD via `admin-ajax`. `?tab=candidatos` redireciona para `redes-sociais`.
+Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não sobrescrever as demais. **Campanha**, **Redes Sociais**, **E-mail**, **Telefone** e **Apoiadores** não passam pelo `options.php`: Campanha grava `pressao_campaign_id` via AJAX; Instagram/TikTok, e-mail e telefone usam AJAX contra a API (alvo/membro + templates); a aba Telefone também grava `pressao_telefone_selecao` via AJAX; as listas editoriais usam tabela + CRUD via `admin-ajax`. `?tab=candidatos` redireciona para `redes-sociais`.
+
+Membros de e-mail e telefone são alvos `modo=individual`; a API sincroniza o agregado. O admin lista pelo `GET /api/v1/alvos/campanha/{id}/membros?tipo_contato=` (só admin, com `contato`). A listagem pública (`GET /alvos/campanha/{id}`) continua só com o agregado.
 
 | Campo | Option WP | Aba | Descrição |
 |-------|-----------|-----|-----------|
@@ -172,6 +176,7 @@ Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não
 | Ajuda do fluxo | `pressao_fluxo_ajuda` | Geral | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
 | Candidatos apoiadores | `pressao_candidatos_apoiadores` | Apoiadores | Lista AJAX + import/remover CSV; botão/lista “já apoiam”, `[pressao_candidatos]` |
 | Compartilhamento | `pressao_compartilhamento` | Compartilhamento | Textos, links, deep links e imagens do botão de compartilhar |
+| Quem ligar | `pressao_telefone_selecao` | Telefone | Padrão do widget: `alvo_da_vez` (API escolhe quem tem menos ligações; empate sorteado) ou `escolher` (o ativista escolhe). O atributo `telefone_selecao` do shortcode, se válido, prevalece |
 
 ### Política de Privacidade
 
@@ -432,7 +437,7 @@ admin estiver vazio; redes de `redes` **ocultas** quando sem URL configurada; im
 | `campaign` | option | ID da campanha |
 | `canais` | `instagram,tiktok,email,telefone` | Canais e ordem dos cards |
 | `alvo_instagram` / `alvo_tiktok` / `alvo_email` / `alvo_telefone` | — | Alvo de cada card. Vazio: primeiro alvo do canal; no e-mail e no telefone, o agregado |
-| `telefone_selecao` | `alvo_da_vez` | `alvo_da_vez`: a API escolhe o membro (badge "Alvo da vez"); `escolher`: select com os membros |
+| `telefone_selecao` | option (`alvo_da_vez`) | `alvo_da_vez`: a API escolhe o membro (badge "Alvo da vez"); `escolher`: select com os membros. Sem o atributo, usa `pressao_telefone_selecao` da aba Telefone |
 | `telefone_email` | `obrigatorio` | Campo de e-mail no telefone: `obrigatorio`, `opcional` ou `oculto` (oculto também tira o aviso de privacidade) |
 | `cache` | `0` | TTL do cache de alvos (`0` sorteia template a cada visita) |
 | `alvos` | `candidatos` | Palavra usada no título padrão e na lista ("Candidatos que serão pressionados") |

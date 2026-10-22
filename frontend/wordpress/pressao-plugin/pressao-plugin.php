@@ -116,6 +116,7 @@ final class PressaoPlugin {
                 'conteudo' => '',
             ],
             'pressao_compartilhamento' => [],
+            'pressao_telefone_selecao' => 'alvo_da_vez',
         ];
         
         foreach ($defaults as $key => $value) {
@@ -455,6 +456,7 @@ final class PressaoPlugin {
             'redesDeleteConfirm' => __('Remover este texto?', 'pressao-plugin'),
             'redesForaSorteio' => __('Fora do sorteio', 'pressao-plugin'),
             'redesCriar' => __('Criar', 'pressao-plugin'),
+            'membroDeleteConfirm' => __('Remover esta pessoa?', 'pressao-plugin'),
         ]);
     }
 }

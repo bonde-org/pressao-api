@@ -448,6 +448,60 @@ class PressaoPlugin_API {
     }
 
     /**
+     * Individuais ativos de e-mail ou telefone (admin), com contato.
+     *
+     * @param string $campanha_id
+     * @param string $tipo email|telefone
+     * @return array|WP_Error
+     */
+    public function listar_membros($campanha_id, $tipo) {
+        if (empty($campanha_id)) {
+            return new WP_Error(
+                'invalid_campaign',
+                __('ID da campanha não informado', 'pressao-plugin')
+            );
+        }
+        if (!in_array($tipo, ['email', 'telefone'], true)) {
+            return new WP_Error(
+                'invalid_tipo',
+                __('Tipo de contato inválido', 'pressao-plugin')
+            );
+        }
+        $endpoint = sprintf(
+            '/api/v1/alvos/campanha/%s/membros?tipo_contato=%s',
+            rawurlencode($campanha_id),
+            rawurlencode($tipo)
+        );
+        $response = $this->api_request($endpoint, 'GET');
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        return is_array($response) ? $response : [];
+    }
+
+    /**
+     * @param string $alvo_id
+     * @param string $campanha_id
+     * @return true|WP_Error
+     */
+    public function deletar_alvo($alvo_id, $campanha_id = '') {
+        if (empty($alvo_id)) {
+            return new WP_Error(
+                'invalid_alvo',
+                __('ID do alvo não informado', 'pressao-plugin')
+            );
+        }
+        $result = $this->api_request(sprintf('/api/v1/alvos/%s', $alvo_id), 'DELETE');
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        if ($campanha_id !== '') {
+            $this->invalidar_cache_alvos($campanha_id);
+        }
+        return true;
+    }
+
+    /**
      * @param string $campanha_id
      * @param string $canal
      * @return array|WP_Error

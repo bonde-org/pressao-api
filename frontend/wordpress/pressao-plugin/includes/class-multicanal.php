@@ -94,7 +94,16 @@ class PressaoPlugin_Multicanal {
         })));
     }
 
+    /**
+     * Padrão de Quem ligar gravado na aba Telefone (`alvo_da_vez` | `escolher`).
+     */
+    public static function telefone_selecao_padrao() {
+        $valor = strtolower(trim((string) get_option('pressao_telefone_selecao', 'alvo_da_vez')));
+        return in_array($valor, self::TELEFONE_SELECOES, true) ? $valor : 'alvo_da_vez';
+    }
+
     private function parse_atts($atts) {
+        $padrao_selecao = self::telefone_selecao_padrao();
         $atts = shortcode_atts([
             'campaign' => get_option('pressao_campaign_id', ''),
             'canais' => 'instagram,tiktok,email,telefone',
@@ -102,7 +111,7 @@ class PressaoPlugin_Multicanal {
             'alvo_tiktok' => '',
             'alvo_email' => '',
             'alvo_telefone' => '',
-            'telefone_selecao' => 'alvo_da_vez',
+            'telefone_selecao' => $padrao_selecao,
             'telefone_email' => 'obrigatorio',
             'cache' => 0,
             'alvos' => __('candidatos', 'pressao-plugin'),
@@ -135,7 +144,7 @@ class PressaoPlugin_Multicanal {
                 'email' => sanitize_text_field($atts['alvo_email']),
                 'telefone' => sanitize_text_field($atts['alvo_telefone']),
             ],
-            'telefone_selecao' => in_array($telefone_selecao, self::TELEFONE_SELECOES, true) ? $telefone_selecao : 'alvo_da_vez',
+            'telefone_selecao' => in_array($telefone_selecao, self::TELEFONE_SELECOES, true) ? $telefone_selecao : $padrao_selecao,
             'telefone_email' => in_array($telefone_email, self::TELEFONE_EMAIL, true) ? $telefone_email : 'obrigatorio',
             'cache' => intval($atts['cache']),
             'alvos' => sanitize_text_field($atts['alvos']),

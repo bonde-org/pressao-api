@@ -677,7 +677,16 @@
     }
 
     function initRedesSociais() {
-        const $root = $('.pressao-redes');
+        $('.pressao-redes, .pressao-agregado').each(function () {
+            initBaloesTemplates($(this));
+        });
+        $('.pressao-agregado').each(function () {
+            initMembrosAgregado($(this));
+            initTelefoneSelecao($(this));
+        });
+    }
+
+    function initBaloesTemplates($root) {
         if (!$root.length) {
             return;
         }
@@ -827,6 +836,183 @@
                 })
                 .fail(function (xhr) {
                     $status.text(ajaxMsg(null, xhr, L.redesSaveError)).addClass('is-error');
+                });
+        });
+    }
+
+    function initMembrosAgregado($root) {
+        if (!$root.length) {
+            return;
+        }
+        const L = labels();
+
+        function nonce() {
+            return $root.attr('data-nonce') || '';
+        }
+
+        function post(data) {
+            return $.post(ajaxUrl(), $.extend({ nonce: nonce() }, data));
+        }
+
+        function ajaxMsg(resp, xhr, fallback) {
+            if (resp && resp.data && resp.data.message) {
+                return resp.data.message;
+            }
+            if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                return xhr.responseJSON.data.message;
+            }
+            return fallback;
+        }
+
+        function $editor() {
+            return $root.find('.pressao-agregado-editor');
+        }
+
+        function fillMembro(data) {
+            const $ed = $editor();
+            $ed.find('[data-field="membro-id"]').val(data.id || '');
+            $ed.find('[data-field="nome"]').val(data.nome || '');
+            $ed.find('[data-field="contato"]').val(data.contato || '');
+            $ed.find('[data-field="cargo"]').val(data.cargo || '');
+            $ed.find('[data-field="partido"]').val(data.partido || '');
+            $ed.find('[data-action="remover-membro"]').prop('hidden', !data.id);
+            $ed.find('.pressao-agregado-editor-status').text('').removeClass('is-error');
+            $ed.removeAttr('hidden');
+        }
+
+        $root.on('click', '[data-action="editar-membro"]', function (e) {
+            e.preventDefault();
+            const $row = $(this).closest('.pressao-agregado-row');
+            fillMembro({
+                id: $row.attr('data-id'),
+                nome: $row.attr('data-nome'),
+                contato: $row.attr('data-contato'),
+                cargo: $row.attr('data-cargo'),
+                partido: $row.attr('data-partido')
+            });
+        });
+
+        $root.on('click', '[data-action="novo-membro"]', function () {
+            fillMembro({});
+        });
+
+        $root.on('click', '[data-action="cancelar-membro"]', function () {
+            $editor().attr('hidden', true);
+        });
+
+        $root.on('click', '[data-action="salvar-membro"]', function () {
+            const $ed = $editor();
+            const $status = $ed.find('.pressao-agregado-editor-status');
+            const $btn = $(this);
+            $status.text(L.saving || 'Salvando…').removeClass('is-error');
+            $btn.prop('disabled', true);
+            post({
+                action: 'pressao_admin_salvar_membro',
+                canal: $root.attr('data-canal'),
+                id: $ed.find('[data-field="membro-id"]').val() || '',
+                nome: $ed.find('[data-field="nome"]').val() || '',
+                contato: $ed.find('[data-field="contato"]').val() || '',
+                cargo: $ed.find('[data-field="cargo"]').val() || '',
+                partido: $ed.find('[data-field="partido"]').val() || ''
+            })
+                .done(function (resp) {
+                    if (!resp || !resp.success) {
+                        $status.text(ajaxMsg(resp, null, L.redesSaveError)).addClass('is-error');
+                        return;
+                    }
+                    window.location.reload();
+                })
+                .fail(function (xhr) {
+                    $status.text(ajaxMsg(null, xhr, L.redesSaveError)).addClass('is-error');
+                })
+                .always(function () {
+                    $btn.prop('disabled', false);
+                });
+        });
+
+        $root.on('click', '[data-action="remover-membro"]', function () {
+            const msg = L.membroDeleteConfirm || 'Remover esta pessoa?';
+            if (!window.confirm(msg)) {
+                return;
+            }
+            const $ed = $editor();
+            const $status = $ed.find('.pressao-agregado-editor-status');
+            const id = $ed.find('[data-field="membro-id"]').val() || '';
+            $status.text(L.saving || 'Salvando…').removeClass('is-error');
+            post({
+                action: 'pressao_admin_deletar_membro',
+                id: id
+            })
+                .done(function (resp) {
+                    if (!resp || !resp.success) {
+                        $status.text(ajaxMsg(resp, null, L.redesSaveError)).addClass('is-error');
+                        return;
+                    }
+                    window.location.reload();
+                })
+                .fail(function (xhr) {
+                    $status.text(ajaxMsg(null, xhr, L.redesSaveError)).addClass('is-error');
+                });
+        });
+    }
+
+    function initTelefoneSelecao($root) {
+        if (!$root.length || $root.attr('data-canal') !== 'telefone') {
+            return;
+        }
+        const L = labels();
+
+        function ajaxMsg(resp, xhr, fallback) {
+            if (resp && resp.data && resp.data.message) {
+                return resp.data.message;
+            }
+            if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                return xhr.responseJSON.data.message;
+            }
+            return fallback;
+        }
+
+        $root.on('click', '.pressao-admin-help', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const $btn = $(this);
+            const open = $btn.hasClass('is-open');
+            $root.find('.pressao-admin-help').removeClass('is-open');
+            if (!open) {
+                $btn.addClass('is-open');
+            }
+        });
+
+        $(document).on('click.pressaoTelefoneHelp', function (e) {
+            if ($(e.target).closest('.pressao-admin-help').length) {
+                return;
+            }
+            $root.find('.pressao-admin-help').removeClass('is-open');
+        });
+
+        $root.on('click', '[data-action="salvar-telefone-selecao"]', function () {
+            const $status = $root.find('.pressao-telefone-selecao-status');
+            const $btn = $(this);
+            const selecao = $root.find('input[name="pressao_telefone_selecao"]:checked').val() || '';
+            $status.text(L.saving || 'Salvando…').removeClass('is-error');
+            $btn.prop('disabled', true);
+            $.post(ajaxUrl(), {
+                action: 'pressao_admin_salvar_telefone_selecao',
+                nonce: $root.attr('data-nonce') || '',
+                selecao: selecao
+            })
+                .done(function (resp) {
+                    if (!resp || !resp.success) {
+                        $status.text(ajaxMsg(resp, null, L.redesSaveError)).addClass('is-error');
+                        return;
+                    }
+                    $status.text(L.saved || 'Salvo.').removeClass('is-error');
+                })
+                .fail(function (xhr) {
+                    $status.text(ajaxMsg(null, xhr, L.redesSaveError)).addClass('is-error');
+                })
+                .always(function () {
+                    $btn.prop('disabled', false);
                 });
         });
     }
