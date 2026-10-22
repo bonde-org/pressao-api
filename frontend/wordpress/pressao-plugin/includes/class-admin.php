@@ -164,6 +164,11 @@ class PressaoPlugin_Admin {
         $group_geral = $this->get_option_group_for_tab('geral');
         register_setting($group_geral, 'pressao_campaign_id');
         register_setting($group_geral, 'pressao_widget_title');
+        register_setting($group_geral, 'pressao_privacidade_url', [
+            'type' => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+            'default' => '',
+        ]);
         register_setting($group_geral, 'pressao_ativista_confirm_interval', [
             'type' => 'integer',
             'sanitize_callback' => [$this, 'sanitize_ativista_confirm_interval'],
@@ -195,6 +200,22 @@ class PressaoPlugin_Admin {
             $page_geral,
             'pressao_widget_section',
             ['field' => 'pressao_widget_title']
+        );
+
+        add_settings_field(
+            'pressao_privacidade_url',
+            __('Política de Privacidade', 'pressao-plugin'),
+            [$this, 'render_text_field'],
+            $page_geral,
+            'pressao_widget_section',
+            [
+                'field' => 'pressao_privacidade_url',
+                'type' => 'url',
+                'description' => __(
+                    'URL do texto de Política de Privacidade abaixo do botão de envio, em qualquer formulário do widget. Se vazio, usa a página de privacidade do WordPress (Ajustes → Privacidade), quando existir.',
+                    'pressao-plugin'
+                ),
+            ]
         );
 
         add_settings_section(
@@ -328,6 +349,8 @@ class PressaoPlugin_Admin {
             <p class="description">
                 <?php printf(esc_html__('Definido via wp-config.php (constante %s), não editável aqui.', 'pressao-plugin'), esc_html($constant)); ?>
             </p>
+        <?php elseif (!empty($args['description'])) : ?>
+            <p class="description"><?php echo esc_html($args['description']); ?></p>
         <?php endif; ?>
         <?php
     }

@@ -1272,14 +1272,14 @@ html.pressao-mc-lock body {
   border-color: var(--mc-black);
 }
 
-.pressao-mc-tel-submit {
+.pressao-mc-form-submit {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-top: auto;
 }
 
-.pressao-mc-tel-form .pressao-mc-actions {
+.pressao-mc-form-submit .pressao-mc-actions {
   margin-top: 0;
   padding-top: 0;
 }

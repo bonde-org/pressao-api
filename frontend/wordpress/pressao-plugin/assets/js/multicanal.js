@@ -106,6 +106,20 @@
         return '<span class="pressao-mc-ico pressao-mc-ico--' + escAttr(nome) + '" aria-hidden="true"></span>';
     }
 
+    function privacidadeLabelHtml(url) {
+        return url
+            ? '<a href="' + escAttr(url) + '" target="_blank" rel="noopener">Política de Privacidade</a>'
+            : 'Política de Privacidade';
+    }
+
+    function privacidadeFootnoteHtml(url) {
+        return (
+            '<p class="pressao-mc-footnote">Ao continuar, você concorda em receber atualizações por e-mail, conforme a ' +
+            privacidadeLabelHtml(url) +
+            '.</p>'
+        );
+    }
+
     function avatarHtml(imagem, extraClass) {
         var cls = 'pressao-mc-chip-avatar' + (extraClass ? ' ' + extraClass : '');
         return imagem
@@ -733,9 +747,12 @@
                 '<p class="pressao-mc-lead-text">Receba atualizações sobre a campanha e novas formas de pressionar pela ' + esc(campanhaNome) + '.</p>' +
                 '<div class="pressao-mc-fields">' + camposAtivistaHtml(Core.getAtivista()) + '</div>' +
                 erroHtml() +
+                '<div class="pressao-mc-form-submit">' +
                 '<div class="pressao-mc-actions">' +
                 '<button type="submit" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-lead-sim>Quero receber atualizações</button>' +
                 '<button type="button" class="pressao-mc-btn pressao-mc-btn-secondary" data-mc-lead-nao>Agora não</button>' +
+                '</div>' +
+                privacidadeFootnoteHtml(config.privacidade_url) +
                 '</div></form>'
             );
         }
@@ -912,10 +929,12 @@
                 '<button type="button" class="pressao-mc-help-mini" data-mc-open-modal="ajuda" aria-label="Como funciona?">' + ico('interrogacao') + '</button></h4>' +
                 '<div class="pressao-mc-fields">' + camposAtivistaHtml(Core.getAtivista()) + '</div>' +
                 erroHtml() +
+                '<div class="pressao-mc-form-submit">' +
                 '<div class="pressao-mc-actions">' +
                 '<button type="submit" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-enviar-email>Enviar email</button>' +
                 '</div>' +
-                '<p class="pressao-mc-footnote">Seus dados são usados apenas para enviar este e-mail e não serão compartilhados.</p>' +
+                privacidadeFootnoteHtml(config.privacidade_url) +
+                '</div>' +
                 '</form></div>'
             );
         }
@@ -1205,13 +1224,7 @@
                   '<input type="email" name="email"' + (emailCampo === 'obrigatorio' ? ' required' : '') +
                   ' autocomplete="email" placeholder="Seu melhor email"' + value(ativista.email) + ' /></label>';
 
-            var privacidade = emailCampo === 'oculto'
-                ? ''
-                : '<p class="pressao-mc-footnote">Ao continuar, você concorda em receber atualizações por e-mail, conforme a ' +
-                  (config.privacidade_url
-                      ? '<a href="' + escAttr(config.privacidade_url) + '" target="_blank" rel="noopener">Política de Privacidade</a>'
-                      : 'Política de Privacidade') +
-                  '.</p>';
+            var privacidade = emailCampo === 'oculto' ? '' : privacidadeFootnoteHtml(config.privacidade_url);
 
             var camposContato = emailCampo === 'oculto'
                 ? '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Telefone <span class="pressao-mc-required">*</span></span>' +
@@ -1237,7 +1250,7 @@
                 '<section class="pressao-mc-block pressao-mc-tel-conectar"><p class="pressao-mc-tel-label">Vamos te conectar com:</p>' + alvoHtml + '</section>' +
                 roteiroHtml(c.roteiro || '') +
                 erroHtml() +
-                '<div class="pressao-mc-tel-submit">' +
+                '<div class="pressao-mc-form-submit">' +
                 '<div class="pressao-mc-actions">' +
                 '<button type="submit" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-tel-ligar>Já pode me ligar</button>' +
                 '</div>' +

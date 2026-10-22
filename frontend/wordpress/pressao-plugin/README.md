@@ -86,7 +86,7 @@ pressao-plugin/
 │   ├── class-apoiadores-imagens-fila.php  # Fila de imagens do CSV (lotes via AJAX + progresso)
 │   ├── class-candidatos-rest.php    # REST pressao/v1/candidatos-apoiadores
 │   ├── class-api.php           # Cliente HTTP: Keycloak + API Pressão
-│   ├── class-render-helpers.php  # Helpers de render comuns (candidatos, avatares, compartilhar, ajuda, cookie, campos do ativista)
+│   ├── class-render-helpers.php  # Helpers de render comuns (candidatos, avatares, compartilhar, ajuda, privacidade_url, cookie, campos do ativista)
 │   ├── class-shortcode.php     # Shortcodes e renderização SSR
 │   ├── class-multicanal.php    # [pressao_multicanal]: widget padrão (Instagram, TikTok, e-mail, telefone, compartilhar)
 │   └── class-ajax.php          # AJAX handlers
@@ -152,6 +152,7 @@ Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não
 | URL da API | `pressao_api_url` | Conexão | Endereço da API Pressão |
 | ID da Campanha | `pressao_campaign_id` | Geral | Campanha padrão dos shortcodes |
 | Título do Widget | `pressao_widget_title` | Geral | Título exibido em `[pressao_widget]` |
+| Política de Privacidade | `pressao_privacidade_url` | Geral | URL do aviso abaixo do submit em **qualquer** formulário do widget. Vazio: página de privacidade do WordPress |
 | Intervalo confirmar identidade | `pressao_ativista_confirm_interval` | Geral | Minutos até perguntar de novo (padrão `10`) |
 | Título do formulário | `pressao_ativista_form_title` | Geral | Título do formulário de identificação |
 | Duração da sessão | `pressao_session_duration` | Geral | TTL dos cookies em segundos (padrão `86400`) |
@@ -162,6 +163,18 @@ Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não
 | Ajuda do fluxo | `pressao_fluxo_ajuda` | Candidatos | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
 | Candidatos apoiadores | `pressao_candidatos_apoiadores` | Apoiadores | Lista AJAX + import/remover CSV; botão/lista “já apoiam”, `[pressao_candidatos]` |
 | Compartilhamento | `pressao_compartilhamento` | Compartilhamento | Textos, links, deep links e imagens do botão de compartilhar |
+
+### Política de Privacidade
+
+A option `pressao_privacidade_url` (aba **Geral**) alimenta o texto **“Política de Privacidade”** abaixo do botão de submit em **qualquer** formulário do plugin — não é exclusiva do telefone. Hoje: e-mail, telefone e captação de lead no `[pressao_multicanal]`. Formulário novo com o mesmo aviso deve reusar essa URL.
+
+Resolução (`PressaoPlugin_Render_Helpers::privacidade_url()`, exposta no config JS como `privacidade_url`):
+
+1. URL preenchida na aba Geral;
+2. senão, página de privacidade do WordPress (`get_privacy_policy_url()`);
+3. sem as duas, o nome da política aparece **sem link**.
+
+Copy: *“Ao continuar, você concorda em receber atualizações por e-mail, conforme a Política de Privacidade.”* No JS, `privacidadeFootnoteHtml(url)` recebe a URL por argumento. No telefone, o aviso some se `telefone_email="oculto"`.
 
 ### Configuração compartilhada via wp-config.php (multisite)
 
@@ -366,11 +379,11 @@ fim do canal, depois da captação de lead.
 
 **Captação de lead** ("Quer acompanhar os próximos passos?"): aparece só se ainda não pedimos e-mail (sem
 `__lead` no cookie, sem e-mail em `pressao_ativista_data` e e-mail não feito). Modal no desktop, tela cheia no
-mobile. "Agora não" registra a ação sem ativista.
+mobile. "Agora não" registra a ação sem ativista. Aviso de privacidade abaixo do submit (mesma URL da aba Geral).
 
 **E-mail:** "Para" com os nomes de `membros` do alvo agregado (API; sem o campo, "N destinatários"), "Assunto"
 = título do template, "Ver Texto" com o corpo e formulário nome/e-mail/WhatsApp. O envio cria a ação
-(`canal=email`) com o ativista.
+(`canal=email`) com o ativista. Aviso de privacidade abaixo do submit.
 
 **Telefone** (Figma V2, "ligamos para você"): o card só aparece com o alvo **agregado** de telefone da API
 (alvo telefone individual é ignorado). Copys e cores seguem o **mobile** do Figma; diagramação, espaçamentos
@@ -386,7 +399,8 @@ e tamanhos continuam diferentes entre mobile e desktop (≥768px). Telas:
    (card; o select de `escolher` fica na intro) → roteiro **"Utilize esse roteiro"** sempre visível
    (card chip, título azul, textos 12px; template `telefone`, placeholders `{alvo_nome}`,
    `{campanha_nome}`, `{ativista_nome}`). CTA **"Já pode me ligar"** (sem ícone, 36px em 1 linha)
-   cria a ação com `membro_id` e `selecao` (`automatica` / `ativista`).
+   cria a ação com `membro_id` e `selecao` (`automatica` / `ativista`). Aviso de privacidade abaixo
+   do submit (mesma URL da aba Geral; some se `telefone_email="oculto"`).
 3. Modal "Vamos te ligar em instantes" com GIF `telefone.gif` ("O número pode começar com [XX]" se houver
    DDD); depois de 90 s aparece "Fechar e acompanhar depois" (volta à home; `sessionStorage` permanece).
 4. "Ligação em andamento" com o roteiro visível (e o GIF), quando o ativista atende — ou ao **reabrir** o
@@ -425,8 +439,8 @@ admin estiver vazio; redes de `redes` **ocultas** quando sem URL configurada; im
 Assets: `pressao-ui.css` + `multicanal.css` + `pressao-core.js` + `share-images.js` + `multicanal.js` (só
 quando o shortcode está na página) + GIFs em `assets/img/` (URLs em `config.assets`). Reusa AJAX
 `pressao_realizar_acao` / `pressao_confirmar_acao`; o telefone usa também `pressao_proximo_membro`,
-`pressao_status_ligacao` e `pressao_nova_ligacao`. O config do widget leva `privacidade_url`
-(`get_privacy_policy_url()`) para o link do aviso de privacidade. Contador `.pressao-acoes-counter`
+`pressao_status_ligacao` e `pressao_nova_ligacao`. O config leva `privacidade_url` (ver
+[Política de Privacidade](#política-de-privacidade)). Contador `.pressao-acoes-counter`
 animado por `PressaoCore.updateCounter`.
 
 ### Shortcodes legados
@@ -647,3 +661,4 @@ Handlers só do admin (logado, `manage_options` + nonce `pressao_apoiadores_imag
 5. **Valide `content-type: application/json`** antes de `response.json()` no JS.
 6. Preserve `AGUARDANDO_ACAO_HUMANA` no cookie de ações até a confirmação; só então marque `CONCLUIDA`.
 7. Shortcode novo precisa entrar na checagem de `has_shortcode` em `pressao-plugin.php`, senão CSS e JS não são carregados na página.
+8. **Política de Privacidade:** todo formulário com esse texto abaixo do submit usa `pressao_privacidade_url` (`PressaoPlugin_Render_Helpers::privacidade_url()` / `config.privacidade_url`). Não hardcodar URL. No JS, passe a URL por argumento (`privacidadeFootnoteHtml(url)`). Sem URL, o nome da política aparece sem link.

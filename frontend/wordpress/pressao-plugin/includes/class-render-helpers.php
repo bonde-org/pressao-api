@@ -234,6 +234,17 @@ class PressaoPlugin_Render_Helpers {
     }
 
     /**
+     * URL da Política de Privacidade: option do plugin, senão a página do WordPress.
+     */
+    public static function privacidade_url() {
+        $url = trim((string) get_option('pressao_privacidade_url', ''));
+        if ($url !== '') {
+            return esc_url_raw($url);
+        }
+        return function_exists('get_privacy_policy_url') ? get_privacy_policy_url() : '';
+    }
+
+    /**
      * Texto puro de um conteúdo HTML de template, mantendo parágrafos e quebras de linha.
      */
     public static function texto_de_html($html) {

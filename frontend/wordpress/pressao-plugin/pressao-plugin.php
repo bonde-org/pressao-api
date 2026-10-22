@@ -105,6 +105,7 @@ final class PressaoPlugin {
             'pressao_api_url' => '',
             'pressao_campaign_id' => '',
             'pressao_widget_title' => 'Pressão Widget',
+            'pressao_privacidade_url' => '',
             'pressao_candidatos' => [],
             'pressao_candidatos_apoiadores' => [],
             'pressao_candidatos_filtros' => [],

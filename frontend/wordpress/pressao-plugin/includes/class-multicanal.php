@@ -293,7 +293,7 @@ class PressaoPlugin_Multicanal {
             'countdown' => $o['countdown'],
             'redes' => $o['redes'],
             'share' => $share,
-            'privacidade_url' => function_exists('get_privacy_policy_url') ? get_privacy_policy_url() : '',
+            'privacidade_url' => PressaoPlugin_Render_Helpers::privacidade_url(),
             'assets' => [
                 'loading' => PRESSAO_PLUGIN_URL . 'assets/img/loading.gif',
                 'telefone' => PRESSAO_PLUGIN_URL . 'assets/img/telefone.gif',
