@@ -32,6 +32,7 @@
 .pressao-mc h2,
 .pressao-mc h3,
 .pressao-mc h4,
+.pressao-mc h5,
 .pressao-mc p,
 .pressao-mc dl,
 .pressao-mc dd,
@@ -51,7 +52,8 @@
 
 .pressao-mc h2,
 .pressao-mc h3,
-.pressao-mc h4 {
+.pressao-mc h4,
+.pressao-mc h5 {
   color: var(--mc-text);
 }
 
@@ -123,6 +125,7 @@ html.pressao-mc-lock body {
 .pressao-mc-ico--lapis { --mc-ico: var(--pressao-icon-lapis); }
 .pressao-mc-ico--pessoas { --mc-ico: var(--pressao-icon-pessoas); }
 .pressao-mc-ico--info { --mc-ico: var(--pressao-icon-info); }
+.pressao-mc-ico--balao { --mc-ico: var(--pressao-icon-balao); }
 .pressao-mc-ico--alerta { --mc-ico: var(--pressao-icon-alerta); }
 .pressao-mc-ico--x { --mc-ico: var(--pressao-icon-x); }
 .pressao-mc-ico--localizacao { --mc-ico: var(--pressao-icon-localizacao); color: #ff5d00; width: 13px; height: 13px; }
@@ -567,8 +570,8 @@ html.pressao-mc-lock body {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  min-height: 40px;
-  padding: 8px 16px !important;
+  min-height: 36px;
+  padding: 5px 16px !important;
   border-radius: 80px !important;
   font-size: 16px !important;
   line-height: 24px !important;
@@ -748,6 +751,7 @@ html.pressao-mc-lock body {
   overflow-y: auto;
 }
 
+.pressao-mc p.pressao-mc-footnote,
 .pressao-mc-footnote {
   font-size: 12px;
   line-height: 18px;
@@ -941,15 +945,15 @@ html.pressao-mc-lock body {
 .pressao-mc-fields {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
 .pressao-mc-field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 16px;
-  line-height: 24px;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--mc-text);
 }
 
@@ -963,7 +967,7 @@ html.pressao-mc-lock body {
   border: 1px solid var(--fluxo-border);
   border-radius: 8px;
   padding: 8px 16px;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 24px;
   color: var(--mc-text);
   background: #fff;
@@ -1082,10 +1086,26 @@ html.pressao-mc-lock body {
   flex: 1;
 }
 
+.pressao-mc .pressao-mc-tel-acontece {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--mc-text);
+  margin-bottom: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--fluxo-border-soft);
+}
+
 .pressao-mc-tel-passos {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.pressao-mc-tel-fields-row {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .pressao-mc-tel-passo {
@@ -1109,7 +1129,6 @@ html.pressao-mc-lock body {
   pointer-events: none;
 }
 
-.pressao-mc-tel-alvo-icon,
 .pressao-mc-tel-status-icon {
   flex-shrink: 0;
   width: 40px;
@@ -1122,20 +1141,27 @@ html.pressao-mc-lock body {
   justify-content: center;
 }
 
+.pressao-mc p.pressao-mc-tel-info,
 .pressao-mc-tel-info {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 12px;
-  border-radius: 8px;
-  background: var(--mc-soft);
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--mc-help);
+  padding: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: #4d4d4d;
 }
 
 .pressao-mc-tel-info .pressao-mc-ico {
   margin-top: 2px;
+  color: var(--mc-link);
+  width: 16px;
+  height: 16px;
+}
+
+.pressao-mc-tel-conectar {
+  padding-top: 16px;
+  border-top: 1px solid var(--fluxo-border-soft);
 }
 
 .pressao-mc .pressao-mc-tel-label {
@@ -1149,8 +1175,21 @@ html.pressao-mc-lock body {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border: 1px solid var(--fluxo-border);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--mc-chip);
+}
+
+.pressao-mc-tel-alvo-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--mc-soft-2) center / cover no-repeat;
+}
+
+.pressao-mc-tel-alvo-avatar.is-empty {
+  background-color: var(--mc-soft-2);
 }
 
 .pressao-mc-tel-alvo[aria-busy="true"] {
@@ -1167,19 +1206,51 @@ html.pressao-mc-lock body {
 }
 
 .pressao-mc-tel-alvo-copy span {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--mc-muted);
 }
 
 .pressao-mc-tel-badge {
   flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--mc-success-soft);
-  color: var(--mc-success);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--mc-link);
+  color: #fff;
   font-size: 12px;
   font-weight: 700;
   line-height: 18px;
+}
+
+.pressao-mc-tel-roteiro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--mc-chip);
+}
+
+.pressao-mc .pressao-mc-tel-roteiro-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  color: var(--mc-link);
+}
+
+.pressao-mc-tel-roteiro-titulo .pressao-mc-ico {
+  color: var(--mc-link);
+}
+
+.pressao-mc p.pressao-mc-tel-roteiro-texto,
+.pressao-mc-tel-roteiro-texto {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--mc-text);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .pressao-mc .pressao-mc-field select {
@@ -1189,8 +1260,8 @@ html.pressao-mc-lock body {
   border-radius: 8px;
   padding: 8px 12px;
   font-family: var(--fluxo-font);
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--mc-text);
   background: #fff;
   margin: 0;
@@ -1199,6 +1270,18 @@ html.pressao-mc-lock body {
 .pressao-mc .pressao-mc-field select:focus {
   outline: none;
   border-color: var(--mc-black);
+}
+
+.pressao-mc-tel-submit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.pressao-mc-tel-form .pressao-mc-actions {
+  margin-top: 0;
+  padding-top: 0;
 }
 
 .pressao-mc-tel-form .pressao-mc-btn .pressao-mc-ico,
@@ -1214,6 +1297,12 @@ html.pressao-mc-lock body {
 .pressao-mc-tel-ligando .pressao-mc-feedback-anim {
   width: 72px;
   height: 72px;
+}
+
+.pressao-mc-tel-ligando .pressao-mc-feedback-title {
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 700;
 }
 
 .pressao-mc .pressao-mc-tel-ligando-fechar {
@@ -1856,7 +1945,7 @@ html.pressao-mc-lock body {
   }
 
   .pressao-mc-home {
-    max-width: 360px;
+    max-width: 624px;
     width: 100%;
     margin: 0 auto;
   }
@@ -1903,7 +1992,7 @@ html.pressao-mc-lock body {
   }
 
   .pressao-mc-screen > * {
-    max-width: 360px;
+    max-width: 624px;
     width: 100%;
     margin-left: auto;
     margin-right: auto;
@@ -1930,6 +2019,28 @@ html.pressao-mc-lock body {
   .pressao-mc .pressao-mc-block-title {
     font-size: 14px;
     line-height: 20px;
+  }
+
+  .pressao-mc-tel-fields-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .pressao-mc-tel-passo {
+    font-size: 14px;
+    line-height: 20px;
+    gap: 10px;
+  }
+
+  .pressao-mc-tel-passo-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .pressao-mc-tel-alvo-avatar {
+    width: 36px;
+    height: 36px;
   }
 
   .pressao-mc-chips {

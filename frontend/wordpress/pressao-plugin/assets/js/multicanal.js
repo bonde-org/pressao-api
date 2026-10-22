@@ -1025,22 +1025,46 @@
             return '<p class="pressao-mc-tel-info">' + ico('info') + '<span>' + esc(texto) + '</span></p>';
         }
 
-        function roteiroHtml(texto, aberto) {
+        function formatRoteiroDisplay(texto, alvoNome, ativistaNome) {
+            var t = roteiroTexto(texto, alvoNome, ativistaNome).trim();
+            if (!t) {
+                return '';
+            }
+            if (t.charAt(0) === '"' || t.charAt(0) === '“') {
+                return t;
+            }
+            return '“' + t + '”';
+        }
+
+        function roteiroHtml(texto) {
             return (
-                '<details class="pressao-mc-accordion pressao-mc-tel-roteiro" data-mc-tel-roteiro' + (aberto ? ' open' : '') + (texto ? '' : ' hidden') + '>' +
-                '<summary>Não sabe o que falar? Utilize esse roteiro' + ico('chevron') + '</summary>' +
-                '<div class="pressao-mc-accordion-body" data-mc-tel-roteiro-texto>' + esc(texto) + '</div></details>'
+                '<div class="pressao-mc-tel-roteiro" data-mc-tel-roteiro' + (texto ? '' : ' hidden') + '>' +
+                '<p class="pressao-mc-tel-roteiro-titulo">' + ico('telefone') + 'Utilize esse roteiro</p>' +
+                '<p class="pressao-mc-tel-roteiro-texto" data-mc-tel-roteiro-texto>' +
+                esc(formatRoteiroDisplay(texto)) +
+                '</p></div>'
             );
         }
 
-        function alvoCardHtml(busy) {
+        function alvoAvatarHtml(membro) {
+            var cand = membro ? candidatoPorNome(membro.nome) : null;
+            var img = cand && cand.imagem ? cand.imagem : '';
+            return img
+                ? '<span class="pressao-mc-tel-alvo-avatar" data-mc-tel-alvo-avatar style="background-image:url(\'' + escAttr(img) + '\')"></span>'
+                : '<span class="pressao-mc-tel-alvo-avatar is-empty" data-mc-tel-alvo-avatar></span>';
+        }
+
+        function alvoCardHtml(busy, membro, comBadge) {
             return (
                 '<div class="pressao-mc-tel-alvo" data-mc-tel-alvo' + (busy ? ' aria-busy="true"' : '') + '>' +
-                '<span class="pressao-mc-tel-alvo-icon" aria-hidden="true">' + ico('telefone') + '</span>' +
+                alvoAvatarHtml(membro) +
                 '<span class="pressao-mc-tel-alvo-copy"><strong data-mc-tel-alvo-nome>' +
-                (busy ? 'Carregando o alvo da vez...' : '') +
-                '</strong><span data-mc-tel-alvo-meta></span></span>' +
-                '<span class="pressao-mc-tel-badge">Alvo da vez</span></div>'
+                (membro && membro.nome ? esc(membro.nome) : busy ? 'Carregando o alvo da vez...' : '') +
+                '</strong><span data-mc-tel-alvo-meta>' +
+                (membro ? esc(cargoPartido(membro)) : '') +
+                '</span></span>' +
+                (comBadge === false ? '' : '<span class="pressao-mc-tel-badge">Alvo da vez</span>') +
+                '</div>'
             );
         }
 
@@ -1052,11 +1076,23 @@
             box.removeAttribute('aria-busy');
             var nome = box.querySelector('[data-mc-tel-alvo-nome]');
             var meta = box.querySelector('[data-mc-tel-alvo-meta]');
+            var av = box.querySelector('[data-mc-tel-alvo-avatar]');
             if (nome) {
                 nome.textContent = membro.nome || '';
             }
             if (meta) {
                 meta.textContent = cargoPartido(membro);
+            }
+            if (av) {
+                var cand = candidatoPorNome(membro.nome);
+                var img = cand && cand.imagem ? cand.imagem : '';
+                if (img) {
+                    av.classList.remove('is-empty');
+                    av.style.backgroundImage = 'url(\'' + img + '\')';
+                } else {
+                    av.classList.add('is-empty');
+                    av.style.backgroundImage = '';
+                }
             }
         }
 
@@ -1091,32 +1127,44 @@
 
         function telefoneIntroHtml(c) {
             var passos = [
-                ['lapis', 'Você informa seus dados telefônicos'],
-                ['telefone-entrada', 'Você recebe uma ligação nossa em instantes'],
-                ['pessoas', 'A gente te conecta com a equipe do alvo'],
-                ['info', 'Você conversa com um roteiro como guia']
+                ['lapis', 'Você informa <strong>seus dados telefônicos</strong>'],
+                ['telefone-entrada', 'Você recebe <strong>uma ligação nossa</strong> em instantes'],
+                ['pessoas', 'A gente te <strong>conecta com o alvo</strong>'],
+                ['balao', 'Você conversa com <strong>um roteiro como guia</strong>']
             ];
-            var alvoSection = c.selecao === 'escolher'
-                ? ''
-                : '<section class="pressao-mc-block"><p class="pressao-mc-tel-label">Você vai se comunicar com:</p>' +
+            var passosOl =
+                '<ol class="pressao-mc-tel-passos">' +
+                passos
+                    .map(function (p) {
+                        return '<li class="pressao-mc-tel-passo"><span class="pressao-mc-tel-passo-icon">' + ico(p[0]) + '</span><span>' + p[1] + '</span></li>';
+                    })
+                    .join('') +
+                '</ol>';
+            var topo = c.selecao === 'escolher'
+                ? '<h4 class="pressao-mc-block-title">Selecione quem você quer pressionar:</h4>' +
+                  '<label class="pressao-mc-field"><span class="pressao-ui-sr-only">Candidato</span>' +
+                  '<select name="membro_id" data-mc-tel-membro><option value="">Selecione um candidato</option>' +
+                  (Array.isArray(c.membros) ? c.membros : [])
+                      .map(function (m) {
+                          var meta = cargoPartido(m);
+                          return '<option value="' + escAttr(m.id) + '">' + esc(m.nome + (meta ? ' · ' + meta : '')) + '</option>';
+                      })
+                      .join('') +
+                  '</select></label>'
+                : '<h4 class="pressao-mc-block-title">Vamos te conectar com:</h4>' +
+                  '<section class="pressao-mc-block">' +
                   alvoCardHtml(true) +
+                  infoHtml('Na próxima ligação, você pode ser direcionado para outro alvo. Assim, equilibramos as ligações entre todos os candidatos da campanha.') +
                   '</section>';
             return (
                 navHtml('telefone', CANAL_TEXTOS.telefone.nome) +
                 '<div class="pressao-mc-screen-body">' +
                 bannerFeitoHtml('telefone') +
-                '<h4 class="pressao-mc-block-title">Como funciona</h4>' +
-                alvoSection +
-                '<ol class="pressao-mc-tel-passos">' +
-                passos
-                    .map(function (p) {
-                        return '<li class="pressao-mc-tel-passo"><span class="pressao-mc-tel-passo-icon">' + ico(p[0]) + '</span><span>' + esc(p[1]) + '</span></li>';
-                    })
-                    .join('') +
-                '</ol>' +
-                (c.selecao === 'escolher'
-                    ? ''
-                    : infoHtml('Na próxima ligação, você pode ser direcionado para outro alvo. Assim, equilibramos as ligações entre todos os candidatos da campanha.')) +
+                topo +
+                '<section class="pressao-mc-block">' +
+                '<h5 class="pressao-mc-tel-acontece">O que acontece agora?</h5>' +
+                passosOl +
+                '</section>' +
                 erroHtml() +
                 '<div class="pressao-mc-actions">' +
                 '<button type="button" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-tel-preencher>Preencher dados telefônicos</button>' +
@@ -1124,7 +1172,7 @@
             );
         }
 
-        function telefoneFormHtml(c) {
+        function telefoneFormHtml(c, membroIntro) {
             var ativista = Core.getAtivista() || {};
             var emailCampo = c.email_campo || 'obrigatorio';
             var membros = Array.isArray(c.membros) ? c.membros : [];
@@ -1132,17 +1180,23 @@
                 return v ? ' value="' + escAttr(v) + '"' : '';
             }
 
-            var alvoHtml = c.selecao === 'escolher'
-                ? '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Escolha para quem ligar <span class="pressao-mc-required">*</span></span>' +
-                  '<select name="membro_id" required data-mc-tel-membro><option value="">Selecione um candidato</option>' +
-                  membros
-                      .map(function (m) {
-                          var meta = cargoPartido(m);
-                          return '<option value="' + escAttr(m.id) + '">' + esc(m.nome + (meta ? ' · ' + meta : '')) + '</option>';
-                      })
-                      .join('') +
-                  '</select></label>'
-                : alvoCardHtml(true);
+            var alvoHtml;
+            if (c.selecao === 'escolher' && !membroIntro) {
+                alvoHtml =
+                    '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Escolha para quem ligar <span class="pressao-mc-required">*</span></span>' +
+                    '<select name="membro_id" required data-mc-tel-membro><option value="">Selecione um candidato</option>' +
+                    membros
+                        .map(function (m) {
+                            var meta = cargoPartido(m);
+                            return '<option value="' + escAttr(m.id) + '">' + esc(m.nome + (meta ? ' · ' + meta : '')) + '</option>';
+                        })
+                        .join('') +
+                    '</select></label>';
+            } else if (membroIntro) {
+                alvoHtml = alvoCardHtml(false, membroIntro, c.selecao !== 'escolher');
+            } else {
+                alvoHtml = alvoCardHtml(true);
+            }
 
             var campoEmail = emailCampo === 'oculto'
                 ? ''
@@ -1159,26 +1213,36 @@
                       : 'Política de Privacidade') +
                   '.</p>';
 
+            var camposContato = emailCampo === 'oculto'
+                ? '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Telefone <span class="pressao-mc-required">*</span></span>' +
+                  '<input type="tel" name="telefone" required inputmode="numeric" autocomplete="tel" placeholder="(00) 00000-000" data-mc-telefone' +
+                  value(ativista.telefone ? Core.formatPhoneMask(ativista.telefone) : '') + ' /></label>'
+                : '<div class="pressao-mc-tel-fields-row">' +
+                  '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Telefone <span class="pressao-mc-required">*</span></span>' +
+                  '<input type="tel" name="telefone" required inputmode="numeric" autocomplete="tel" placeholder="(00) 00000-000" data-mc-telefone' +
+                  value(ativista.telefone ? Core.formatPhoneMask(ativista.telefone) : '') + ' /></label>' +
+                  campoEmail +
+                  '</div>';
+
             return (
                 navHtml('telefone', CANAL_TEXTOS.telefone.nome) +
                 '<div class="pressao-mc-screen-body">' +
                 '<form class="pressao-mc-tel-form" data-mc-tel-form novalidate>' +
-                '<h4 class="pressao-mc-block-title">Vamos te conectar com</h4>' +
-                '<section class="pressao-mc-block">' + alvoHtml + '</section>' +
+                '<h4 class="pressao-mc-block-title">Preencha seus dados para gente te ligar:</h4>' +
                 '<div class="pressao-mc-fields">' +
-                '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Nome completo <span class="pressao-mc-required">*</span></span>' +
-                '<input type="text" name="nome" required autocomplete="name" placeholder="Seu nome completo"' + value(ativista.nome) + ' /></label>' +
-                '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Telefone <span class="pressao-mc-required">*</span></span>' +
-                '<input type="tel" name="telefone" required inputmode="numeric" autocomplete="tel" placeholder="(00) 00000-0000" data-mc-telefone' +
-                value(ativista.telefone ? Core.formatPhoneMask(ativista.telefone) : '') + ' /></label>' +
-                campoEmail +
+                '<label class="pressao-mc-field"><span class="pressao-mc-field-label">Seu nome completo <span class="pressao-mc-required">*</span></span>' +
+                '<input type="text" name="nome" required autocomplete="name" placeholder="Seu nome"' + value(ativista.nome) + ' /></label>' +
+                camposContato +
                 '</div>' +
-                roteiroHtml(c.roteiro || '', false) +
+                '<section class="pressao-mc-block pressao-mc-tel-conectar"><p class="pressao-mc-tel-label">Vamos te conectar com:</p>' + alvoHtml + '</section>' +
+                roteiroHtml(c.roteiro || '') +
                 erroHtml() +
+                '<div class="pressao-mc-tel-submit">' +
                 '<div class="pressao-mc-actions">' +
-                '<button type="submit" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-tel-ligar>' + ico('telefone') + 'Já pode me ligar</button>' +
+                '<button type="submit" class="pressao-mc-btn pressao-mc-btn-primary" data-mc-tel-ligar>Já pode me ligar</button>' +
                 '</div>' +
                 privacidade +
+                '</div>' +
                 '</form></div>'
             );
         }
@@ -1191,33 +1255,49 @@
                 return;
             }
             openScreen(telefoneIntroHtml(c), 'telefone', function (container) {
+                var select = container.querySelector('[data-mc-tel-membro]');
+                var membroCarregado = null;
                 container.querySelector('[data-mc-tel-preencher]').addEventListener('click', function () {
-                    abrirTelefoneForm(c);
+                    var membro = membroCarregado;
+                    if (select) {
+                        membro = membroPorId(c, select.value);
+                        if (!membro) {
+                            mostrarErro(container, 'Escolha para quem ligar.');
+                            return;
+                        }
+                    }
+                    abrirTelefoneForm(c, membro);
                 });
-                carregarAlvoDaVez(container, c);
+                carregarAlvoDaVez(container, c, function (r) {
+                    if (r && r.membro) {
+                        membroCarregado = r.membro;
+                    }
+                });
             });
         }
 
-        function abrirTelefoneForm(c) {
-            var estado = { membro: null, roteiro: c.roteiro || '', templateId: c.template_id || '' };
-            openScreen(telefoneFormHtml(c), 'telefone', function (container) {
+        function abrirTelefoneForm(c, membroIntro) {
+            var estado = { membro: membroIntro || null, roteiro: c.roteiro || '', templateId: c.template_id || '' };
+            openScreen(telefoneFormHtml(c, membroIntro), 'telefone', function (container) {
                 var form = container.querySelector('[data-mc-tel-form]');
                 var btn = form.querySelector('[data-mc-tel-ligar]');
                 var select = form.querySelector('[data-mc-tel-membro]');
                 Core.bindPhoneMask(form.querySelector('[data-mc-telefone]'));
 
                 function atualizarRoteiro() {
-                    var det = form.querySelector('[data-mc-tel-roteiro]');
-                    if (!det) {
+                    var box = form.querySelector('[data-mc-tel-roteiro]');
+                    if (!box) {
                         return;
                     }
-                    // Mantém o accordion visível; só esconde se realmente não houver roteiro.
-                    det.hidden = !estado.roteiro;
-                    det.querySelector('[data-mc-tel-roteiro-texto]').textContent = roteiroTexto(
-                        estado.roteiro,
-                        estado.membro && estado.membro.nome,
-                        (form.elements.nome.value || '').trim()
-                    );
+                    box.hidden = !estado.roteiro;
+                    var el = box.querySelector('[data-mc-tel-roteiro-texto]');
+                    if (el) {
+                        el.textContent = formatRoteiroDisplay(
+                            estado.roteiro,
+                            estado.membro && estado.membro.nome,
+                            (form.elements.nome.value || '').trim()
+                        );
+                    }
                 }
                 form.elements.nome.addEventListener('input', atualizarRoteiro);
 
@@ -1230,6 +1310,9 @@
                         estado.membro = membroPorId(c, select.value);
                         atualizarRoteiro();
                     });
+                } else if (estado.membro) {
+                    btn.disabled = false;
+                    atualizarRoteiro();
                 } else {
                     btn.disabled = true;
                     carregarAlvoDaVez(form, c, function (r) {
@@ -1311,7 +1394,9 @@
         function ligandoTextos(salvo) {
             return {
                 titulo: 'Vamos te ligar em instantes',
-                texto: 'Fique com o telefone por perto.' + (salvo.prefixo ? ' O número pode começar com (' + salvo.prefixo + ').' : '')
+                texto: salvo.prefixo
+                    ? 'Fique com o telefone por perto. O número pode começar com [' + salvo.prefixo + ']'
+                    : 'Fique com o telefone por perto.'
             };
         }
 
@@ -1346,7 +1431,7 @@
                     : '<span class="pressao-mc-tel-status-icon" aria-hidden="true">' + ico('telefone') + '</span>') +
                 '<div><strong data-mc-tel-status-titulo>' + esc(t.titulo) + '</strong>' +
                 '<p data-mc-tel-status-texto>' + esc(t.texto) + '</p></div></div>' +
-                roteiroHtml(salvo.roteiro || '', true) +
+                roteiroHtml(salvo.roteiro || '') +
                 '</div>'
             );
         }

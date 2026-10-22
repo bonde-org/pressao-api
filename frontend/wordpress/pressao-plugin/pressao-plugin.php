@@ -297,6 +297,7 @@ final class PressaoPlugin {
             'lapis' => 'lapis',
             'pessoas' => 'pessoas',
             'info' => 'info',
+            'balao' => 'balao',
             'alerta' => 'alerta',
             'x' => 'x',
             'seta' => 'seta',

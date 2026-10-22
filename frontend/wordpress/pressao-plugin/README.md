@@ -101,7 +101,7 @@ pressao-plugin/
 │   │   ├── Anton/
 │   │   ├── Host_Grotesk/
 │   │   └── Funnel_Display/     # presente; não usada no [pressao_fluxo]
-│   ├── icons/                  # SVG de canais (inclui x e telefone), compartilhar/enviar, copiar, download, setas, check, fechar, chevron, localização, interrogação, raio e os do telefone (telefone-entrada, lapis, pessoas, info, alerta; Bootstrap Icons, MIT) (via CSS mask-image; URLs absolutas injetadas como --pressao-icon-*)
+│   ├── icons/                  # SVG de canais (inclui x e telefone), compartilhar/enviar, copiar, download, setas, check, fechar, chevron, localização, interrogação, raio e os do telefone (telefone-entrada, lapis, pessoas, info, balao, alerta; Bootstrap Icons, MIT) (via CSS mask-image; URLs absolutas injetadas como --pressao-icon-*)
 │   ├── img/                    # GIFs de feedback do multicanal (loading.gif = espera social; telefone.gif = espera de ligação)
 │   ├── vendor/tom-select/      # Autocomplete do fluxo único (+ remoção no admin)
 │   ├── examples/               # CSV + scripts REST (apoiadores)
@@ -373,16 +373,23 @@ mobile. "Agora não" registra a ação sem ativista.
 (`canal=email`) com o ativista.
 
 **Telefone** (Figma V2, "ligamos para você"): o card só aparece com o alvo **agregado** de telefone da API
-(alvo telefone individual é ignorado). Telas:
+(alvo telefone individual é ignorado). Copys e cores seguem o **mobile** do Figma; diagramação, espaçamentos
+e tamanhos continuam diferentes entre mobile e desktop (≥768px). Telas:
 
-1. "Como funciona": card do alvo da vez (quando `alvo_da_vez`), 4 passos (inclui "Você conversa com um
-   roteiro como guia"; ícones em cinza) e aviso de rotação de alvo.
-2. Formulário "Vamos te conectar com": card/select do alvo → nome, telefone e e-mail (`telefone_email`) →
-   roteiro recolhível (template `telefone`, placeholders `{alvo_nome}`, `{campanha_nome}`, `{ativista_nome}`).
-   "Já pode me ligar" cria a ação com `membro_id` e `selecao` (`automatica` / `ativista`).
-3. Modal "Vamos te ligar em instantes" com GIF `telefone.gif` (DDD de origem da campanha); depois de 90 s
-   aparece "Fechar e acompanhar depois" (volta à home; `sessionStorage` permanece).
-4. "Ligação em andamento" com o roteiro aberto (e o GIF), quando o ativista atende — ou ao **reabrir** o
+1. Intro **"Vamos te conectar com:"** (ou **"Selecione quem você quer pressionar:"** com select quando
+   `escolher`): card do alvo da vez no topo (foto + badge azul "Alvo da vez"), aviso de rotação (ícone
+   "i" azul, 12px/#4D4D4D, sem caixa cinza) e bloco **"O que acontece agora?"** com 4 passos (inclui
+   "A gente te conecta com o alvo" e "Você conversa com um roteiro como guia"; ícones cinza — 40px no
+   mobile, 32px no desktop).
+2. Formulário **"Preencha seus dados para gente te ligar:"**: nome → telefone e e-mail empilhados no
+   mobile e lado a lado no desktop (`telefone_email`) → divisor → seção **"Vamos te conectar com:"**
+   (card; o select de `escolher` fica na intro) → roteiro **"Utilize esse roteiro"** sempre visível
+   (card chip, título azul, textos 12px; template `telefone`, placeholders `{alvo_nome}`,
+   `{campanha_nome}`, `{ativista_nome}`). CTA **"Já pode me ligar"** (sem ícone, 36px em 1 linha)
+   cria a ação com `membro_id` e `selecao` (`automatica` / `ativista`).
+3. Modal "Vamos te ligar em instantes" com GIF `telefone.gif` ("O número pode começar com [XX]" se houver
+   DDD); depois de 90 s aparece "Fechar e acompanhar depois" (volta à home; `sessionStorage` permanece).
+4. "Ligação em andamento" com o roteiro visível (e o GIF), quando o ativista atende — ou ao **reabrir** o
    card com ligação pendente (tela com seta voltar, sem modal bloqueante).
 5. Sucesso ("Ligação realizada com sucesso!", cookie da ação, contador, home ou compartilhar) ou telas de
    erro com "Iniciar ligação novamente" (`pressao_nova_ligacao`): erros do ativista mostram "Seu número" /
