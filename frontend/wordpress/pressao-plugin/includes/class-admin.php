@@ -10,6 +10,15 @@ if (!defined('ABSPATH')) {
 }
 
 class PressaoPlugin_Admin {
+
+    const CONEXAO_STATUS_TRANSIENT = 'pressao_conexao_status';
+    const CONEXAO_FIELDS = [
+        'pressao_keycloak_url',
+        'pressao_realm',
+        'pressao_client_id',
+        'pressao_client_secret',
+        'pressao_api_url',
+    ];
     
     public function __construct() {
         add_action('admin_menu', [$this, 'add_admin_menu']);
@@ -58,6 +67,9 @@ class PressaoPlugin_Admin {
         $tabs = $this->get_settings_tabs();
         if (!isset($tabs[$tab])) {
             return $location;
+        }
+        if ($tab === 'conexao') {
+            delete_transient(self::CONEXAO_STATUS_TRANSIENT);
         }
         return add_query_arg('tab', $tab, $location);
     }
@@ -390,30 +402,106 @@ class PressaoPlugin_Admin {
         <?php
     }
     
+    /**
+     * @return array<int, string>
+     */
+    public static function conexao_constants() {
+        $out = [];
+        foreach (self::CONEXAO_FIELDS as $field) {
+            $constant = strtoupper($field);
+            if (defined($constant)) {
+                $out[] = $constant;
+            }
+        }
+        return $out;
+    }
+
+    public static function has_editable_conexao_field() {
+        return count(self::conexao_constants()) < count(self::CONEXAO_FIELDS);
+    }
+
+    /**
+     * @param string $url
+     * @return string
+     */
+    private static function host_from_url($url) {
+        $host = wp_parse_url((string) $url, PHP_URL_HOST);
+        return is_string($host) && $host !== '' ? $host : (string) $url;
+    }
+
+    /**
+     * @param PressaoPlugin_API $api
+     * @param bool              $fresh
+     * @return array{ok: bool, message: string, checked_at: int}
+     */
+    private function get_conexao_status(PressaoPlugin_API $api, $fresh = false) {
+        if (!$fresh) {
+            $cached = get_transient(self::CONEXAO_STATUS_TRANSIENT);
+            if (is_array($cached) && isset($cached['ok'])) {
+                return [
+                    'ok' => (bool) $cached['ok'],
+                    'message' => (string) ($cached['message'] ?? ''),
+                    'checked_at' => (int) ($cached['checked_at'] ?? time()),
+                ];
+            }
+        }
+
+        $result = $api->testar_conexao($fresh);
+        $status = [
+            'ok' => !is_wp_error($result),
+            'message' => is_wp_error($result) ? $result->get_error_message() : '',
+            'checked_at' => time(),
+        ];
+        set_transient(self::CONEXAO_STATUS_TRANSIENT, $status, 60);
+        return $status;
+    }
+
     public function render_settings_page() {
         if (!current_user_can('manage_options')) {
             wp_die(__('Sem permissão.', 'pressao-plugin'));
         }
 
+        $api = new PressaoPlugin_API();
+        $configured = $api->is_configured();
         $tabs = $this->get_settings_tabs();
         $current_tab = $this->get_current_tab();
+        $tab_liberada = ['conexao', 'documentacao'];
+        if (!$configured && !in_array($current_tab, $tab_liberada, true)) {
+            $current_tab = 'conexao';
+        }
+
         $base_url = self::settings_url();
+        $bloqueio_titulo = __('Configure a conexão com a API para usar esta aba.', 'pressao-plugin');
         ?>
         <div class="wrap pressao-settings-wrap">
-            <h1><?php esc_html_e('Pressão Plugin - Configurações', 'pressao-plugin'); ?></h1>
+            <h1><?php esc_html_e('Pressão', 'pressao-plugin'); ?></h1>
 
             <nav class="nav-tab-wrapper pressao-settings-tabs" aria-label="<?php esc_attr_e('Seções de configuração', 'pressao-plugin'); ?>">
                 <?php foreach ($tabs as $slug => $label) : ?>
-                    <a href="<?php echo esc_url(add_query_arg('tab', $slug, $base_url)); ?>"
-                       class="nav-tab <?php echo $current_tab === $slug ? 'nav-tab-active' : ''; ?>">
-                        <?php echo esc_html($label); ?>
-                    </a>
+                    <?php
+                    $ativa = $current_tab === $slug;
+                    $liberada = $configured || in_array($slug, $tab_liberada, true);
+                    ?>
+                    <?php if ($liberada) : ?>
+                        <a href="<?php echo esc_url(add_query_arg('tab', $slug, $base_url)); ?>"
+                           class="nav-tab<?php echo $ativa ? ' nav-tab-active' : ''; ?>">
+                            <?php echo esc_html($label); ?>
+                        </a>
+                    <?php else : ?>
+                        <span class="nav-tab nav-tab-disabled"
+                              aria-disabled="true"
+                              title="<?php echo esc_attr($bloqueio_titulo); ?>">
+                            <?php echo esc_html($label); ?>
+                        </span>
+                    <?php endif; ?>
                 <?php endforeach; ?>
             </nav>
 
             <div class="pressao-settings-tab-panel" data-tab="<?php echo esc_attr($current_tab); ?>">
                 <?php if ($current_tab === 'documentacao') : ?>
                     <?php $this->render_documentacao_tab(); ?>
+                <?php elseif ($current_tab === 'conexao') : ?>
+                    <?php $this->render_conexao_tab($api, $configured); ?>
                 <?php elseif ($current_tab === 'apoiadores') : ?>
                     <h2><?php esc_html_e('Candidatos apoiadores', 'pressao-plugin'); ?></h2>
                     <p><?php esc_html_e('Base dos que já apoiam a pauta: botão/lista do [pressao_fluxo] e shortcode [pressao_candidatos]. Use as ferramentas abaixo para importar CSV ou remover da base.', 'pressao-plugin'); ?></p>
@@ -444,6 +532,124 @@ class PressaoPlugin_Admin {
                     </form>
                 <?php endif; ?>
             </div>
+        </div>
+        <?php
+    }
+
+    /**
+     * @param PressaoPlugin_API $api
+     * @param bool              $configured
+     */
+    private function render_conexao_tab(PressaoPlugin_API $api, $configured) {
+        $editar = $configured && self::has_editable_conexao_field() && !empty($_GET['editar']);
+        if (!$configured || $editar) {
+            $this->render_conexao_form($configured);
+            return;
+        }
+        $fresh = !empty($_GET['verificar']);
+        if ($fresh) {
+            check_admin_referer('pressao_verificar_conexao');
+        }
+        $this->render_conexao_status_card($api, $this->get_conexao_status($api, $fresh));
+    }
+
+    /**
+     * @param bool $configured
+     */
+    private function render_conexao_form($configured) {
+        ?>
+        <p class="pressao-conexao-intro">
+            <?php
+            echo $configured
+                ? esc_html__('Atualize as credenciais que não estão definidas no wp-config.php. Campos com constante continuam bloqueados.', 'pressao-plugin')
+                : esc_html__('Informe o Keycloak e a URL da API para este site usar o Pressão. Depois disso, esta aba mostra só o status da conexão.', 'pressao-plugin');
+            ?>
+        </p>
+        <form method="post" action="options.php">
+            <?php
+            settings_fields($this->get_option_group_for_tab('conexao'));
+            do_settings_sections($this->get_settings_page_for_tab('conexao'));
+            submit_button($configured ? __('Salvar credenciais', 'pressao-plugin') : __('Salvar e conectar', 'pressao-plugin'));
+            ?>
+        </form>
+        <?php if ($configured) : ?>
+            <p>
+                <a href="<?php echo esc_url(self::settings_url(['tab' => 'conexao'])); ?>">
+                    <?php esc_html_e('Cancelar', 'pressao-plugin'); ?>
+                </a>
+            </p>
+        <?php endif;
+    }
+
+    /**
+     * @param PressaoPlugin_API                  $api
+     * @param array{ok: bool, message: string, checked_at: int} $status
+     */
+    private function render_conexao_status_card(PressaoPlugin_API $api, array $status) {
+        $ok = !empty($status['ok']);
+        $constants = self::conexao_constants();
+        $editable = self::has_editable_conexao_field();
+        $verificar_url = wp_nonce_url(
+            self::settings_url(['tab' => 'conexao', 'verificar' => '1']),
+            'pressao_verificar_conexao'
+        );
+        ?>
+        <div class="pressao-conexao-card <?php echo $ok ? 'is-ok' : 'is-fail'; ?>">
+            <div class="pressao-conexao-card-head">
+                <span class="pressao-conexao-badge"><?php echo $ok ? esc_html__('Conectado', 'pressao-plugin') : esc_html__('Sem conexão', 'pressao-plugin'); ?></span>
+                <p class="pressao-conexao-card-title">
+                    <?php
+                    echo $ok
+                        ? esc_html__('A API está respondendo com as credenciais atuais.', 'pressao-plugin')
+                        : esc_html($status['message'] !== '' ? $status['message'] : __('Não foi possível falar com a API.', 'pressao-plugin'));
+                    ?>
+                </p>
+            </div>
+            <ul class="pressao-conexao-hosts">
+                <li>
+                    <strong><?php esc_html_e('API', 'pressao-plugin'); ?></strong>
+                    <?php echo esc_html(self::host_from_url($api->get_api_url())); ?>
+                </li>
+                <li>
+                    <strong><?php esc_html_e('Keycloak', 'pressao-plugin'); ?></strong>
+                    <?php echo esc_html(self::host_from_url($api->get_keycloak_url())); ?>
+                    · <?php echo esc_html($api->get_realm()); ?>
+                </li>
+            </ul>
+            <?php if ($constants) : ?>
+                <p class="pressao-conexao-selos">
+                    <?php
+                    printf(
+                        /* translators: %s: list of PHP constants */
+                        esc_html__('Via wp-config.php: %s', 'pressao-plugin'),
+                        esc_html(implode(', ', $constants))
+                    );
+                    ?>
+                </p>
+            <?php endif; ?>
+            <p class="pressao-conexao-meta">
+                <?php
+                echo esc_html(
+                    sprintf(
+                        /* translators: %s: time */
+                        __('Verificado às %s', 'pressao-plugin'),
+                        wp_date(get_option('time_format'), (int) $status['checked_at'])
+                    )
+                );
+                ?>
+            </p>
+            <p class="pressao-conexao-actions">
+                <a class="button" href="<?php echo esc_url($verificar_url); ?>">
+                    <?php esc_html_e('Verificar conexão', 'pressao-plugin'); ?>
+                </a>
+                <?php if ($editable) : ?>
+                    <a class="button" href="<?php echo esc_url(self::settings_url(['tab' => 'conexao', 'editar' => '1'])); ?>">
+                        <?php esc_html_e('Editar credenciais', 'pressao-plugin'); ?>
+                    </a>
+                <?php else : ?>
+                    <span class="description"><?php esc_html_e('Gerenciado pelo servidor (wp-config.php).', 'pressao-plugin'); ?></span>
+                <?php endif; ?>
+            </p>
         </div>
         <?php
     }

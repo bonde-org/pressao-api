@@ -130,11 +130,14 @@ docker compose exec wordpress wp plugin activate pressao-plugin
 
 ### Configurando
 
-Acesse **Pressão** no menu raiz do wp-admin (ícone de megafone). A página usa abas:
+Acesse **Pressão** no menu raiz do wp-admin (ícone de megafone). Sem Keycloak + API, só **Conexão**
+e **Documentação** são clicáveis; as demais abas ficam desabilitadas. Com as credenciais
+preenchidas, **Conexão** vira um cartão de status (conectado / sem conexão); **Editar credenciais**
+só aparece se algum campo não vier de constante no `wp-config.php`. A página usa abas:
 
 | Aba | Conteúdo |
 |-----|----------|
-| **Conexão** | Keycloak + URL da API |
+| **Conexão** | Setup na primeira vez; depois status da API (token Keycloak + `GET /api/v1/campanhas/`) |
 | **Geral** | ID da campanha, título do widget, sessão/identificação do ativista |
 | **Candidatos** | Lista a pressionar + limite / countdown / ajuda do `[pressao_fluxo]` |
 | **Apoiadores** | Lista “já apoiam” + import/remover CSV |
@@ -188,7 +191,7 @@ define('PRESSAO_CLIENT_SECRET', getenv('PRESSAO_KEYCLOAK_CLIENT_SECRET'));
 define('PRESSAO_API_URL', 'https://pressao-api.bonde.cloud');
 ```
 
-Útil numa rede multisite onde todos os sites compartilham o mesmo client Keycloak/API — evita reescrever (e reexpor) o `client_secret` em cada site. Quando uma constante está definida, o campo correspondente aparece desabilitado na tela de admin, com uma nota indicando a constante. `pressao_campaign_id` e os demais campos continuam por site (não têm override por constante).
+Útil numa rede multisite onde todos os sites compartilham o mesmo client Keycloak/API — evita reescrever (e reexpor) o `client_secret` em cada site. Quando uma constante está definida, o campo correspondente aparece desabilitado no formulário (e no cartão de status, listado como “Via wp-config.php”). Se **todas** as cinco forem constantes, não há “Editar credenciais”. `pressao_campaign_id` e os demais campos continuam por site (não têm override por constante).
 
 ### Configuração de candidatos
 

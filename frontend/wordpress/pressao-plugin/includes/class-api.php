@@ -27,6 +27,61 @@ class PressaoPlugin_API {
         $this->client_secret = defined('PRESSAO_CLIENT_SECRET') ? PRESSAO_CLIENT_SECRET : get_option('pressao_client_secret', '');
         $this->api_url = defined('PRESSAO_API_URL') ? PRESSAO_API_URL : get_option('pressao_api_url', '');
     }
+
+    /**
+     * Credenciais mínimas para falar com Keycloak + API (realm tem default master).
+     */
+    public function is_configured() {
+        return $this->keycloak_url !== ''
+            && $this->client_id !== ''
+            && $this->client_secret !== ''
+            && $this->api_url !== '';
+    }
+
+    public function get_keycloak_url() {
+        return $this->keycloak_url;
+    }
+
+    public function get_api_url() {
+        return $this->api_url;
+    }
+
+    public function get_realm() {
+        return $this->realm;
+    }
+
+    /**
+     * Keycloak (token) e um GET em /api/v1/campanhas/. $fresh ignora token em cache.
+     *
+     * @return true|WP_Error
+     */
+    public function testar_conexao($fresh = false) {
+        if (!$this->is_configured()) {
+            return new WP_Error(
+                'config_error',
+                __('Preencha a URL do Keycloak, Client ID, Client Secret e a URL da API.', 'pressao-plugin')
+            );
+        }
+
+        if ($fresh) {
+            delete_transient($this->token_cache_key);
+        }
+
+        $token = $this->get_token();
+        if (!$token) {
+            return new WP_Error(
+                'auth_error',
+                __('Não foi possível obter token de autenticação no Keycloak.', 'pressao-plugin')
+            );
+        }
+
+        $response = $this->api_request('/api/v1/campanhas/', 'GET');
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        return true;
+    }
     
     /**
      * Obtém token do Keycloak com cache
