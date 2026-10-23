@@ -28,6 +28,7 @@ from pressao_api.services.alvo_agregado import (
 )
 from pressao_api.services.telefone_alvo_da_vez import SemMembrosTelefoneError, escolher_membro
 from pressao_api.services.templates import sortear_template
+from pressao_api.utils.validadores import validar_email, validar_telefone
 
 router = APIRouter(prefix="/alvos", tags=["Alvos"])
 
@@ -73,6 +74,13 @@ def _montar_resposta_com_template(
 
 def _e_individual_agregavel(alvo: Alvo) -> bool:
     return alvo.tipo_contato in TIPOS_AGREGADOS and alvo.modo == ModoAlvo.INDIVIDUAL
+
+
+def _assert_contato_valido(contato: str, tipo: TipoContato) -> None:
+    if tipo == TipoContato.EMAIL and not validar_email(contato):
+        raise HTTPException(status_code=422, detail="Formato de e-mail inválido")
+    if tipo == TipoContato.TELEFONE and not validar_telefone(contato):
+        raise HTTPException(status_code=422, detail="Formato de telefone inválido")
 
 
 @router.post("/", response_model=AlvoResponse, status_code=status.HTTP_201_CREATED)
@@ -139,6 +147,28 @@ async def listar_alvos_por_campanha(
             )
         )
     return respostas
+
+
+@router.get(
+    "/campanha/{campanha_id}/membros",
+    response_model=list[AlvoResponse],
+    summary="Lista membros individuais do agregado (admin)",
+)
+async def listar_membros_agregado(
+    campanha_id: UUID,
+    tipo_contato: TipoContato,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista alvos individuais ativos de e-mail ou telefone, com contato (uso admin)."""
+    if not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Apenas administradores podem listar membros")
+    if tipo_contato not in TIPOS_AGREGADOS:
+        raise HTTPException(status_code=422, detail="tipo_contato deve ser email ou telefone")
+
+    agregado_service = AlvoAgregadoService(db)
+    membros = await agregado_service.listar_individuais(campanha_id, tipo_contato, ativo=True)
+    return [AlvoResponse.model_validate(alvo) for alvo in membros]
 
 
 @router.get(
@@ -217,7 +247,18 @@ async def atualizar_alvo(
     db: AsyncSession = Depends(get_db),
 ):
     repo = AlvoRepository(db)
-    alvo = await repo.atualizar(alvo_id, request.model_dump(exclude_none=True))
+    atual = await repo.buscar_por_id(alvo_id)
+    if not atual:
+        raise HTTPException(status_code=404, detail="Alvo não encontrado")
+
+    dados = request.model_dump(exclude_none=True)
+    if "contato" in dados:
+        tipo = dados.get("tipo_contato") or atual.tipo_contato
+        if isinstance(tipo, str):
+            tipo = TipoContato(tipo)
+        _assert_contato_valido(dados["contato"], tipo)
+
+    alvo = await repo.atualizar(alvo_id, dados)
     if not alvo:
         raise HTTPException(status_code=404, detail="Alvo não encontrado")
 

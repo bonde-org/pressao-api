@@ -80,7 +80,7 @@ class AlvoAgregadoService:
     async def garantir_agregado_email(self, campanha_id: UUID) -> Alvo:
         return await self.garantir_agregado(campanha_id, TipoContato.EMAIL)
 
-    async def _listar_individuais(
+    async def listar_individuais(
         self, campanha_id: UUID, tipo: TipoContato, ativo: bool | None = None
     ) -> list[Alvo]:
         alvos = await self.alvo_repo.listar_por_campanha(campanha_id, ativo)
@@ -89,7 +89,7 @@ class AlvoAgregadoService:
         ]
 
     async def sincronizar_membros_tipo(self, campanha_id: UUID, tipo: TipoContato) -> int:
-        membros = await self._listar_individuais(campanha_id, tipo, ativo=True)
+        membros = await self.listar_individuais(campanha_id, tipo, ativo=True)
         if tipo == TipoContato.TELEFONE and not membros:
             agregado = await self.buscar_agregado(campanha_id, tipo)
             if agregado is None:

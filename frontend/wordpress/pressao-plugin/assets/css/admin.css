@@ -4,6 +4,13 @@
 	margin-bottom: 1.25rem;
 }
 
+.pressao-settings-wrap .nav-tab-disabled {
+	background: #f0f0f1;
+	border-color: #dcdcde;
+	color: #a7aaad;
+	cursor: not-allowed;
+}
+
 .pressao-settings-tab-panel {
 	max-width: 1100px;
 }
@@ -317,4 +324,497 @@
 .pressao-share-imagem-preview img {
 	max-width: 96px;
 	height: auto;
+}
+
+/* Cartão de status da conexão */
+
+.pressao-conexao-intro {
+	max-width: 40rem;
+	margin: 0 0 1rem;
+}
+
+.pressao-conexao-card {
+	max-width: 40rem;
+	padding: 1.25rem 1.5rem;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.pressao-conexao-card.is-ok {
+	border-left: 4px solid #00a32a;
+}
+
+.pressao-conexao-card.is-fail {
+	border-left: 4px solid #d63638;
+}
+
+.pressao-conexao-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 2px;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.7;
+	color: #fff;
+}
+
+.pressao-conexao-card.is-ok .pressao-conexao-badge {
+	background: #00a32a;
+}
+
+.pressao-conexao-card.is-fail .pressao-conexao-badge {
+	background: #d63638;
+}
+
+.pressao-conexao-card-title {
+	margin: 0.6rem 0 0;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.pressao-conexao-hosts {
+	margin: 1rem 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pressao-conexao-hosts li {
+	margin: 0 0 0.35rem;
+	font-size: 13px;
+}
+
+.pressao-conexao-hosts strong {
+	display: inline-block;
+	min-width: 5.5rem;
+}
+
+.pressao-conexao-selos,
+.pressao-conexao-meta {
+	margin: 0.75rem 0 0;
+	color: #646970;
+	font-size: 13px;
+}
+
+.pressao-conexao-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 1.25rem 0 0;
+}
+
+/* Aba Campanha */
+
+.pressao-campanha-picker {
+	max-width: 40rem;
+}
+
+.pressao-campanha-aviso {
+	margin: 0 0 1rem;
+}
+
+.pressao-campanha-card {
+	padding: 1.25rem 1.5rem;
+	border: 1px solid #c3c4c7;
+	border-left: 4px solid #2271b1;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.pressao-campanha-badge {
+	display: inline-block;
+	margin: 0 0 0.4rem;
+	padding: 2px 8px;
+	border-radius: 2px;
+	color: #fff;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.7;
+}
+
+.pressao-campanha-badge.is-ativa {
+	background: #00a32a;
+}
+
+.pressao-campanha-badge.is-inativa {
+	background: #646970;
+}
+
+.pressao-campanha-nome {
+	margin: 0;
+	font-size: 1.2em;
+}
+
+.pressao-campanha-descricao {
+	margin: 0.5rem 0 0;
+	color: #50575e;
+}
+
+.pressao-campanha-telefone {
+	margin: 0.75rem 0 0;
+	font-size: 13px;
+}
+
+.pressao-campanha-telefone strong {
+	display: inline-block;
+	margin-right: 0.4rem;
+}
+
+.pressao-campanha-actions,
+.pressao-campanha-form-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 1.25rem 0 0;
+}
+
+.pressao-campanha-busca .ts-wrapper {
+	max-width: 32rem;
+}
+
+.pressao-campanha-form-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0 1.25rem;
+}
+
+.pressao-campanha-form-row .description,
+.pressao-campanha-ativa .description {
+	display: block;
+	margin-top: 0.35rem;
+}
+
+.pressao-campanha-ativa label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.pressao-campanha-form-status {
+	min-height: 1.4em;
+	margin: 0.5rem 0 0;
+}
+
+.pressao-campanha-form-status.is-error {
+	color: #d63638;
+}
+
+@media (max-width: 782px) {
+	.pressao-campanha-form-row {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Redes Sociais: Instagram + TikTok lado a lado */
+
+.pressao-redes-duo {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1.25rem;
+	margin: 1rem 0 2rem;
+	align-items: start;
+}
+
+.pressao-redes-card {
+	padding: 1rem 1.25rem 1.25rem;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+}
+
+.pressao-redes-card h3 {
+	margin-top: 0;
+}
+
+.pressao-redes-card h4 {
+	margin: 1.25rem 0 0.35rem;
+}
+
+.pressao-redes-alvo label {
+	display: block;
+	margin-bottom: 0.25rem;
+	font-weight: 600;
+}
+
+.pressao-redes-alvo input.regular-text {
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.pressao-redes-alvo-status,
+.pressao-redes-editor-status {
+	min-height: 1.4em;
+	margin: 0.35rem 0 0;
+}
+
+.pressao-redes-alvo-status.is-error,
+.pressao-redes-editor-status.is-error {
+	color: #d63638;
+}
+
+.pressao-redes-baloes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0.75rem 0 0;
+}
+
+.pressao-redes-balao {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	max-width: 100%;
+	padding: 8px 12px;
+	border: 1px solid #c3c4c7;
+	border-radius: 18px;
+	background: #f6f7f7;
+	cursor: pointer;
+	text-align: left;
+	font-size: 13px;
+	line-height: 1.4;
+	color: #1d2327;
+}
+
+.pressao-redes-balao:hover,
+.pressao-redes-balao:focus {
+	border-color: #2271b1;
+}
+
+.pressao-redes-balao.is-open {
+	border-color: #2271b1;
+	background: #f0f6fc;
+	box-shadow: 0 0 0 1px #2271b1;
+}
+
+.pressao-redes-balao.is-inativo {
+	opacity: 0.72;
+}
+
+.pressao-redes-balao-preview {
+	display: -webkit-box;
+	-webkit-line-clamp: 4;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.pressao-redes-balao-selo {
+	font-size: 11px;
+	color: #646970;
+}
+
+.pressao-redes-balao-add {
+	border-style: dashed;
+	background: #fff;
+	color: #2271b1;
+	font-weight: 600;
+}
+
+.pressao-redes-editor {
+	margin-top: 1rem;
+	padding: 1rem 1.25rem;
+	background: #f6f7f7;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+}
+
+.pressao-redes-editor label {
+	display: block;
+	margin-bottom: 0.25rem;
+	font-weight: 600;
+}
+
+.pressao-redes-editor textarea.large-text,
+.pressao-redes-editor input.regular-text {
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.pressao-redes-editor-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 0;
+}
+
+.pressao-admin-filtros {
+	margin: 2rem 0;
+	padding-top: 1.25rem;
+	border-top: 1px solid #c3c4c7;
+}
+
+.pressao-admin-list-table .column-tiktok {
+	width: 12%;
+}
+
+@media (max-width: 1100px) {
+	.pressao-redes-duo {
+		grid-template-columns: 1fr;
+	}
+}
+
+.pressao-agregado .pressao-redes-card {
+	margin: 1rem 0 2rem;
+}
+
+.pressao-agregado-origem {
+	margin: 0 0 1rem;
+}
+
+.pressao-agregado-tabela {
+	margin: 1rem 0;
+}
+
+.pressao-agregado-lista-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 15.5rem;
+	gap: 1.25rem;
+	align-items: start;
+	margin: 1rem 0;
+}
+
+.pressao-agregado-lista-row .pressao-agregado-tabela {
+	margin: 0 0 0.75rem;
+}
+
+.pressao-agregado-lista-row .pressao-admin-list-footer {
+	margin: 0;
+}
+
+.pressao-agregado-editor {
+	margin-top: 1rem;
+	padding: 1rem 1.25rem;
+	background: #f6f7f7;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	max-width: 40rem;
+}
+
+.pressao-agregado-editor label {
+	display: block;
+	margin-bottom: 0.25rem;
+	font-weight: 600;
+}
+
+.pressao-agregado-editor-status {
+	min-height: 1.4em;
+	margin: 0.35rem 0 0;
+}
+
+.pressao-agregado-editor-status.is-error {
+	color: #d63638;
+}
+
+.pressao-telefone-selecao {
+	margin: 0;
+	padding: 0.75rem 1rem 1rem;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	background: #fff;
+}
+
+.pressao-telefone-selecao legend {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.15rem;
+	font-weight: 600;
+	padding: 0 0.35rem;
+}
+
+.pressao-telefone-selecao-opcao {
+	display: flex;
+	align-items: center;
+	gap: 0.15rem;
+	margin: 0.35rem 0;
+}
+
+.pressao-telefone-selecao-opcao label {
+	margin: 0;
+}
+
+.pressao-telefone-selecao-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0.75rem 0 0;
+}
+
+.pressao-telefone-selecao-status {
+	min-height: 1.4em;
+	margin: 0;
+}
+
+.pressao-telefone-selecao-status.is-error {
+	color: #d63638;
+}
+
+.pressao-admin-help {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	padding: 0;
+	width: 1.5rem;
+	height: 1.5rem;
+	border: 0;
+	background: transparent;
+	color: #646970;
+	cursor: help;
+	vertical-align: middle;
+}
+
+.pressao-admin-help .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	line-height: 1;
+}
+
+.pressao-admin-help .pressao-admin-tooltip {
+	position: absolute;
+	z-index: 20;
+	top: 50%;
+	right: calc(100% + 8px);
+	width: 15.5rem;
+	padding: 0.5rem 0.65rem;
+	background: #1d2327;
+	color: #fff;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1.4;
+	text-align: left;
+	border-radius: 4px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transform: translateY(-50%);
+}
+
+.pressao-admin-help:hover .pressao-admin-tooltip,
+.pressao-admin-help:focus .pressao-admin-tooltip,
+.pressao-admin-help:focus-visible .pressao-admin-tooltip,
+.pressao-admin-help.is-open .pressao-admin-tooltip {
+	opacity: 1;
+	visibility: visible;
+}
+
+@media (max-width: 1100px) {
+	.pressao-agregado-lista-row {
+		grid-template-columns: 1fr;
+	}
+
+	.pressao-admin-help .pressao-admin-tooltip {
+		top: calc(100% + 6px);
+		right: 0;
+		transform: none;
+	}
 }

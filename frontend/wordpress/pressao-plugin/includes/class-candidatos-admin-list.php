@@ -78,6 +78,7 @@ class PressaoPlugin_Candidatos_Admin_List {
                 (string) ($item['cargo'] ?? ''),
                 (string) ($item['partido'] ?? ''),
                 (string) ($item['link_url'] ?? ''),
+                (string) ($item['tiktok'] ?? ''),
                 $uf,
                 $uf !== '' ? PressaoPlugin_Candidatos_Filtros::UFS[$uf] : '',
             ]);
@@ -140,10 +141,33 @@ class PressaoPlugin_Candidatos_Admin_List {
     }
 
     /**
+     * @param mixed $value
+     * @return string
+     */
+    public static function sanitize_tiktok_handle($value) {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return '';
+        }
+
+        if (preg_match('#tiktok\.com/@?([^/?#]+)#i', $value, $matches)) {
+            $value = $matches[1];
+        }
+
+        $value = ltrim($value, '@');
+        $value = preg_replace('/[^A-Za-z0-9._]/', '', $value);
+        if ($value === '') {
+            return '';
+        }
+
+        return '@' . $value;
+    }
+
+    /**
      * Sanitiza um item (permite vazio — rascunho na listagem admin).
      *
      * @param mixed $candidato
-     * @return array{nome: string, cargo: string, partido: string, estado: string, descricao: string, link_url: string, imagem_id: int}
+     * @return array{nome: string, cargo: string, partido: string, estado: string, descricao: string, link_url: string, tiktok: string, imagem_id: int}
      */
     public static function sanitize_item($candidato) {
         if (!is_array($candidato)) {
@@ -157,6 +181,7 @@ class PressaoPlugin_Candidatos_Admin_List {
             'estado' => PressaoPlugin_Candidatos_Filtros::sanitize_uf($candidato['estado'] ?? ''),
             'descricao' => sanitize_textarea_field($candidato['descricao'] ?? ''),
             'link_url' => self::sanitize_instagram_handle($candidato['link_url'] ?? ''),
+            'tiktok' => self::sanitize_tiktok_handle($candidato['tiktok'] ?? ''),
             'imagem_id' => absint($candidato['imagem_id'] ?? 0),
         ];
     }
@@ -179,6 +204,7 @@ class PressaoPlugin_Candidatos_Admin_List {
                 && $item['partido'] === ''
                 && $item['descricao'] === ''
                 && $item['link_url'] === ''
+                && $item['tiktok'] === ''
                 && !$item['imagem_id']
             ) {
                 continue;
@@ -194,7 +220,7 @@ class PressaoPlugin_Candidatos_Admin_List {
      * @return string candidatos|apoiadores
      */
     public static function tab_for_option($option_name) {
-        return $option_name === self::OPTION_APOIADORES ? 'apoiadores' : 'candidatos';
+        return $option_name === self::OPTION_APOIADORES ? 'apoiadores' : 'redes-sociais';
     }
 
     private function assert_can_manage() {
@@ -245,7 +271,9 @@ class PressaoPlugin_Candidatos_Admin_List {
             'index' => $index,
             'item' => $item,
             'thumb' => $thumb,
-            'message' => __('Candidato salvo.', 'pressao-plugin'),
+            'message' => $option === self::OPTION_PRESSIONAR
+                ? __('Salvo.', 'pressao-plugin')
+                : __('Candidato salvo.', 'pressao-plugin'),
         ]);
     }
 
@@ -264,7 +292,9 @@ class PressaoPlugin_Candidatos_Admin_List {
         update_option($option, $items, false);
 
         wp_send_json_success([
-            'message' => __('Candidato removido.', 'pressao-plugin'),
+            'message' => $option === self::OPTION_PRESSIONAR
+                ? __('Removido.', 'pressao-plugin')
+                : __('Candidato removido.', 'pressao-plugin'),
             'total' => count($items),
         ]);
     }
@@ -281,22 +311,20 @@ class PressaoPlugin_Candidatos_Admin_List {
         $page = (int) ceil(($index + 1) / self::PER_PAGE);
         $tab = self::tab_for_option($option);
 
-        $url = add_query_arg(
-            [
-                'page' => 'pressao-settings',
-                'tab' => $tab,
-                'cpage' => $page,
-                'cs' => '',
-                'expand' => $index,
-            ],
-            admin_url('options-general.php')
-        );
+        $url = PressaoPlugin_Admin::settings_url([
+            'tab' => $tab,
+            'cpage' => $page,
+            'cs' => '',
+            'expand' => $index,
+        ]);
 
         wp_send_json_success([
             'index' => $index,
             'page' => $page,
             'redirect' => $url,
-            'message' => __('Candidato adicionado.', 'pressao-plugin'),
+            'message' => $option === self::OPTION_PRESSIONAR
+                ? __('Adicionado.', 'pressao-plugin')
+                : __('Candidato adicionado.', 'pressao-plugin'),
         ]);
     }
 
@@ -312,7 +340,8 @@ class PressaoPlugin_Candidatos_Admin_List {
 
         $tab = self::tab_for_option($option_name);
         $com_estado = ($option_name === self::OPTION_PRESSIONAR);
-        $colspan = $com_estado ? 7 : 6;
+        $com_tiktok = $com_estado;
+        $colspan = $com_estado ? 8 : 6;
         $search = isset($_GET['cs']) ? sanitize_text_field(wp_unslash($_GET['cs'])) : '';
         $page = isset($_GET['cpage']) ? max(1, absint($_GET['cpage'])) : 1;
         $expand = isset($_GET['expand']) ? (int) $_GET['expand'] : -1;
@@ -323,7 +352,7 @@ class PressaoPlugin_Candidatos_Admin_List {
         $filtered = self::filter_items($all, $search);
         $paged = self::paginate($filtered, $page, self::PER_PAGE);
 
-        $base_url = admin_url('options-general.php');
+        $base_url = admin_url('admin.php');
         $nonce = wp_create_nonce(self::NONCE_ACTION);
         ?>
         <div class="pressao-admin-list"
@@ -336,18 +365,22 @@ class PressaoPlugin_Candidatos_Admin_List {
                     <input type="hidden" name="page" value="pressao-settings" />
                     <input type="hidden" name="tab" value="<?php echo esc_attr($tab); ?>" />
                     <label class="screen-reader-text" for="pressao-admin-list-cs-<?php echo esc_attr($option_name); ?>">
-                        <?php esc_html_e('Buscar candidatos', 'pressao-plugin'); ?>
+                        <?php echo $com_tiktok
+                            ? esc_html__('Buscar quem marcar', 'pressao-plugin')
+                            : esc_html__('Buscar candidatos', 'pressao-plugin'); ?>
                     </label>
                     <input type="search"
                            id="pressao-admin-list-cs-<?php echo esc_attr($option_name); ?>"
                            name="cs"
                            value="<?php echo esc_attr($search); ?>"
-                           placeholder="<?php esc_attr_e('Buscar por nome, cargo, partido ou @', 'pressao-plugin'); ?>"
+                           placeholder="<?php echo $com_tiktok
+                               ? esc_attr__('Buscar por nome, cargo, partido, Instagram ou TikTok', 'pressao-plugin')
+                               : esc_attr__('Buscar por nome, cargo, partido ou @', 'pressao-plugin'); ?>"
                            class="regular-text" />
                     <?php submit_button(__('Buscar', 'pressao-plugin'), 'secondary', '', false); ?>
                     <?php if ($search !== '') : ?>
                         <a class="button"
-                           href="<?php echo esc_url(add_query_arg(['page' => 'pressao-settings', 'tab' => $tab], $base_url)); ?>">
+                           href="<?php echo esc_url(PressaoPlugin_Admin::settings_url(['tab' => $tab])); ?>">
                             <?php esc_html_e('Limpar', 'pressao-plugin'); ?>
                         </a>
                     <?php endif; ?>
@@ -381,6 +414,9 @@ class PressaoPlugin_Candidatos_Admin_List {
                             <th scope="col"><?php esc_html_e('Estado', 'pressao-plugin'); ?></th>
                         <?php endif; ?>
                         <th scope="col"><?php esc_html_e('Instagram', 'pressao-plugin'); ?></th>
+                        <?php if ($com_tiktok) : ?>
+                            <th scope="col"><?php esc_html_e('TikTok', 'pressao-plugin'); ?></th>
+                        <?php endif; ?>
                         <th scope="col" class="column-actions"><?php esc_html_e('Ações', 'pressao-plugin'); ?></th>
                     </tr>
                 </thead>
@@ -390,8 +426,10 @@ class PressaoPlugin_Candidatos_Admin_List {
                             <td colspan="<?php echo esc_attr((string) $colspan); ?>">
                                 <?php
                                 echo $search !== ''
-                                    ? esc_html__('Nenhum candidato encontrado para esta busca.', 'pressao-plugin')
-                                    : esc_html__('Nenhum candidato cadastrado. Use “Adicionar candidato”.', 'pressao-plugin');
+                                    ? esc_html__('Ninguém encontrado para esta busca.', 'pressao-plugin')
+                                    : ($com_tiktok
+                                        ? esc_html__('Ninguém cadastrado. Use “Adicionar”.', 'pressao-plugin')
+                                        : esc_html__('Nenhum candidato cadastrado. Use “Adicionar candidato”.', 'pressao-plugin'));
                                 ?>
                             </td>
                         </tr>
@@ -421,6 +459,9 @@ class PressaoPlugin_Candidatos_Admin_List {
                                     <td class="column-estado" data-field="estado"><?php echo esc_html(PressaoPlugin_Candidatos_Filtros::sanitize_uf($candidato['estado'] ?? '')); ?></td>
                                 <?php endif; ?>
                                 <td class="column-instagram" data-field="link_url"><?php echo esc_html($candidato['link_url'] ?? ''); ?></td>
+                                <?php if ($com_tiktok) : ?>
+                                    <td class="column-tiktok" data-field="tiktok"><?php echo esc_html($candidato['tiktok'] ?? ''); ?></td>
+                                <?php endif; ?>
                                 <td class="column-actions">
                                     <button type="button" class="button-link pressao-admin-list-toggle">
                                         <?php esc_html_e('Editar', 'pressao-plugin'); ?>
@@ -435,7 +476,7 @@ class PressaoPlugin_Candidatos_Admin_List {
                                 data-index="<?php echo esc_attr((string) $index); ?>"
                                 <?php echo $is_expanded ? '' : 'hidden'; ?>>
                                 <td colspan="<?php echo esc_attr((string) $colspan); ?>">
-                                    <?php self::render_editor_fields($candidato, (int) $index, $com_estado); ?>
+                                    <?php self::render_editor_fields($candidato, (int) $index, $com_estado, $com_tiktok); ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -465,7 +506,9 @@ class PressaoPlugin_Candidatos_Admin_List {
 
             <p class="pressao-admin-list-footer">
                 <button type="button" class="button button-primary pressao-admin-list-add">
-                    <?php esc_html_e('Adicionar candidato', 'pressao-plugin'); ?>
+                    <?php echo $com_tiktok
+                        ? esc_html__('Adicionar', 'pressao-plugin')
+                        : esc_html__('Adicionar candidato', 'pressao-plugin'); ?>
                 </button>
                 <span class="description">
                     <?php esc_html_e('As imagens usam a Biblioteca de Mídia do WordPress. Alterações de cada item são salvas com “Salvar item” (não pelo botão Salvar da aba).', 'pressao-plugin'); ?>
@@ -479,8 +522,9 @@ class PressaoPlugin_Candidatos_Admin_List {
      * @param array $candidato
      * @param int   $index
      * @param bool  $com_estado
+     * @param bool  $com_tiktok
      */
-    private static function render_editor_fields(array $candidato, $index, $com_estado = false) {
+    private static function render_editor_fields(array $candidato, $index, $com_estado = false, $com_tiktok = false) {
         $estado_atual = PressaoPlugin_Candidatos_Filtros::sanitize_uf($candidato['estado'] ?? '');
         $imagem_id = absint($candidato['imagem_id'] ?? 0);
         $imagem_url = $imagem_id ? wp_get_attachment_image_url($imagem_id, 'thumbnail') : '';
@@ -536,9 +580,21 @@ class PressaoPlugin_Candidatos_Admin_List {
                                class="regular-text"
                                data-field="link_url"
                                value="<?php echo esc_attr($candidato['link_url'] ?? ''); ?>"
-                               placeholder="@candidato" />
+                               placeholder="@usuario" />
                     </label>
                 </p>
+                <?php if ($com_tiktok) : ?>
+                    <p>
+                        <label>
+                            <?php esc_html_e('TikTok (@)', 'pressao-plugin'); ?><br>
+                            <input type="text"
+                                   class="regular-text"
+                                   data-field="tiktok"
+                                   value="<?php echo esc_attr($candidato['tiktok'] ?? ''); ?>"
+                                   placeholder="@usuario" />
+                        </label>
+                    </p>
+                <?php endif; ?>
             </div>
             <p>
                 <label>

@@ -437,7 +437,7 @@ GET /api/v1/campanhas/
 Authorization: Bearer {token_jwt}
 ```
 
-Cada campanha inclui `acoes_confirmadas` (total de ações com status `CONCLUIDA`).
+Query opcional: `q` (contém no nome, case-insensitive) e `limit` (1–50, default 20). Sem `q`, devolve todas; com `q`, aplica o filtro e o `limit`. Cada campanha inclui `acoes_confirmadas` (total de ações com status `CONCLUIDA`).
 
 **Obter Campanha**
 

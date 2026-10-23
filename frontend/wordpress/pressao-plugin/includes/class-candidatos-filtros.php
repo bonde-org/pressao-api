@@ -187,7 +187,7 @@ class PressaoPlugin_Candidatos_Filtros {
         $index = self::regenerate();
         set_transient(self::NOTICE_TRANSIENT, self::summary($index), 60);
 
-        wp_safe_redirect(admin_url('options-general.php?page=pressao-settings&tab=candidatos'));
+        wp_safe_redirect(PressaoPlugin_Admin::settings_url(['tab' => 'redes-sociais']));
         exit;
     }
 
@@ -212,7 +212,7 @@ class PressaoPlugin_Candidatos_Filtros {
         <div class="pressao-admin-filtros">
             <h3><?php esc_html_e('Filtros por estado', 'pressao-plugin'); ?></h3>
             <p class="description">
-                <?php esc_html_e('Estados e cargos do “Filtre por estado” no [pressao_fluxo] são pré-calculados a partir desta lista e atualizados automaticamente ao salvar um candidato.', 'pressao-plugin'); ?>
+                <?php esc_html_e('Estados e cargos do “Filtre por estado” no [pressao_fluxo] são pré-calculados a partir desta lista e atualizados automaticamente ao salvar quem marcar.', 'pressao-plugin'); ?>
                 <br>
                 <?php echo esc_html(self::summary($index)); ?>
             </p>

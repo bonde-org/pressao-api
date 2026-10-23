@@ -27,6 +27,61 @@ class PressaoPlugin_API {
         $this->client_secret = defined('PRESSAO_CLIENT_SECRET') ? PRESSAO_CLIENT_SECRET : get_option('pressao_client_secret', '');
         $this->api_url = defined('PRESSAO_API_URL') ? PRESSAO_API_URL : get_option('pressao_api_url', '');
     }
+
+    /**
+     * Credenciais mínimas para falar com Keycloak + API (realm tem default master).
+     */
+    public function is_configured() {
+        return $this->keycloak_url !== ''
+            && $this->client_id !== ''
+            && $this->client_secret !== ''
+            && $this->api_url !== '';
+    }
+
+    public function get_keycloak_url() {
+        return $this->keycloak_url;
+    }
+
+    public function get_api_url() {
+        return $this->api_url;
+    }
+
+    public function get_realm() {
+        return $this->realm;
+    }
+
+    /**
+     * Keycloak (token) e um GET em /api/v1/campanhas/. $fresh ignora token em cache.
+     *
+     * @return true|WP_Error
+     */
+    public function testar_conexao($fresh = false) {
+        if (!$this->is_configured()) {
+            return new WP_Error(
+                'config_error',
+                __('Preencha a URL do Keycloak, Client ID, Client Secret e a URL da API.', 'pressao-plugin')
+            );
+        }
+
+        if ($fresh) {
+            delete_transient($this->token_cache_key);
+        }
+
+        $token = $this->get_token();
+        if (!$token) {
+            return new WP_Error(
+                'auth_error',
+                __('Não foi possível obter token de autenticação no Keycloak.', 'pressao-plugin')
+            );
+        }
+
+        $response = $this->api_request('/api/v1/campanhas/', 'GET');
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        return true;
+    }
     
     /**
      * Obtém token do Keycloak com cache
@@ -166,6 +221,60 @@ class PressaoPlugin_API {
     }
     
     /**
+     * Lista campanhas. Com $q, filtra pelo nome (limit 20).
+     *
+     * @param string $q
+     * @return array|WP_Error
+     */
+    public function listar_campanhas($q) {
+        $q = trim((string) $q);
+        if ($q === '') {
+            return [];
+        }
+        $endpoint = sprintf(
+            '/api/v1/campanhas/?q=%s&limit=20',
+            rawurlencode($q)
+        );
+        $response = $this->api_request($endpoint, 'GET');
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        return is_array($response) ? $response : [];
+    }
+
+    /**
+     * Cria campanha na API (admin/service account).
+     *
+     * @param array $dados
+     * @return array|WP_Error
+     */
+    public function criar_campanha($dados) {
+        return $this->api_request('/api/v1/campanhas/', 'POST', $dados);
+    }
+
+    /**
+     * Atualiza campanha na API (admin/service account).
+     *
+     * @param string $campanha_id
+     * @param array  $dados
+     * @return array|WP_Error
+     */
+    public function atualizar_campanha($campanha_id, $dados) {
+        if (empty($campanha_id)) {
+            return new WP_Error(
+                'invalid_campaign',
+                __('ID da campanha não informado', 'pressao-plugin')
+            );
+        }
+        $endpoint = sprintf('/api/v1/campanhas/%s', $campanha_id);
+        $result = $this->api_request($endpoint, 'PUT', $dados);
+        if (!is_wp_error($result)) {
+            delete_transient('pressao_campanha_' . md5($campanha_id));
+        }
+        return $result;
+    }
+
+    /**
      * Obtém dados de uma campanha específica
      */
     public function get_campanha($campanha_id) {
@@ -297,6 +406,176 @@ class PressaoPlugin_API {
             'cached' => false,
             'count' => is_array($result) ? count($result) : 0
         ];
+    }
+
+    /**
+     * @param string $campanha_id
+     */
+    public function invalidar_cache_alvos($campanha_id) {
+        delete_transient('pressao_alvos_' . md5($campanha_id . serialize([])));
+    }
+
+    /**
+     * @param array $dados
+     * @return array|WP_Error
+     */
+    public function criar_alvo($dados) {
+        $result = $this->api_request('/api/v1/alvos/', 'POST', $dados);
+        if (!is_wp_error($result) && !empty($dados['campanha_id'])) {
+            $this->invalidar_cache_alvos($dados['campanha_id']);
+        }
+        return $result;
+    }
+
+    /**
+     * @param string $alvo_id
+     * @param array  $dados
+     * @param string $campanha_id
+     * @return array|WP_Error
+     */
+    public function atualizar_alvo($alvo_id, $dados, $campanha_id = '') {
+        if (empty($alvo_id)) {
+            return new WP_Error(
+                'invalid_alvo',
+                __('ID do alvo não informado', 'pressao-plugin')
+            );
+        }
+        $result = $this->api_request(sprintf('/api/v1/alvos/%s', $alvo_id), 'PUT', $dados);
+        if (!is_wp_error($result) && $campanha_id !== '') {
+            $this->invalidar_cache_alvos($campanha_id);
+        }
+        return $result;
+    }
+
+    /**
+     * Individuais ativos de e-mail ou telefone (admin), com contato.
+     *
+     * @param string $campanha_id
+     * @param string $tipo email|telefone
+     * @return array|WP_Error
+     */
+    public function listar_membros($campanha_id, $tipo) {
+        if (empty($campanha_id)) {
+            return new WP_Error(
+                'invalid_campaign',
+                __('ID da campanha não informado', 'pressao-plugin')
+            );
+        }
+        if (!in_array($tipo, ['email', 'telefone'], true)) {
+            return new WP_Error(
+                'invalid_tipo',
+                __('Tipo de contato inválido', 'pressao-plugin')
+            );
+        }
+        $endpoint = sprintf(
+            '/api/v1/alvos/campanha/%s/membros?tipo_contato=%s',
+            rawurlencode($campanha_id),
+            rawurlencode($tipo)
+        );
+        $response = $this->api_request($endpoint, 'GET');
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        return is_array($response) ? $response : [];
+    }
+
+    /**
+     * @param string $alvo_id
+     * @param string $campanha_id
+     * @return true|WP_Error
+     */
+    public function deletar_alvo($alvo_id, $campanha_id = '') {
+        if (empty($alvo_id)) {
+            return new WP_Error(
+                'invalid_alvo',
+                __('ID do alvo não informado', 'pressao-plugin')
+            );
+        }
+        $result = $this->api_request(sprintf('/api/v1/alvos/%s', $alvo_id), 'DELETE');
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        if ($campanha_id !== '') {
+            $this->invalidar_cache_alvos($campanha_id);
+        }
+        return true;
+    }
+
+    /**
+     * @param string $campanha_id
+     * @param string $canal
+     * @return array|WP_Error
+     */
+    public function listar_templates($campanha_id, $canal = '') {
+        if (empty($campanha_id)) {
+            return new WP_Error(
+                'invalid_campaign',
+                __('ID da campanha não informado', 'pressao-plugin')
+            );
+        }
+        $endpoint = sprintf('/api/v1/templates/campanha/%s', $campanha_id);
+        if ($canal !== '') {
+            $endpoint .= '?canal=' . rawurlencode($canal);
+        }
+        $response = $this->api_request($endpoint, 'GET');
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        return is_array($response) ? $response : [];
+    }
+
+    /**
+     * @param array $dados
+     * @return array|WP_Error
+     */
+    public function criar_template($dados) {
+        $result = $this->api_request('/api/v1/templates/', 'POST', $dados);
+        if (!is_wp_error($result) && !empty($dados['campanha_id'])) {
+            $this->invalidar_cache_alvos($dados['campanha_id']);
+        }
+        return $result;
+    }
+
+    /**
+     * @param string $template_id
+     * @param array  $dados
+     * @param string $campanha_id
+     * @return array|WP_Error
+     */
+    public function atualizar_template($template_id, $dados, $campanha_id = '') {
+        if (empty($template_id)) {
+            return new WP_Error(
+                'invalid_template',
+                __('ID do texto não informado', 'pressao-plugin')
+            );
+        }
+        $result = $this->api_request(sprintf('/api/v1/templates/%s', $template_id), 'PUT', $dados);
+        if (!is_wp_error($result) && $campanha_id !== '') {
+            $this->invalidar_cache_alvos($campanha_id);
+        }
+        return $result;
+    }
+
+    /**
+     * @param string $template_id
+     * @param string $campanha_id
+     * @return true|WP_Error
+     */
+    public function deletar_template($template_id, $campanha_id = '') {
+        if (empty($template_id)) {
+            return new WP_Error(
+                'invalid_template',
+                __('ID do texto não informado', 'pressao-plugin')
+            );
+        }
+        $result = $this->api_request(sprintf('/api/v1/templates/%s', $template_id), 'DELETE');
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        if ($campanha_id !== '') {
+            $this->invalidar_cache_alvos($campanha_id);
+        }
+        return true;
     }
 
     /**

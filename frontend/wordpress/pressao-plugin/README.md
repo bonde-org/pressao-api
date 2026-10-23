@@ -86,7 +86,7 @@ pressao-plugin/
 │   ├── class-apoiadores-imagens-fila.php  # Fila de imagens do CSV (lotes via AJAX + progresso)
 │   ├── class-candidatos-rest.php    # REST pressao/v1/candidatos-apoiadores
 │   ├── class-api.php           # Cliente HTTP: Keycloak + API Pressão
-│   ├── class-render-helpers.php  # Helpers de render comuns (candidatos, avatares, compartilhar, ajuda, cookie, campos do ativista)
+│   ├── class-render-helpers.php  # Helpers de render comuns (candidatos, avatares, compartilhar, ajuda, privacidade_url, cookie, campos do ativista)
 │   ├── class-shortcode.php     # Shortcodes e renderização SSR
 │   ├── class-multicanal.php    # [pressao_multicanal]: widget padrão (Instagram, TikTok, e-mail, telefone, compartilhar)
 │   └── class-ajax.php          # AJAX handlers
@@ -101,7 +101,7 @@ pressao-plugin/
 │   │   ├── Anton/
 │   │   ├── Host_Grotesk/
 │   │   └── Funnel_Display/     # presente; não usada no [pressao_fluxo]
-│   ├── icons/                  # SVG de canais (inclui x e telefone), compartilhar/enviar, copiar, download, setas, check, fechar, chevron, localização, interrogação, raio e os do telefone (telefone-entrada, lapis, pessoas, info, alerta; Bootstrap Icons, MIT) (via CSS mask-image; URLs absolutas injetadas como --pressao-icon-*)
+│   ├── icons/                  # SVG de canais (inclui x e telefone), compartilhar/enviar, copiar, download, setas, check, fechar, chevron, localização, interrogação, raio e os do telefone (telefone-entrada, lapis, pessoas, info, balao, alerta; Bootstrap Icons, MIT) (via CSS mask-image; URLs absolutas injetadas como --pressao-icon-*)
 │   ├── img/                    # GIFs de feedback do multicanal (loading.gif = espera social; telefone.gif = espera de ligação)
 │   ├── vendor/tom-select/      # Autocomplete do fluxo único (+ remoção no admin)
 │   ├── examples/               # CSV + scripts REST (apoiadores)
@@ -130,18 +130,31 @@ docker compose exec wordpress wp plugin activate pressao-plugin
 
 ### Configurando
 
-Acesse **Configurações → Pressão Plugin**. A página usa abas:
+Acesse **Pressão** no menu raiz do wp-admin (ícone de megafone). O setup é em sequência:
+abas bloqueadas aparecem desabilitadas (não redirecionam). **Documentação** continua sempre
+clicável.
+
+1. Sem Keycloak + API, só **Conexão** e **Documentação**.
+2. Com as credenciais, **Campanha** libera. **Conexão** vira cartão de status (conectado /
+   sem conexão); **Editar credenciais** só se algum campo não vier de constante no `wp-config.php`.
+3. Com uma campanha vinculada (`pressao_campaign_id` UUID), liberam Geral, Redes Sociais,
+   E-mail, Telefone, Apoiadores e Compartilhamento.
 
 | Aba | Conteúdo |
 |-----|----------|
-| **Conexão** | Keycloak + URL da API |
-| **Geral** | ID da campanha, título do widget, sessão/identificação do ativista |
-| **Candidatos** | Lista a pressionar + limite / countdown / ajuda do `[pressao_fluxo]` |
-| **Apoiadores** | Lista “já apoiam” + import/remover CSV |
+| **Conexão** | Setup na primeira vez; depois status da API (token Keycloak + `GET /api/v1/campanhas/`) |
+| **Campanha** | Busca por nome (autocomplete), criar e editar na API; vincula o UUID ao site na hora |
+| **Redes Sociais** | Instagram e TikTok (um alvo cada + textos em balões) e lista **Quem marcar** |
+| **E-mail** | Textos (assunto + corpo em balões) e destinatários (membros do agregado) |
+| **Telefone** | Roteiros em balões, **Quem ligar** (lista + como o widget escolhe) e atalho do número de origem |
 | **Compartilhamento** | Botão e overlay de compartilhar em `[pressao_alvos]` |
 | **Documentação** | Shortcodes (“Como usar”) e nota sobre LGPD |
+| **Geral** | Título do widget, privacidade, sessão/identificação do ativista + opções provisórias do `[pressao_fluxo]` |
+| **Apoiadores** | Lista “já apoiam” + import/remover CSV |
 
-Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não sobrescrever as demais. As listas de **Candidatos** e **Apoiadores** não passam pelo `options.php`: usam tabela com busca/paginação e CRUD via `admin-ajax` (`class-candidatos-admin-list.php`). **Alvos** e **Templates** da API ainda são geridos fora do painel; no futuro entram como abas de primeiro nível (não dentro de Geral).
+Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não sobrescrever as demais. **Campanha**, **Redes Sociais**, **E-mail**, **Telefone** e **Apoiadores** não passam pelo `options.php`: Campanha grava `pressao_campaign_id` via AJAX; Instagram/TikTok, e-mail e telefone usam AJAX contra a API (alvo/membro + templates); a aba Telefone também grava `pressao_telefone_selecao` via AJAX; as listas editoriais usam tabela + CRUD via `admin-ajax`. `?tab=candidatos` redireciona para `redes-sociais`.
+
+Membros de e-mail e telefone são alvos `modo=individual`; a API sincroniza o agregado. O admin lista pelo `GET /api/v1/alvos/campanha/{id}/membros?tipo_contato=` (só admin, com `contato`). A listagem pública (`GET /alvos/campanha/{id}`) continua só com o agregado.
 
 | Campo | Option WP | Aba | Descrição |
 |-------|-----------|-----|-----------|
@@ -150,18 +163,32 @@ Cada aba de opções salva só o seu grupo (`pressao_settings_{aba}`), para não
 | Client ID | `pressao_client_id` | Conexão | ID do client configurado |
 | Client Secret | `pressao_client_secret` | Conexão | Secret do client |
 | URL da API | `pressao_api_url` | Conexão | Endereço da API Pressão |
-| ID da Campanha | `pressao_campaign_id` | Geral | Campanha padrão dos shortcodes |
+| Campanha | `pressao_campaign_id` | Campanha | UUID da campanha na API (busca/criar/editar; padrão dos shortcodes) |
 | Título do Widget | `pressao_widget_title` | Geral | Título exibido em `[pressao_widget]` |
+| Política de Privacidade | `pressao_privacidade_url` | Geral | URL do aviso abaixo do submit em **qualquer** formulário do widget. Vazio: página de privacidade do WordPress |
 | Intervalo confirmar identidade | `pressao_ativista_confirm_interval` | Geral | Minutos até perguntar de novo (padrão `10`) |
 | Título do formulário | `pressao_ativista_form_title` | Geral | Título do formulário de identificação |
 | Duração da sessão | `pressao_session_duration` | Geral | TTL dos cookies em segundos (padrão `86400`) |
-| Candidatos a pressionar | `pressao_candidatos` | Candidatos | Lista AJAX (busca/paginação); usada na busca e no filtro por estado do `[pressao_fluxo]` |
-| Índice de filtros | `pressao_candidatos_filtros` | Candidatos | Gerado (não editável): estados e cargos do “Filtre por estado”; recalculado a cada gravação de `pressao_candidatos` ou pelo botão **Regenerar filtros** |
-| Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Candidatos | Máximo de @ por mensagem (padrão `5`) — salvo pelo botão Salvar da aba |
-| Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Candidatos | Se ligado: toast com countdown antes de abrir; se desligado (padrão): abre no clique. Mobile tenta o app; desktop abre nova aba |
-| Ajuda do fluxo | `pressao_fluxo_ajuda` | Candidatos | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
+| Quem marcar | `pressao_candidatos` | Redes Sociais | Lista AJAX (busca/paginação); Instagram em `link_url`, TikTok em `tiktok`; usada na busca e no filtro por estado do `[pressao_fluxo]` e nos comentários do `[pressao_multicanal]` |
+| Índice de filtros | `pressao_candidatos_filtros` | Redes Sociais | Gerado (não editável): estados e cargos do “Filtre por estado”; recalculado a cada gravação de `pressao_candidatos` ou pelo botão **Regenerar filtros** |
+| Limite de marcação (fluxo) | `pressao_fluxo_limite_candidatos` | Geral | Máximo de @ por mensagem (padrão `5`) — moradia temporária nesta aba |
+| Contador antes de abrir IG | `pressao_fluxo_countdown_abrir` | Geral | Se ligado: toast com countdown antes de abrir; se desligado (padrão): abre no clique. Mobile tenta o app; desktop abre nova aba |
+| Ajuda do fluxo | `pressao_fluxo_ajuda` | Geral | Título + conteúdo HTML do modal `?` no `[pressao_fluxo]` |
 | Candidatos apoiadores | `pressao_candidatos_apoiadores` | Apoiadores | Lista AJAX + import/remover CSV; botão/lista “já apoiam”, `[pressao_candidatos]` |
 | Compartilhamento | `pressao_compartilhamento` | Compartilhamento | Textos, links, deep links e imagens do botão de compartilhar |
+| Quem ligar | `pressao_telefone_selecao` | Telefone | Padrão do widget: `alvo_da_vez` (API escolhe quem tem menos ligações; empate sorteado) ou `escolher` (o ativista escolhe). O atributo `telefone_selecao` do shortcode, se válido, prevalece |
+
+### Política de Privacidade
+
+A option `pressao_privacidade_url` (aba **Geral**) alimenta o texto **“Política de Privacidade”** abaixo do botão de submit em **qualquer** formulário do plugin — não é exclusiva do telefone. Hoje: e-mail, telefone e captação de lead no `[pressao_multicanal]`. Formulário novo com o mesmo aviso deve reusar essa URL.
+
+Resolução (`PressaoPlugin_Render_Helpers::privacidade_url()`, exposta no config JS como `privacidade_url`):
+
+1. URL preenchida na aba Geral;
+2. senão, página de privacidade do WordPress (`get_privacy_policy_url()`);
+3. sem as duas, o nome da política aparece **sem link**.
+
+Copy: *“Ao continuar, você concorda em receber atualizações por e-mail, conforme a Política de Privacidade.”* No JS, `privacidadeFootnoteHtml(url)` recebe a URL por argumento. No telefone, o aviso some se `telefone_email="oculto"`.
 
 ### Configuração compartilhada via wp-config.php (multisite)
 
@@ -175,7 +202,7 @@ define('PRESSAO_CLIENT_SECRET', getenv('PRESSAO_KEYCLOAK_CLIENT_SECRET'));
 define('PRESSAO_API_URL', 'https://pressao-api.bonde.cloud');
 ```
 
-Útil numa rede multisite onde todos os sites compartilham o mesmo client Keycloak/API — evita reescrever (e reexpor) o `client_secret` em cada site. Quando uma constante está definida, o campo correspondente aparece desabilitado na tela de admin, com uma nota indicando a constante. `pressao_campaign_id` e os demais campos continuam por site (não têm override por constante).
+Útil numa rede multisite onde todos os sites compartilham o mesmo client Keycloak/API — evita reescrever (e reexpor) o `client_secret` em cada site. Quando uma constante está definida, o campo correspondente aparece desabilitado no formulário (e no cartão de status, listado como “Via wp-config.php”). Se **todas** as cinco forem constantes, não há “Editar credenciais”. `pressao_campaign_id` e os demais campos continuam por site (não têm override por constante).
 
 ### Configuração de candidatos
 
@@ -183,12 +210,12 @@ Há **duas bases** no WordPress:
 
 | Base | Option | Uso |
 |------|--------|-----|
-| A pressionar | `pressao_candidatos` | Busca/seleção (Tom Select) no `[pressao_fluxo]` |
+| Quem marcar (a pressionar) | `pressao_candidatos` | Busca/seleção (Tom Select) no `[pressao_fluxo]`; handles do `[pressao_multicanal]` (Instagram e TikTok) |
 | Apoiadores | `pressao_candidatos_apoiadores` | Botão “já apoiam”, overlay da lista, shortcode `[pressao_candidatos]` |
 
 No admin, as duas listas usam o **mesmo padrão de listagem** (`PressaoPlugin_Candidatos_Admin_List`):
 
-- Tabela com colunas: foto, nome, cargo, partido, Instagram (+ **estado** só na base a pressionar)
+- Tabela com colunas: foto, nome, cargo, partido, Instagram (+ **estado** e **TikTok** só em Quem marcar)
 - Clique / **Editar** expande o formulário na linha; **Salvar item** grava via AJAX
 - Busca (`cs`) e paginação (`cpage`, 20 por página) no servidor
 - Actions: `pressao_candidato_save`, `pressao_candidato_delete`, `pressao_candidato_add`
@@ -200,8 +227,9 @@ Campos por candidato (iguais nas duas):
 - `partido`
 - `descricao`
 - `link_url` — **Instagram (@)** (handle; aceita `@user` ou URL de perfil; sanitizado no save)
+- `tiktok` — **TikTok (@)** só em Quem marcar (aceita `@user` ou URL de perfil; sanitizado no save)
 - `imagem_id`
-- `estado` — sigla UF (select das 27 UFs; só editável na base **a pressionar**; valor inválido vira vazio)
+- `estado` — sigla UF (select das 27 UFs; só editável em **Quem marcar**; valor inválido vira vazio)
 
 As imagens manuais usam a Biblioteca de Mídia do WordPress (`attachment ID` + `wp_get_attachment_image()`).
 
@@ -213,7 +241,7 @@ O “Filtre por estado” do `[pressao_fluxo]` usa um índice pré-calculado (`P
 
 - Só estados com pelo menos um candidato (com `@`), ordenados pelo nome.
 - Cargos = distinct do texto `cargo` **por estado**, agrupado ignorando maiúsculas, acentos e espaços extras; o rótulo é a primeira grafia encontrada. Cargo vazio não vira opção.
-- Regenerado automaticamente nos hooks `add_option_pressao_candidatos` / `update_option_pressao_candidatos` (salvar, adicionar ou remover item). Na aba **Candidatos**, o bloco **Filtros por estado** mostra o resumo e o botão **Regenerar filtros** (`admin-post` `pressao_regenerar_filtros`).
+- Regenerado automaticamente nos hooks `add_option_pressao_candidatos` / `update_option_pressao_candidatos` (salvar, adicionar ou remover item). Na aba **Redes Sociais**, o bloco **Filtros por estado** mostra o resumo e o botão **Regenerar filtros** (`admin-post` `pressao_regenerar_filtros`).
 - Candidatos sem estado aparecem só na busca por nome.
 
 #### Import CSV (apoiadores)
@@ -366,23 +394,31 @@ fim do canal, depois da captação de lead.
 
 **Captação de lead** ("Quer acompanhar os próximos passos?"): aparece só se ainda não pedimos e-mail (sem
 `__lead` no cookie, sem e-mail em `pressao_ativista_data` e e-mail não feito). Modal no desktop, tela cheia no
-mobile. "Agora não" registra a ação sem ativista.
+mobile. "Agora não" registra a ação sem ativista. Aviso de privacidade abaixo do submit (mesma URL da aba Geral).
 
 **E-mail:** "Para" com os nomes de `membros` do alvo agregado (API; sem o campo, "N destinatários"), "Assunto"
 = título do template, "Ver Texto" com o corpo e formulário nome/e-mail/WhatsApp. O envio cria a ação
-(`canal=email`) com o ativista.
+(`canal=email`) com o ativista. Aviso de privacidade abaixo do submit.
 
 **Telefone** (Figma V2, "ligamos para você"): o card só aparece com o alvo **agregado** de telefone da API
-(alvo telefone individual é ignorado). Telas:
+(alvo telefone individual é ignorado). Copys e cores seguem o **mobile** do Figma; diagramação, espaçamentos
+e tamanhos continuam diferentes entre mobile e desktop (≥768px). Telas:
 
-1. "Como funciona": card do alvo da vez (quando `alvo_da_vez`), 4 passos (inclui "Você conversa com um
-   roteiro como guia"; ícones em cinza) e aviso de rotação de alvo.
-2. Formulário "Vamos te conectar com": card/select do alvo → nome, telefone e e-mail (`telefone_email`) →
-   roteiro recolhível (template `telefone`, placeholders `{alvo_nome}`, `{campanha_nome}`, `{ativista_nome}`).
-   "Já pode me ligar" cria a ação com `membro_id` e `selecao` (`automatica` / `ativista`).
-3. Modal "Vamos te ligar em instantes" com GIF `telefone.gif` (DDD de origem da campanha); depois de 90 s
-   aparece "Fechar e acompanhar depois" (volta à home; `sessionStorage` permanece).
-4. "Ligação em andamento" com o roteiro aberto (e o GIF), quando o ativista atende — ou ao **reabrir** o
+1. Intro **"Vamos te conectar com:"** (ou **"Selecione quem você quer pressionar:"** com select quando
+   `escolher`): card do alvo da vez no topo (foto + badge azul "Alvo da vez"), aviso de rotação (ícone
+   "i" azul, 12px/#4D4D4D, sem caixa cinza) e bloco **"O que acontece agora?"** com 4 passos (inclui
+   "A gente te conecta com o alvo" e "Você conversa com um roteiro como guia"; ícones cinza — 40px no
+   mobile, 32px no desktop).
+2. Formulário **"Preencha seus dados para gente te ligar:"**: nome → telefone e e-mail empilhados no
+   mobile e lado a lado no desktop (`telefone_email`) → divisor → seção **"Vamos te conectar com:"**
+   (card; o select de `escolher` fica na intro) → roteiro **"Utilize esse roteiro"** sempre visível
+   (card chip, título azul, textos 12px; template `telefone`, placeholders `{alvo_nome}`,
+   `{campanha_nome}`, `{ativista_nome}`). CTA **"Já pode me ligar"** (sem ícone, 36px em 1 linha)
+   cria a ação com `membro_id` e `selecao` (`automatica` / `ativista`). Aviso de privacidade abaixo
+   do submit (mesma URL da aba Geral; some se `telefone_email="oculto"`).
+3. Modal "Vamos te ligar em instantes" com GIF `telefone.gif` ("O número pode começar com [XX]" se houver
+   DDD); depois de 90 s aparece "Fechar e acompanhar depois" (volta à home; `sessionStorage` permanece).
+4. "Ligação em andamento" com o roteiro visível (e o GIF), quando o ativista atende — ou ao **reabrir** o
    card com ligação pendente (tela com seta voltar, sem modal bloqueante).
 5. Sucesso ("Ligação realizada com sucesso!", cookie da ação, contador, home ou compartilhar) ou telas de
    erro com "Iniciar ligação novamente" (`pressao_nova_ligacao`): erros do ativista mostram "Seu número" /
@@ -401,7 +437,7 @@ admin estiver vazio; redes de `redes` **ocultas** quando sem URL configurada; im
 | `campaign` | option | ID da campanha |
 | `canais` | `instagram,tiktok,email,telefone` | Canais e ordem dos cards |
 | `alvo_instagram` / `alvo_tiktok` / `alvo_email` / `alvo_telefone` | — | Alvo de cada card. Vazio: primeiro alvo do canal; no e-mail e no telefone, o agregado |
-| `telefone_selecao` | `alvo_da_vez` | `alvo_da_vez`: a API escolhe o membro (badge "Alvo da vez"); `escolher`: select com os membros |
+| `telefone_selecao` | option (`alvo_da_vez`) | `alvo_da_vez`: a API escolhe o membro (badge "Alvo da vez"); `escolher`: select com os membros. Sem o atributo, usa `pressao_telefone_selecao` da aba Telefone |
 | `telefone_email` | `obrigatorio` | Campo de e-mail no telefone: `obrigatorio`, `opcional` ou `oculto` (oculto também tira o aviso de privacidade) |
 | `cache` | `0` | TTL do cache de alvos (`0` sorteia template a cada visita) |
 | `alvos` | `candidatos` | Palavra usada no título padrão e na lista ("Candidatos que serão pressionados") |
@@ -418,8 +454,8 @@ admin estiver vazio; redes de `redes` **ocultas** quando sem URL configurada; im
 Assets: `pressao-ui.css` + `multicanal.css` + `pressao-core.js` + `share-images.js` + `multicanal.js` (só
 quando o shortcode está na página) + GIFs em `assets/img/` (URLs em `config.assets`). Reusa AJAX
 `pressao_realizar_acao` / `pressao_confirmar_acao`; o telefone usa também `pressao_proximo_membro`,
-`pressao_status_ligacao` e `pressao_nova_ligacao`. O config do widget leva `privacidade_url`
-(`get_privacy_policy_url()`) para o link do aviso de privacidade. Contador `.pressao-acoes-counter`
+`pressao_status_ligacao` e `pressao_nova_ligacao`. O config leva `privacidade_url` (ver
+[Política de Privacidade](#política-de-privacidade)). Contador `.pressao-acoes-counter`
 animado por `PressaoCore.updateCounter`.
 
 ### Shortcodes legados
@@ -617,6 +653,17 @@ Todos registrados nas variantes logada e `nopriv`:
 
 `pressao_realizar_acao` e `pressao_confirmar_acao` invalidam o transient do contador (`invalidar_cache_contador`) quando recebem `campanha_id` no POST.
 
+Handlers **só admin** (`wp_ajax_`, `manage_options`, nonce `pressao_admin_campanha`) da aba Campanha:
+
+| Action | Método em `PressaoPlugin_API` | Endpoint da API |
+|--------|-------------------------------|-----------------|
+| `pressao_admin_buscar_campanhas` | `listar_campanhas` | `GET /api/v1/campanhas/?q=&limit=20` (a partir de 2 caracteres) |
+| `pressao_admin_criar_campanha` | `criar_campanha` | `POST /api/v1/campanhas/` (nome, descrição, telefone, `ativa`; grava `pressao_campaign_id`) |
+| `pressao_admin_atualizar_campanha` | `atualizar_campanha` | `PUT /api/v1/campanhas/{id}` (nome, descrição, telefone de origem, `ativa`) |
+| `pressao_admin_vincular_campanha` | — | Nenhum: grava o UUID em `pressao_campaign_id` |
+
+O **telefone de origem** da campanha é o número Twilio que liga para o ativista e o que o alvo vê na chamada. Pode ficar vazio e ser preenchido depois, quando o canal telefone estiver em uso.
+
 **Posse da ligação:** a service account do plugin enxerga qualquer ação na API. Por isso `pressao_realizar_acao`
 (telefone) e `pressao_nova_ligacao` gravam o transient `pressao_ligacao_{md5(acao_id)}` = `sessao_id` (1 h), e
 `pressao_status_ligacao` / `pressao_nova_ligacao` só respondem quando o `sessao_id` enviado bate (senão, 403
@@ -640,3 +687,4 @@ Handlers só do admin (logado, `manage_options` + nonce `pressao_apoiadores_imag
 5. **Valide `content-type: application/json`** antes de `response.json()` no JS.
 6. Preserve `AGUARDANDO_ACAO_HUMANA` no cookie de ações até a confirmação; só então marque `CONCLUIDA`.
 7. Shortcode novo precisa entrar na checagem de `has_shortcode` em `pressao-plugin.php`, senão CSS e JS não são carregados na página.
+8. **Política de Privacidade:** todo formulário com esse texto abaixo do submit usa `pressao_privacidade_url` (`PressaoPlugin_Render_Helpers::privacidade_url()` / `config.privacidade_url`). Não hardcodar URL. No JS, passe a URL por argumento (`privacidadeFootnoteHtml(url)`). Sem URL, o nome da política aparece sem link.

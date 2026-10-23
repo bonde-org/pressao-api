@@ -32,10 +32,24 @@ class CampanhaRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def listar_todas(self, ativa: bool | None = None) -> list[Campanha]:
+    @staticmethod
+    def _escape_like(texto: str) -> str:
+        return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    async def listar_todas(
+        self,
+        ativa: bool | None = None,
+        q: str | None = None,
+        limit: int | None = None,
+    ) -> list[Campanha]:
         query = select(Campanha)
         if ativa is not None:
             query = query.where(Campanha.ativa == ativa)
+        if q:
+            query = query.where(Campanha.nome.ilike(f"%{self._escape_like(q)}%", escape="\\"))
+            query = query.order_by(Campanha.nome)
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.session.execute(query)
         return list(result.scalars().all())
 

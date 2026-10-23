@@ -105,6 +105,7 @@ final class PressaoPlugin {
             'pressao_api_url' => '',
             'pressao_campaign_id' => '',
             'pressao_widget_title' => 'Pressão Widget',
+            'pressao_privacidade_url' => '',
             'pressao_candidatos' => [],
             'pressao_candidatos_apoiadores' => [],
             'pressao_candidatos_filtros' => [],
@@ -115,6 +116,7 @@ final class PressaoPlugin {
                 'conteudo' => '',
             ],
             'pressao_compartilhamento' => [],
+            'pressao_telefone_selecao' => 'alvo_da_vez',
         ];
         
         foreach ($defaults as $key => $value) {
@@ -297,6 +299,7 @@ final class PressaoPlugin {
             'lapis' => 'lapis',
             'pessoas' => 'pessoas',
             'info' => 'info',
+            'balao' => 'balao',
             'alerta' => 'alerta',
             'x' => 'x',
             'seta' => 'seta',
@@ -440,6 +443,20 @@ final class PressaoPlugin {
             'filaConcluidaErros' => __('Processamento terminado com erros. Corrija a URL no CSV ou tente novamente.', 'pressao-plugin'),
             'filaFalhaRede' => __('A conexão falhou algumas vezes seguidas. Clique em Continuar para retomar.', 'pressao-plugin'),
             'filaSaindo' => __('Ainda há imagens na fila. Se sair, o processamento continua quando você voltar à aba Apoiadores.', 'pressao-plugin'),
+            'campaignCreate' => __('Criar campanha', 'pressao-plugin'),
+            'campaignSave' => __('Salvar alterações', 'pressao-plugin'),
+            'campaignSearchError' => __('Não foi possível buscar campanhas.', 'pressao-plugin'),
+            'campaignSaveError' => __('Não foi possível salvar a campanha.', 'pressao-plugin'),
+            'campaignLinkError' => __('Não foi possível vincular a campanha.', 'pressao-plugin'),
+            'campaignPhoneEmpty' => __('Não definido', 'pressao-plugin'),
+            'campaignNoResults' => __('Não encontramos resultados para sua busca', 'pressao-plugin'),
+            'campaignActive' => __('Ativa', 'pressao-plugin'),
+            'campaignInactive' => __('Inativa', 'pressao-plugin'),
+            'redesSaveError' => __('Não foi possível salvar.', 'pressao-plugin'),
+            'redesDeleteConfirm' => __('Remover este texto?', 'pressao-plugin'),
+            'redesForaSorteio' => __('Fora do sorteio', 'pressao-plugin'),
+            'redesCriar' => __('Criar', 'pressao-plugin'),
+            'membroDeleteConfirm' => __('Remover esta pessoa?', 'pressao-plugin'),
         ]);
     }
 }

@@ -217,3 +217,105 @@ class TestAPIAlvo:
         )
         assert response.status_code == 422
         assert "Formato de telefone inválido" in response.text
+
+    def test_listar_membros_admin_devolve_contato(self, client, db_session, mock_admin, campanha):
+        """Admin lista individuais de e-mail com contato; a listagem pública continua agregada."""
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+        campanha_id = campanha["id"]
+        emails = ["alvo0@email.com", "alvo1@email.com", "alvo2@email.com"]
+        for i, email in enumerate(emails):
+            client.post(
+                "/api/v1/alvos/",
+                json={
+                    "nome": f"Alvo {i}",
+                    "contato": email,
+                    "tipo_contato": "email",
+                    "campanha_id": campanha_id,
+                },
+            )
+        inativo = client.post(
+            "/api/v1/alvos/",
+            json={
+                "nome": "Fora",
+                "contato": "fora@email.com",
+                "tipo_contato": "email",
+                "campanha_id": campanha_id,
+                "ativo": False,
+            },
+        )
+        assert inativo.status_code == 201
+
+        response = client.get(f"/api/v1/alvos/campanha/{campanha_id}/membros?tipo_contato=email")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 3
+        contatos = sorted(item["contato"] for item in data)
+        assert contatos == emails
+        assert all(item["modo"] == "individual" for item in data)
+        assert all(item["tipo_contato"] == "email" for item in data)
+
+        publica = client.get(f"/api/v1/alvos/campanha/{campanha_id}")
+        assert publica.status_code == 200
+        agregados = publica.json()
+        assert len(agregados) == 1
+        assert agregados[0]["modo"] == "agregado"
+        assert agregados[0]["total_membros"] == 3
+        assert agregados[0]["membros"] == [
+            {"nome": "Alvo 0"},
+            {"nome": "Alvo 1"},
+            {"nome": "Alvo 2"},
+        ]
+
+    def test_listar_membros_telefone_com_metadados(self, client, db_session, mock_admin, campanha):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+        campanha_id = campanha["id"]
+        criado = client.post(
+            "/api/v1/alvos/",
+            json={
+                "nome": "Maria Silva",
+                "contato": "11988880001",
+                "tipo_contato": "telefone",
+                "campanha_id": campanha_id,
+                "metadados": {"cargo": "Vereadora", "partido": "PSOL"},
+            },
+        )
+        assert criado.status_code == 201
+
+        response = client.get(f"/api/v1/alvos/campanha/{campanha_id}/membros?tipo_contato=telefone")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["contato"] == "11988880001"
+        assert data[0]["metadados"] == {"cargo": "Vereadora", "partido": "PSOL"}
+        assert data[0]["modo"] == "individual"
+
+    def test_listar_membros_exige_admin(self, client, db_session, mock_user, campanha):
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        campanha_id = campanha["id"]
+        response = client.get(f"/api/v1/alvos/campanha/{campanha_id}/membros?tipo_contato=email")
+        assert response.status_code == 403
+
+    def test_listar_membros_tipo_invalido(self, client, db_session, mock_admin, campanha):
+        app.dependency_overrides[get_current_user] = lambda: mock_admin
+        campanha_id = campanha["id"]
+        response = client.get(
+            f"/api/v1/alvos/campanha/{campanha_id}/membros?tipo_contato=instagram"
+        )
+        assert response.status_code == 422
+
+    def test_atualizar_alvo_com_email_invalido(self, client, db_session, mock_user, campanha):
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        campanha_id = campanha["id"]
+        criado = client.post(
+            "/api/v1/alvos/",
+            json={
+                "nome": "João Silva",
+                "contato": "joao@email.com",
+                "tipo_contato": "email",
+                "campanha_id": campanha_id,
+            },
+        )
+        alvo_id = criado.json()["id"]
+        response = client.put(f"/api/v1/alvos/{alvo_id}", json={"contato": "email-invalido"})
+        assert response.status_code == 422
+        assert "Formato de e-mail inválido" in response.text

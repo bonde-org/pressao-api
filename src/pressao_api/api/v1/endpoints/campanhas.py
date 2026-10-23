@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pressao_api.core.database import get_db
@@ -54,13 +54,17 @@ async def criar_campanha(
 @router.get("/", response_model=list[CampanhaResponse])
 async def listar_campanhas(
     ativa: bool | None = None,
+    q: str | None = Query(None, max_length=200, description="Filtro por nome (contém)"),
+    limit: int = Query(20, ge=1, le=50, description="Máximo de resultados quando há q"),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Lista todas as campanhas"""
+    """Lista campanhas. Sem `q` devolve todas; com `q`, filtra pelo nome e aplica `limit`."""
     repo = CampanhaRepository(db)
-    campanhas = await repo.listar_todas(ativa)
-    return campanhas
+    q_limpo = q.strip() if q else None
+    if not q_limpo:
+        return await repo.listar_todas(ativa)
+    return await repo.listar_todas(ativa, q=q_limpo, limit=limit)
 
 
 @router.get("/{campanha_id}", response_model=CampanhaResponse)
