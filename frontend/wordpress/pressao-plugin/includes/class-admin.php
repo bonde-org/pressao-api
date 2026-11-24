@@ -1758,9 +1758,10 @@ class PressaoPlugin_Admin {
         $config['imagens_subtitulo'] = sanitize_text_field(wp_unslash($_POST['imagens_subtitulo'] ?? ''));
         $config['imagens_instrucao'] = sanitize_textarea_field(wp_unslash($_POST['imagens_instrucao'] ?? ''));
         $config['imagens'] = $imagens;
+        $config['imagens_ativo'] = !empty($_POST['imagens_ativo']) ? 1 : 0;
         update_option('pressao_compartilhamento', $config);
 
-        wp_send_json_success(['total' => count($imagens)]);
+        wp_send_json_success(['total' => count($imagens), 'ativo' => $config['imagens_ativo']]);
     }
 
     public function ajax_salvar_pos_acao() {
@@ -2341,7 +2342,15 @@ class PressaoPlugin_Admin {
         if (empty($imagens)) {
             $imagens = [[]];
         }
+        $ativo = !array_key_exists('imagens_ativo', $config) || !empty($config['imagens_ativo']);
         ?>
+        <p>
+            <label>
+                <input type="checkbox" class="pressao-imagens-ativo" data-field="imagens-ativo" <?php checked($ativo); ?> />
+                <?php esc_html_e('Exibir as imagens para baixar na tela de compartilhamento', 'pressao-plugin'); ?>
+            </label>
+        </p>
+        <div class="pressao-imagens-campos">
             <h4><?php esc_html_e('Imagens para postar', 'pressao-plugin'); ?></h4>
             <p>
                 <label>
@@ -2385,6 +2394,7 @@ class PressaoPlugin_Admin {
                     <?php esc_html_e('As imagens usam a Biblioteca de Mídia do WordPress (attachment ID).', 'pressao-plugin'); ?>
                 </p>
             </div>
+        </div>
         <?php
     }
 
@@ -2462,6 +2472,14 @@ class PressaoPlugin_Admin {
             return [];
         }
 
+        if (array_key_exists('imagens_ativo', $value)) {
+            $imagens_ativo = !empty($value['imagens_ativo']) ? 1 : 0;
+        } else {
+            $atual_ativo = get_option('pressao_compartilhamento', []);
+            $imagens_ativo = (is_array($atual_ativo) && array_key_exists('imagens_ativo', $atual_ativo))
+                ? (!empty($atual_ativo['imagens_ativo']) ? 1 : 0)
+                : 1;
+        }
         // As imagens para postar são editadas na aba Pós-ação: quando este formulário não as envia,
         // mantém o que já está salvo em vez de apagar.
         $atual = get_option('pressao_compartilhamento', []);
@@ -2490,6 +2508,7 @@ class PressaoPlugin_Admin {
             'imagens_titulo' => sanitize_text_field($value['imagens_titulo'] ?? ''),
             'imagens_subtitulo' => sanitize_text_field($value['imagens_subtitulo'] ?? ''),
             'imagens_instrucao' => sanitize_textarea_field($value['imagens_instrucao'] ?? ''),
+            'imagens_ativo' => $imagens_ativo,
             'imagens' => $imagens,
         ];
     }
