@@ -490,6 +490,9 @@
 
         // ---------------- Telas (painel direito / drawer) ----------------
 
+        /** true só durante a abertura automática (atributo abrir): não rouba foco nem rola a página. */
+        var abrindoAuto = false;
+
         function openScreen(html, canal, onMount) {
             var jaAberta = screenCanal !== null;
             if (!jaAberta) {
@@ -512,10 +515,10 @@
             }
             var titulo = screen.querySelector('[data-mc-screen-title]');
             // No mobile/touch, focus() marca o título como selecionado.
-            if (titulo && !COARSE_MQ.matches && DESKTOP_MQ.matches) {
+            if (titulo && !COARSE_MQ.matches && DESKTOP_MQ.matches && !abrindoAuto) {
                 titulo.focus({ preventScroll: true });
             }
-            if (DESKTOP_MQ.matches && panel) {
+            if (DESKTOP_MQ.matches && panel && !abrindoAuto) {
                 var rect = panel.getBoundingClientRect();
                 if (rect.top < 0) {
                     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1865,6 +1868,15 @@
         }
 
         refreshHome();
+
+        // Atributo abrir="email": o formulário do canal já vem aberto. Só no desktop (no mobile a tela
+        // ocupa a viewport e trava a rolagem) e só se o canal ainda não foi feito ou dispensado.
+        if (config.abrir_canal && canaisPorId[config.abrir_canal] && DESKTOP_MQ.matches && !canalState(config.abrir_canal)) {
+            abrindoAuto = true;
+            abrirCanal(config.abrir_canal);
+            abrindoAuto = false;
+        }
+
         root.classList.add('is-ready');
     }
 

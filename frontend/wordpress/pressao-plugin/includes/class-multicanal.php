@@ -120,6 +120,7 @@ class PressaoPlugin_Multicanal {
             'subtitle' => __('Marque quem ainda não se comprometeu e ajude a fortalecer o movimento.', 'pressao-plugin'),
             'progresso' => '1',
             'countdown' => 3,
+            'abrir' => '',
             'tempo_instagram' => '2 min',
             'tempo_tiktok' => '2 min',
             'tempo_email' => '1 min',
@@ -134,6 +135,7 @@ class PressaoPlugin_Multicanal {
         $progresso = strtolower(trim((string) $atts['progresso']));
         $telefone_selecao = strtolower(trim((string) $atts['telefone_selecao']));
         $telefone_email = strtolower(trim((string) $atts['telefone_email']));
+        $abrir = strtolower(trim((string) $atts['abrir']));
 
         return [
             'campanha_id' => sanitize_text_field($atts['campaign']),
@@ -153,6 +155,7 @@ class PressaoPlugin_Multicanal {
             'subtitle' => sanitize_textarea_field($atts['subtitle']),
             'progresso' => !in_array($progresso, ['0', 'no', 'nao', 'não', 'false', 'off'], true),
             'countdown' => max(0, intval($atts['countdown'])),
+            'abrir' => in_array($abrir, self::CANAIS, true) ? $abrir : '',
             'tempos' => [
                 'instagram' => sanitize_text_field($atts['tempo_instagram']),
                 'tiktok' => sanitize_text_field($atts['tempo_tiktok']),
@@ -300,6 +303,7 @@ class PressaoPlugin_Multicanal {
             'acoes_confirmadas' => $acoes_count,
             'progresso' => $o['progresso'],
             'countdown' => $o['countdown'],
+            'abrir_canal' => $o['abrir'],
             'redes' => $o['redes'],
             'share' => $share,
             'privacidade_url' => PressaoPlugin_Render_Helpers::privacidade_url(),
