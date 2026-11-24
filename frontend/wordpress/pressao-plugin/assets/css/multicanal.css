@@ -646,6 +646,23 @@ html.pressao-mc-lock body {
   to { transform: translateX(100%); }
 }
 
+/* Temas costumam ter `header { position: fixed; top: 0; left: 0; z-index; width: 100%; float }` sem escopo,
+   pensado para o header do site. O widget usa <header> nos seus cabeçalhos internos (nav da tela, modais,
+   lead, compartilhar); sem isto o tema os arranca para o topo da viewport, atrás do menu do site, e o
+   título ("Email", "Instagram"...) some. Seletor por classe (não por ancestral) porque os modais podem
+   ser movidos para fora de `.pressao-mc`. Mesmo padrão do fluxo.css. */
+.pressao-mc-nav,
+.pressao-mc-modal-header,
+.pressao-mc-lead-header,
+.pressao-mc-share-header {
+  position: static;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  width: auto;
+  float: none;
+}
+
 .pressao-mc-nav {
   display: grid;
   grid-template-columns: 32px 1fr 32px;
@@ -1984,9 +2001,21 @@ html.pressao-mc-lock body {
     display: none;
   }
 
+  /* Com a tela do canal aberta, ela entra no fluxo e o card cresce até caber todo o formulário
+     (antes ficava sobreposta numa altura fixa de 610px e o botão de enviar ficava atrás de rolagem). */
+  .pressao-mc.is-screen-open .pressao-mc-panel {
+    padding: 0;
+  }
+
+  .pressao-mc.is-screen-open .pressao-mc-home {
+    display: none;
+  }
+
   .pressao-mc-screen {
-    position: absolute;
-    inset: 0;
+    position: relative;
+    inset: auto;
+    flex: 1;
+    width: 100%;
     z-index: 2;
     padding: 48px 64px 32px;
   }
