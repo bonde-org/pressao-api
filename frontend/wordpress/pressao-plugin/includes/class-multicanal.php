@@ -361,11 +361,11 @@ class PressaoPlugin_Multicanal {
             . '<span class="pressao-acoes-count" data-count="' . esc_attr($view['acoes_count']) . '">'
             . esc_html(number_format_i18n($view['acoes_count']))
             . '</span></span>';
+        $total_alvos = (int) $view['total_candidatos'];
         $alvos_texto = sprintf(
-            /* translators: 1: total, 2: palavra para os alvos (ex.: candidatos) */
-            __('+%1$d %2$s', 'pressao-plugin'),
-            $view['total_candidatos'],
-            $o['alvos']
+            /* translators: %d: total de alvos */
+            _n('%d alvo', '%d alvos', $total_alvos, 'pressao-plugin'),
+            $total_alvos
         );
 
         // Marca o widget que abre um canal direto: o CSS esconde os cards até o JS abrir o formulário,
@@ -416,8 +416,8 @@ class PressaoPlugin_Multicanal {
                                         <span class="pressao-mc-mobile-only"><?php esc_html_e('Ver', 'pressao-plugin'); ?> </span><?php echo esc_html($alvos_texto); ?>
                                         <span class="pressao-mc-ico pressao-mc-ico--seta-diagonal" aria-hidden="true"></span>
                                     </strong>
-                                    <span class="pressao-mc-mobile-only"><?php esc_html_e('que serão pressionados', 'pressao-plugin'); ?></span>
-                                    <span class="pressao-mc-desktop-only"><?php esc_html_e('serão pressionados', 'pressao-plugin'); ?></span>
+                                    <span class="pressao-mc-mobile-only"><?php echo esc_html(_n('que será pressionado', 'que serão pressionados', $total_alvos, 'pressao-plugin')); ?></span>
+                                    <span class="pressao-mc-desktop-only"><?php echo esc_html(_n('será pressionado', 'serão pressionados', $total_alvos, 'pressao-plugin')); ?></span>
                                 </span>
                             </button>
                         <?php endif; ?>
