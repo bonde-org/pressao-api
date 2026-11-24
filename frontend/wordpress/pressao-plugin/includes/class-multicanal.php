@@ -368,12 +368,25 @@ class PressaoPlugin_Multicanal {
             $o['alvos']
         );
 
+        // Marca o widget que abre um canal direto: o CSS esconde os cards até o JS abrir o formulário,
+        // evitando o "pisca" (cards de canal → formulário). Só vale se o canal existe no widget.
+        $abrir_attr = '';
+        if (($config['abrir_canal'] ?? '') !== '') {
+            foreach ($config['canais'] as $canal_cfg) {
+                if (($canal_cfg['canal'] ?? '') === $config['abrir_canal']) {
+                    $abrir_attr = 'data-mc-abrir="' . esc_attr($config['abrir_canal']) . '"';
+                    break;
+                }
+            }
+        }
+
         ob_start();
         ?>
         <div id="<?php echo esc_attr($o['id']); ?>"
              class="pressao-mc <?php echo esc_attr($o['class']); ?>"
              data-campaign="<?php echo $campaign_attr; ?>"
              data-nonce="<?php echo esc_attr($view['nonce']); ?>"
+             <?php echo $abrir_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
              data-pressao-mc="<?php echo esc_attr(wp_json_encode($config)); ?>">
             <div class="pressao-mc-card">
                 <section class="pressao-mc-hero">

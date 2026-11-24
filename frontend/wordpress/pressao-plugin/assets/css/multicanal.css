@@ -663,6 +663,37 @@ html.pressao-mc-lock body {
   float: none;
 }
 
+/* Widget com `abrir`: o JS abre o formulário na carga. Até lá (antes de `.is-ready`) o painel dos cards
+   fica invisível para não "piscar" a escolha de canal antes do formulário. Se o JS falhar, a animação
+   revela os cards após 3s. */
+.pressao-mc[data-mc-abrir]:not(.is-ready) .pressao-mc-home,
+.pressao-mc[data-mc-abrir]:not(.is-ready) .pressao-mc-panel > .pressao-mc-progress {
+  visibility: hidden;
+  animation: pressao-mc-revelar 0s linear 3s forwards;
+}
+
+@keyframes pressao-mc-revelar {
+  to { visibility: visible; }
+}
+
+/* Mobile, canal único aberto direto (`abrir`): o formulário fica dentro do card, no lugar dos cards,
+   em vez da tela cheia (fixed) que trava a rolagem. */
+@media (max-width: 767px) {
+  .pressao-mc.is-screen-inline .pressao-mc-home,
+  .pressao-mc.is-screen-inline .pressao-mc-panel > .pressao-mc-progress {
+    display: none;
+  }
+
+  .pressao-mc.is-screen-inline .pressao-mc-screen {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    overflow: visible;
+    background: transparent;
+    padding: 0 0 24px;
+  }
+}
+
 /* O mesmo tema costuma ter `header + * { margin-top: <altura do header do site> }` para compensar o menu
    fixo; ela cai no elemento logo depois do <header> do widget (ex.: `.pressao-mc-screen-body`) e abre um
    vão enorme. Fica antes das regras de margem do próprio plugin, que continuam vencendo por ordem. */
