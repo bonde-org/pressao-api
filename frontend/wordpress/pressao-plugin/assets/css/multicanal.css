@@ -646,6 +646,64 @@ html.pressao-mc-lock body {
   to { transform: translateX(100%); }
 }
 
+/* Temas costumam ter `header { position: fixed; top: 0; left: 0; z-index; width: 100%; float }` sem escopo,
+   pensado para o header do site. O widget usa <header> nos seus cabeçalhos internos (nav da tela, modais,
+   lead, compartilhar); sem isto o tema os arranca para o topo da viewport, atrás do menu do site, e o
+   título ("Email", "Instagram"...) some. Seletor por classe (não por ancestral) porque os modais podem
+   ser movidos para fora de `.pressao-mc`. Mesmo padrão do fluxo.css. */
+.pressao-mc-nav,
+.pressao-mc-modal-header,
+.pressao-mc-lead-header,
+.pressao-mc-share-header {
+  position: static;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  width: auto;
+  float: none;
+}
+
+/* Widget com `abrir`: o JS abre o formulário na carga. Até lá (antes de `.is-ready`) o painel dos cards
+   fica invisível para não "piscar" a escolha de canal antes do formulário. Se o JS falhar, a animação
+   revela os cards após 3s. */
+.pressao-mc[data-mc-abrir]:not(.is-ready) .pressao-mc-home,
+.pressao-mc[data-mc-abrir]:not(.is-ready) .pressao-mc-panel > .pressao-mc-progress {
+  visibility: hidden;
+  animation: pressao-mc-revelar 0s linear 3s forwards;
+}
+
+@keyframes pressao-mc-revelar {
+  to { visibility: visible; }
+}
+
+/* Mobile, canal único aberto direto (`abrir`): o formulário fica dentro do card, no lugar dos cards,
+   em vez da tela cheia (fixed) que trava a rolagem. */
+@media (max-width: 767px) {
+  .pressao-mc.is-screen-inline .pressao-mc-home,
+  .pressao-mc.is-screen-inline .pressao-mc-panel > .pressao-mc-progress {
+    display: none;
+  }
+
+  .pressao-mc.is-screen-inline .pressao-mc-screen {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    overflow: visible;
+    background: transparent;
+    padding: 0 0 24px;
+  }
+}
+
+/* O mesmo tema costuma ter `header + * { margin-top: <altura do header do site> }` para compensar o menu
+   fixo; ela cai no elemento logo depois do <header> do widget (ex.: `.pressao-mc-screen-body`) e abre um
+   vão enorme. Fica antes das regras de margem do próprio plugin, que continuam vencendo por ordem. */
+.pressao-mc-nav + *,
+.pressao-mc-modal-header + *,
+.pressao-mc-lead-header + *,
+.pressao-mc-share-header + * {
+  margin-top: 0;
+}
+
 .pressao-mc-nav {
   display: grid;
   grid-template-columns: 32px 1fr 32px;
@@ -1984,9 +2042,21 @@ html.pressao-mc-lock body {
     display: none;
   }
 
+  /* Com a tela do canal aberta, ela entra no fluxo e o card cresce até caber todo o formulário
+     (antes ficava sobreposta numa altura fixa de 610px e o botão de enviar ficava atrás de rolagem). */
+  .pressao-mc.is-screen-open .pressao-mc-panel {
+    padding: 0;
+  }
+
+  .pressao-mc.is-screen-open .pressao-mc-home {
+    display: none;
+  }
+
   .pressao-mc-screen {
-    position: absolute;
-    inset: 0;
+    position: relative;
+    inset: auto;
+    flex: 1;
+    width: 100%;
     z-index: 2;
     padding: 48px 64px 32px;
   }

@@ -407,7 +407,7 @@
         // ---------------- Bloqueio de rolagem ----------------
 
         function syncScrollLock() {
-            var lock = modalStack.length > 0 || (screenCanal !== null && !DESKTOP_MQ.matches);
+            var lock = modalStack.length > 0 || (screenCanal !== null && !DESKTOP_MQ.matches && !root.classList.contains('is-screen-inline'));
             document.documentElement.classList.toggle('pressao-mc-lock', lock);
         }
 
@@ -490,17 +490,22 @@
 
         // ---------------- Telas (painel direito / drawer) ----------------
 
+        /** true só durante a abertura automática (atributo abrir): não rouba foco nem rola a página. */
+        var abrindoAuto = false;
+
         function openScreen(html, canal, onMount) {
             var jaAberta = screenCanal !== null;
             if (!jaAberta) {
                 focoAoFecharTela = document.activeElement;
             }
             screenCanal = canal || '';
+            // Canal único aberto direto (abrir): no mobile o formulário fica dentro do card, sem tela cheia nem trava de rolagem.
+            root.classList.toggle('is-screen-inline', telaSemVoltar && screenCanal === config.abrir_canal);
             screen.innerHTML = html;
             screen.hidden = false;
             screen.classList.remove('is-leaving');
             root.classList.add('is-screen-open');
-            if (!jaAberta) {
+            if (!jaAberta && !abrindoAuto) {
                 screen.classList.add('is-entering');
                 setTimeout(function () {
                     screen.classList.remove('is-entering');
@@ -512,10 +517,10 @@
             }
             var titulo = screen.querySelector('[data-mc-screen-title]');
             // No mobile/touch, focus() marca o título como selecionado.
-            if (titulo && !COARSE_MQ.matches && DESKTOP_MQ.matches) {
+            if (titulo && !COARSE_MQ.matches && DESKTOP_MQ.matches && !abrindoAuto) {
                 titulo.focus({ preventScroll: true });
             }
-            if (DESKTOP_MQ.matches && panel) {
+            if (DESKTOP_MQ.matches && panel && !abrindoAuto) {
                 var rect = panel.getBoundingClientRect();
                 if (rect.top < 0) {
                     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -529,6 +534,7 @@
                 return;
             }
             screenCanal = null;
+            root.classList.remove('is-screen-inline');
             if (typeof aoFecharTela === 'function') {
                 var fn = aoFecharTela;
                 aoFecharTela = null;
@@ -551,10 +557,16 @@
             }
         }
 
+        /** true quando a tela do único canal foi aberta direto (atributo abrir): não há para onde voltar. */
+        var telaSemVoltar = false;
+
         function navHtml(canal, titulo) {
+            var semVoltar = telaSemVoltar && canal === config.abrir_canal;
             return (
                 '<header class="pressao-mc-nav">' +
-                '<button type="button" class="pressao-mc-icon-btn pressao-mc-back" data-mc-back aria-label="Voltar">' + ico('seta-voltar') + '</button>' +
+                (semVoltar
+                    ? ''
+                    : '<button type="button" class="pressao-mc-icon-btn pressao-mc-back" data-mc-back aria-label="Voltar">' + ico('seta-voltar') + '</button>') +
                 '<h3 class="pressao-mc-nav-title" tabindex="-1" data-mc-screen-title>' +
                 (canal ? ico(canal) : '') + '<span>' + esc(titulo) + '</span></h3>' +
                 '<button type="button" class="pressao-mc-help-btn pressao-mc-help-btn--nav" data-mc-open-modal="ajuda" aria-label="Como funciona?">' +
@@ -1830,7 +1842,7 @@
                     }
                     return;
                 }
-                if (screenCanal !== null) {
+                if (screenCanal !== null && !(telaSemVoltar && screenCanal === config.abrir_canal)) {
                     e.preventDefault();
                     closeScreen();
                 }
@@ -1865,6 +1877,17 @@
         }
 
         refreshHome();
+
+        // Atributo abrir="email": o formulário do canal já vem aberto, se o canal ainda não foi feito ou dispensado.
+        // No desktop vale para qualquer widget; no mobile só com um único canal, em que o formulário fica dentro
+        // do card (inline). Com vários canais no mobile a tela cheia trava a rolagem, então segue pelos cards.
+        if (config.abrir_canal && canaisPorId[config.abrir_canal] && (DESKTOP_MQ.matches || canais.length === 1) && !canalState(config.abrir_canal)) {
+            abrindoAuto = true;
+            telaSemVoltar = canais.length === 1;
+            abrirCanal(config.abrir_canal);
+            abrindoAuto = false;
+        }
+
         root.classList.add('is-ready');
     }
 
