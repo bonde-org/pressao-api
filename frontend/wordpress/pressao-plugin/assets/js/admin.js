@@ -701,6 +701,45 @@
         $root.on('change', '[data-field="conf-ativo"], [data-field="an-ativo"]', syncCampos);
         syncCampos();
 
+        $root.on('click', '[data-action="salvar-pos-acao-imagens"]', function () {
+            const $btn = $(this);
+            const $card = $btn.closest('.pressao-pos-acao-imagens');
+            const $status = $card.find('.pressao-pos-acao-imagens-status');
+            const imagens = {};
+            $card.find('.pressao-share-imagem-admin-item').each(function (i) {
+                imagens[i] = {
+                    rotulo: $(this).find('input[type="text"]').val() || '',
+                    imagem_id: $(this).find('.pressao-share-imagem-id').val() || ''
+                };
+            });
+            const campo = function (nome) {
+                return $card.find('[name="pressao_compartilhamento[' + nome + ']"]').val() || '';
+            };
+            $status.text(L.saving || 'Salvando…').removeClass('is-error');
+            $btn.prop('disabled', true);
+            $.post(ajaxUrl(), {
+                action: 'pressao_admin_salvar_pos_acao_imagens',
+                nonce: $root.attr('data-nonce') || '',
+                imagens_titulo: campo('imagens_titulo'),
+                imagens_subtitulo: campo('imagens_subtitulo'),
+                imagens_instrucao: campo('imagens_instrucao'),
+                imagens: imagens
+            })
+                .done(function (resp) {
+                    if (!resp || !resp.success) {
+                        $status.text(msg(resp, null, L.redesSaveError)).addClass('is-error');
+                        return;
+                    }
+                    $status.text(L.saved || 'Salvo.').removeClass('is-error');
+                })
+                .fail(function (xhr) {
+                    $status.text(msg(null, xhr, L.redesSaveError)).addClass('is-error');
+                })
+                .always(function () {
+                    $btn.prop('disabled', false);
+                });
+        });
+
         $root.on('click', '[data-action="salvar-pos-acao"]', function () {
             const $btn = $(this);
             const $status = $root.find('.pressao-pos-acao-status');
