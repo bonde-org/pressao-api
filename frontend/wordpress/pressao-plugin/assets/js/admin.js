@@ -701,6 +701,13 @@
         $root.on('change', '[data-field="conf-ativo"], [data-field="an-ativo"]', syncCampos);
         syncCampos();
 
+        function syncImagens() {
+            const ativo = $root.find('.pressao-imagens-ativo').is(':checked');
+            $root.find('.pressao-imagens-campos').toggle(ativo);
+        }
+        $root.on('change', '.pressao-imagens-ativo', syncImagens);
+        syncImagens();
+
         $root.on('click', '[data-action="salvar-pos-acao-imagens"]', function () {
             const $btn = $(this);
             const $card = $btn.closest('.pressao-pos-acao-imagens');
@@ -720,6 +727,7 @@
             $.post(ajaxUrl(), {
                 action: 'pressao_admin_salvar_pos_acao_imagens',
                 nonce: $root.attr('data-nonce') || '',
+                imagens_ativo: $card.find('.pressao-imagens-ativo').is(':checked') ? 1 : 0,
                 imagens_titulo: campo('imagens_titulo'),
                 imagens_subtitulo: campo('imagens_subtitulo'),
                 imagens_instrucao: campo('imagens_instrucao'),

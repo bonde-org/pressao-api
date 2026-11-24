@@ -160,8 +160,10 @@ class PressaoPlugin_Render_Helpers {
         $instagram_url = isset($config['instagram_url']) ? trim((string) $config['instagram_url']) : '';
         $facebook_url = isset($config['facebook_url']) ? trim((string) $config['facebook_url']) : '';
 
+        // `imagens_ativo` ausente = ligado (compatível com configurações antigas).
+        $imagens_ativo = !array_key_exists('imagens_ativo', $config) || !empty($config['imagens_ativo']);
         $imagens = [];
-        if (!empty($config['imagens']) && is_array($config['imagens'])) {
+        if ($imagens_ativo && !empty($config['imagens']) && is_array($config['imagens'])) {
             foreach ($config['imagens'] as $imagem) {
                 if (!is_array($imagem)) {
                     continue;
