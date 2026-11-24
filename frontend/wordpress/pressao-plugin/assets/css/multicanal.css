@@ -663,6 +663,16 @@ html.pressao-mc-lock body {
   float: none;
 }
 
+/* O mesmo tema costuma ter `header + * { margin-top: <altura do header do site> }` para compensar o menu
+   fixo; ela cai no elemento logo depois do <header> do widget (ex.: `.pressao-mc-screen-body`) e abre um
+   vão enorme. Fica antes das regras de margem do próprio plugin, que continuam vencendo por ordem. */
+.pressao-mc-nav + *,
+.pressao-mc-modal-header + *,
+.pressao-mc-lead-header + *,
+.pressao-mc-share-header + * {
+  margin-top: 0;
+}
+
 .pressao-mc-nav {
   display: grid;
   grid-template-columns: 32px 1fr 32px;
