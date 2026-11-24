@@ -1,8 +1,13 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import UUID4, BaseModel, Field, field_validator
 
-from pressao_api.utils.validadores import normalizar_telefone_e164, telefone_toll_free_br
+from pressao_api.utils.validadores import (
+    normalizar_telefone_e164,
+    telefone_toll_free_br,
+    validar_email,
+)
 
 
 def _validar_telefone_origem(v: str | None) -> str | None:
@@ -12,6 +17,54 @@ def _validar_telefone_origem(v: str | None) -> str | None:
     if telefone_toll_free_br(telefone):
         raise ValueError("Número 0800 não pode originar ligações; use um número local do Twilio")
     return telefone
+
+
+class ActionNetworkConfig(BaseModel):
+    """Contato criado/atualizado no Action Network quando o ativista age na campanha."""
+
+    tags: list[str] = Field(..., min_length=1, description="Tags aplicadas ao contato")
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: list[str]) -> list[str]:
+        tags = [t.strip() for t in v if t and t.strip()]
+        if not tags:
+            raise ValueError("Informe ao menos uma tag")
+        if any(len(t) > 100 for t in tags):
+            raise ValueError("Cada tag deve ter no máximo 100 caracteres")
+        return list(dict.fromkeys(tags))
+
+
+class ConfirmacaoEmailConfig(BaseModel):
+    """E-mail de confirmação enviado ao ativista após a primeira ação na campanha."""
+
+    remetente_nome: str = Field(..., min_length=1, max_length=100)
+    remetente_email: str = Field(..., max_length=200)
+    assunto: str = Field(..., min_length=1, max_length=200)
+    texto: str = Field(
+        ...,
+        min_length=1,
+        max_length=10000,
+        description="Texto puro; parágrafos separados por linha em branco. {nome} = 1º nome",
+    )
+
+    @field_validator("remetente_email")
+    @classmethod
+    def validate_remetente_email(cls, v: str) -> str:
+        v = v.strip()
+        if not validar_email(v):
+            raise ValueError("E-mail do remetente inválido")
+        return v
+
+
+class PosAcaoConfig(BaseModel):
+    """O que acontece depois que o ativista conclui uma ação na campanha."""
+
+    canais: list[Literal["email", "telefone", "instagram", "tiktok", "whatsapp"]] = Field(
+        default=["email"], description="Canais cuja ação dispara o pós-ação"
+    )
+    actionnetwork: ActionNetworkConfig | None = None
+    confirmacao_email: ConfirmacaoEmailConfig | None = None
 
 
 class CampanhaBase(BaseModel):
@@ -28,6 +81,9 @@ class CampanhaBase(BaseModel):
             "Número Twilio (E.164) da campanha: liga para o ativista e aparece para o alvo "
             "no canal telefone"
         ),
+    )
+    pos_acao: PosAcaoConfig | None = Field(
+        None, description="Action Network e e-mail de confirmação do ativista"
     )
 
     @field_validator("dominios_permitidos", mode="before")
@@ -54,6 +110,7 @@ class CampanhaUpdate(BaseModel):
     dominios_permitidos: list[str] | None = None
     ativa: bool | None = None
     telefone_origem: str | None = Field(None, max_length=20)
+    pos_acao: PosAcaoConfig | None = None
 
     @field_validator("dominios_permitidos", mode="before")
     @classmethod

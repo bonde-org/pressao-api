@@ -289,6 +289,8 @@ make docker-down
 | `SENDGRID_SANDBOX_MODE` | Se `true`, não entrega e-mails reais | `true` |
 | `SENDGRID_WEBHOOK_VERIFICATION_KEY` | Chave pública ECDSA do Event Webhook | `MFkwEwYH...` |
 | `SENDGRID_WEBHOOK_URL` | URL pública do webhook | `https://seu-dominio/api/v1/webhooks/sendgrid` |
+| `ACTIONNETWORK_API_KEY` | Chave da API do Action Network (pós-ação). Vazio desliga a integração | `xxxxxxxx` |
+| `ACTIONNETWORK_API_URL` | Base da API (padrão `https://actionnetwork.org/api/v2`) | |
 | `TWILIO_ACCOUNT_SID` | SID da conta Twilio (`AC...`, não o da API Key) | `ACxxxxx` |
 | `TWILIO_AUTH_TOKEN` | Auth Token da conta; valida `X-Twilio-Signature` (e autentica a API se não houver API Key) | `xxxxx` |
 | `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` | API Key Standard usada nas chamadas à API do Twilio | `SKxxxxx` / `xxxxx` |
@@ -1137,3 +1139,34 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](./LI
 ----
 
 Feito com ❤️ para ativistas e causas sociais
+
+## Pós-ação da campanha (e-mail de confirmação + Action Network)
+
+Depois que o ativista conclui uma ação, a API pode (a) enviar um e-mail de confirmação e (b) criar/atualizar
+o contato no Action Network com tags. A configuração fica **na campanha** (coluna `campanhas.pos_acao`,
+JSON), editável por `PUT /api/v1/campanhas/{id}` ou pela aba **Pós-ação** do plugin WordPress:
+
+```json
+{
+  "pos_acao": {
+    "canais": ["email"],
+    "confirmacao_email": {
+      "remetente_nome": "Annie do BONDE",
+      "remetente_email": "mobilizacao@bonde.org",
+      "assunto": "Tarifa Zero já - vamos chegar mais longe!",
+      "texto": "Valeu, {nome}!\n\nAcesse www.tarifazero.bonde.org e compartilhe."
+    },
+    "actionnetwork": { "tags": ["tarifazero"] }
+  }
+}
+```
+
+- Roda em background depois da resposta: falha do SendGrid ou do Action Network não afeta a ação do ativista.
+- O e-mail vai só na **primeira** ação concluída da pessoa na campanha (comparação por e-mail, sem diferenciar
+  maiúsculas). O Action Network é chamado a cada ação (idempotente: atualiza o mesmo contato e reaplica a tag).
+- Ações anônimas ou sem e-mail válido são ignoradas.
+- O e-mail não leva `acao_id`/`disparo_id` nos custom args do SendGrid, para que eventos do webhook (bounce) não
+  alterem o estado da ação. O remetente precisa estar autenticado no SendGrid.
+- Action Network: `POST /people/` (Person Signup Helper) com `add_tags`. O status de inscrição do e-mail **não é
+  enviado**: pessoa nova entra inscrita e quem já existe mantém o status (nunca reinscrevemos quem saiu).
+- `ACTIONNETWORK_API_KEY` é um segredo do servidor (Secret do Kubernetes); nunca vai para o navegador nem para o WordPress.

@@ -120,6 +120,7 @@ class PressaoPlugin_Multicanal {
             'subtitle' => __('Marque quem ainda não se comprometeu e ajude a fortalecer o movimento.', 'pressao-plugin'),
             'progresso' => '1',
             'countdown' => 3,
+            'abrir' => '',
             'tempo_instagram' => '2 min',
             'tempo_tiktok' => '2 min',
             'tempo_email' => '1 min',
@@ -134,6 +135,7 @@ class PressaoPlugin_Multicanal {
         $progresso = strtolower(trim((string) $atts['progresso']));
         $telefone_selecao = strtolower(trim((string) $atts['telefone_selecao']));
         $telefone_email = strtolower(trim((string) $atts['telefone_email']));
+        $abrir = strtolower(trim((string) $atts['abrir']));
 
         return [
             'campanha_id' => sanitize_text_field($atts['campaign']),
@@ -153,6 +155,7 @@ class PressaoPlugin_Multicanal {
             'subtitle' => sanitize_textarea_field($atts['subtitle']),
             'progresso' => !in_array($progresso, ['0', 'no', 'nao', 'não', 'false', 'off'], true),
             'countdown' => max(0, intval($atts['countdown'])),
+            'abrir' => in_array($abrir, self::CANAIS, true) ? $abrir : '',
             'tempos' => [
                 'instagram' => sanitize_text_field($atts['tempo_instagram']),
                 'tiktok' => sanitize_text_field($atts['tempo_tiktok']),
@@ -300,6 +303,7 @@ class PressaoPlugin_Multicanal {
             'acoes_confirmadas' => $acoes_count,
             'progresso' => $o['progresso'],
             'countdown' => $o['countdown'],
+            'abrir_canal' => $o['abrir'],
             'redes' => $o['redes'],
             'share' => $share,
             'privacidade_url' => PressaoPlugin_Render_Helpers::privacidade_url(),
@@ -357,12 +361,24 @@ class PressaoPlugin_Multicanal {
             . '<span class="pressao-acoes-count" data-count="' . esc_attr($view['acoes_count']) . '">'
             . esc_html(number_format_i18n($view['acoes_count']))
             . '</span></span>';
+        $total_alvos = (int) $view['total_candidatos'];
         $alvos_texto = sprintf(
-            /* translators: 1: total, 2: palavra para os alvos (ex.: candidatos) */
-            __('+%1$d %2$s', 'pressao-plugin'),
-            $view['total_candidatos'],
-            $o['alvos']
+            /* translators: %d: total de alvos */
+            _n('%d alvo', '%d alvos', $total_alvos, 'pressao-plugin'),
+            $total_alvos
         );
+
+        // Marca o widget que abre um canal direto: o CSS esconde os cards até o JS abrir o formulário,
+        // evitando o "pisca" (cards de canal → formulário). Só vale se o canal existe no widget.
+        $abrir_attr = '';
+        if (($config['abrir_canal'] ?? '') !== '') {
+            foreach ($config['canais'] as $canal_cfg) {
+                if (($canal_cfg['canal'] ?? '') === $config['abrir_canal']) {
+                    $abrir_attr = 'data-mc-abrir="' . esc_attr($config['abrir_canal']) . '"';
+                    break;
+                }
+            }
+        }
 
         ob_start();
         ?>
@@ -370,6 +386,7 @@ class PressaoPlugin_Multicanal {
              class="pressao-mc <?php echo esc_attr($o['class']); ?>"
              data-campaign="<?php echo $campaign_attr; ?>"
              data-nonce="<?php echo esc_attr($view['nonce']); ?>"
+             <?php echo $abrir_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
              data-pressao-mc="<?php echo esc_attr(wp_json_encode($config)); ?>">
             <div class="pressao-mc-card">
                 <section class="pressao-mc-hero">
@@ -399,8 +416,8 @@ class PressaoPlugin_Multicanal {
                                         <span class="pressao-mc-mobile-only"><?php esc_html_e('Ver', 'pressao-plugin'); ?> </span><?php echo esc_html($alvos_texto); ?>
                                         <span class="pressao-mc-ico pressao-mc-ico--seta-diagonal" aria-hidden="true"></span>
                                     </strong>
-                                    <span class="pressao-mc-mobile-only"><?php esc_html_e('que serão pressionados', 'pressao-plugin'); ?></span>
-                                    <span class="pressao-mc-desktop-only"><?php esc_html_e('serão pressionados', 'pressao-plugin'); ?></span>
+                                    <span class="pressao-mc-mobile-only"><?php echo esc_html(_n('que será pressionado', 'que serão pressionados', $total_alvos, 'pressao-plugin')); ?></span>
+                                    <span class="pressao-mc-desktop-only"><?php echo esc_html(_n('será pressionado', 'serão pressionados', $total_alvos, 'pressao-plugin')); ?></span>
                                 </span>
                             </button>
                         <?php endif; ?>

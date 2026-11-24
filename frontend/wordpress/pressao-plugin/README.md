@@ -345,6 +345,14 @@ Não cria ação na API. Ao copiar o link ou abrir WhatsApp/Instagram/Messenger,
 - Prefetch dos blobs ao abrir a tela; clique na imagem ou em “Baixar todas as imagens”.
 - Download/share de imagem **não** marca `__compartilhar`.
 
+### Pós-ação (aba **Pós-ação**)
+
+Edita, direto no WordPress, o e-mail de confirmação enviado ao ativista e a integração com o Action Network
+(tags). Os dados são gravados **na campanha vinculada** (`PUT /api/v1/campanhas/{id}`, campo `pos_acao`), e não
+em opções do site: outra campanha, mesmo no mesmo WordPress, não herda nem sobrescreve esta configuração. A chave
+do Action Network fica só no servidor da API. Se a API não devolver `pos_acao` (versão antiga), o salvar avisa
+em vez de fingir sucesso. Requer `pressao-api` com o pós-ação.
+
 ### Debug
 
 Para ativar o debug, no `wp-config.php`:
@@ -446,6 +454,7 @@ admin estiver vazio; redes de `redes` **ocultas** quando sem URL configurada; im
 | `subtitle` | `Marque quem ainda não se comprometeu e ajude a fortalecer o movimento.` | Subtítulo |
 | `progresso` | `1` | `0` remove a barra "Etapas que você já fez" |
 | `countdown` | `3` | Segundos de "Abrindo em N..." antes de abrir o app; `0` abre após 1,5 s |
+| `abrir` | _(vazio)_ | Canal (`instagram`, `tiktok`, `email` ou `telefone`) cujo formulário já vem aberto ao carregar a página. Só no desktop (no mobile a tela ocupa a viewport e trava a rolagem) e só se o canal ainda não foi feito ou dispensado; não rouba o foco nem rola a página. Ex.: `[pressao_multicanal canais="email" abrir="email"]` |
 | `tempo_instagram` / `tempo_tiktok` / `tempo_email` / `tempo_telefone` | `2 min` / `2 min` / `1 min` / `5 min` | Tempo exibido nos cards |
 | `ajuda_titulo` / `ajuda` | `Como funciona?` / texto padrão | Modal `?`. Sem `ajuda`, usa o conteúdo de `pressao_fluxo_ajuda` se preenchido |
 | `redes` | `whatsapp,x,instagram` | Redes do compartilhar (aceita também `facebook`; rede sem link no admin é omitida) |

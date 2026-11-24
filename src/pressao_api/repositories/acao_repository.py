@@ -2,7 +2,7 @@ from typing import Any
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pressao_api.models.acao import Acao
@@ -40,6 +40,16 @@ class AcaoRepository:
         query = select(Acao).where(Acao.ativista_email == email)
         result = await self.session.execute(query)
         return result.scalars().all()
+
+    async def contar_concluidas_por_email(self, campanha_id: UUID, email: str) -> int:
+        """Ações CONCLUIDA do ativista (por e-mail, sem diferenciar maiúsculas) na campanha."""
+        query = select(func.count(Acao.id)).where(
+            Acao.campanha_id == campanha_id,
+            func.lower(Acao.ativista_email) == email.strip().lower(),
+            Acao.status == "CONCLUIDA",
+        )
+        result = await self.session.execute(query)
+        return int(result.scalar_one() or 0)
 
     async def salvar(self, acao: Acao) -> Acao:
         """Salva alterações na ação."""

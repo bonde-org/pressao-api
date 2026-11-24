@@ -15,6 +15,7 @@ class PressaoPlugin_Admin {
     const NONCE_CAMPANHA = 'pressao_admin_campanha';
     const NONCE_REDES = 'pressao_admin_redes';
     const NONCE_AGREGADOS = 'pressao_admin_agregados';
+    const NONCE_POS_ACAO = 'pressao_admin_pos_acao';
     const CONEXAO_FIELDS = [
         'pressao_keycloak_url',
         'pressao_realm',
@@ -37,6 +38,7 @@ class PressaoPlugin_Admin {
         add_action('wp_ajax_pressao_admin_salvar_membro', [$this, 'ajax_salvar_membro']);
         add_action('wp_ajax_pressao_admin_deletar_membro', [$this, 'ajax_deletar_membro']);
         add_action('wp_ajax_pressao_admin_salvar_telefone_selecao', [$this, 'ajax_salvar_telefone_selecao']);
+        add_action('wp_ajax_pressao_admin_salvar_pos_acao', [$this, 'ajax_salvar_pos_acao']);
     }
     
     public function add_admin_menu() {
@@ -123,6 +125,7 @@ class PressaoPlugin_Admin {
             'redes-sociais' => __('Redes Sociais', 'pressao-plugin'),
             'email' => __('E-mail', 'pressao-plugin'),
             'telefone' => __('Telefone', 'pressao-plugin'),
+            'pos-acao' => __('Pós-ação', 'pressao-plugin'),
             'compartilhamento' => __('Compartilhamento', 'pressao-plugin'),
             'documentacao' => __('Documentação', 'pressao-plugin'),
             'geral' => __('Geral', 'pressao-plugin'),
@@ -548,6 +551,8 @@ class PressaoPlugin_Admin {
                     <?php $this->render_agregado_tab($api, 'email'); ?>
                 <?php elseif ($current_tab === 'telefone') : ?>
                     <?php $this->render_agregado_tab($api, 'telefone'); ?>
+                <?php elseif ($current_tab === 'pos-acao') : ?>
+                    <?php $this->render_pos_acao_tab($api); ?>
                 <?php else : ?>
                     <form method="post" action="options.php">
                         <?php
@@ -1605,6 +1610,175 @@ class PressaoPlugin_Admin {
             wp_send_json_error(['message' => $ok->get_error_message()], 400);
         }
         wp_send_json_success(['id' => $id]);
+    }
+
+    /**
+     * Aba Pós-ação: e-mail de confirmação ao ativista e contato no Action Network.
+     * A configuração é gravada NA CAMPANHA vinculada (API), nunca em opção do site: outra campanha,
+     * mesmo no mesmo WordPress, não herda nem sobrescreve estes dados.
+     */
+    private function render_pos_acao_tab(PressaoPlugin_API $api) {
+        $campanha_id = (string) get_option('pressao_campaign_id', '');
+        $campanha = $campanha_id !== '' ? $api->get_campanha($campanha_id) : null;
+        $erro = is_wp_error($campanha) ? $campanha->get_error_message() : '';
+        $campanha = (!is_wp_error($campanha) && is_array($campanha)) ? $campanha : [];
+        $pos = isset($campanha['pos_acao']) && is_array($campanha['pos_acao']) ? $campanha['pos_acao'] : [];
+        $conf = isset($pos['confirmacao_email']) && is_array($pos['confirmacao_email']) ? $pos['confirmacao_email'] : [];
+        $an = isset($pos['actionnetwork']) && is_array($pos['actionnetwork']) ? $pos['actionnetwork'] : [];
+        $canais_sel = isset($pos['canais']) && is_array($pos['canais']) ? $pos['canais'] : ['email'];
+        $tags = isset($an['tags']) && is_array($an['tags']) ? implode(', ', $an['tags']) : '';
+        $canais = [
+            'email' => __('E-mail', 'pressao-plugin'),
+            'telefone' => __('Telefone', 'pressao-plugin'),
+            'instagram' => __('Instagram', 'pressao-plugin'),
+            'tiktok' => __('TikTok', 'pressao-plugin'),
+        ];
+        ?>
+        <div class="pressao-pos-acao"
+             data-nonce="<?php echo esc_attr(wp_create_nonce(self::NONCE_POS_ACAO)); ?>">
+            <h2><?php esc_html_e('Pós-ação', 'pressao-plugin'); ?></h2>
+            <p>
+                <?php
+                printf(
+                    /* translators: %s: nome da campanha */
+                    esc_html__('O que acontece depois que alguém age na campanha "%s". Estas configurações ficam salvas nesta campanha e não valem para outras.', 'pressao-plugin'),
+                    esc_html($campanha['nome'] ?? '')
+                );
+                ?>
+            </p>
+            <?php if ($erro !== '') : ?>
+                <div class="notice notice-error inline"><p><?php echo esc_html($erro); ?></p></div>
+            <?php endif; ?>
+
+            <div class="pressao-agregado-editor pressao-pos-acao-card">
+                <h3><?php esc_html_e('Quando disparar', 'pressao-plugin'); ?></h3>
+                <p>
+                    <?php foreach ($canais as $valor => $rotulo) : ?>
+                        <label class="pressao-pos-acao-inline">
+                            <input type="checkbox" data-field="canal" value="<?php echo esc_attr($valor); ?>"
+                                   <?php checked(in_array($valor, $canais_sel, true)); ?> />
+                            <?php echo esc_html($rotulo); ?>
+                        </label>
+                    <?php endforeach; ?>
+                </p>
+                <p class="description"><?php esc_html_e('Ações feitas por estes canais disparam o pós-ação. Só vale para quem informou o e-mail; ações anônimas são ignoradas.', 'pressao-plugin'); ?></p>
+            </div>
+
+            <div class="pressao-agregado-editor pressao-pos-acao-card">
+                <h3><?php esc_html_e('E-mail de confirmação', 'pressao-plugin'); ?></h3>
+                <p>
+                    <label class="pressao-pos-acao-inline">
+                        <input type="checkbox" data-field="conf-ativo" <?php checked(!empty($conf)); ?> />
+                        <?php esc_html_e('Enviar e-mail de confirmação ao ativista', 'pressao-plugin'); ?>
+                    </label>
+                </p>
+                <div data-pos-acao-campos="conf">
+                    <p class="description"><?php esc_html_e('Enviado uma vez por pessoa, na primeira ação dela nesta campanha. O endereço do remetente precisa estar autenticado no SendGrid.', 'pressao-plugin'); ?></p>
+                    <p>
+                        <label><?php esc_html_e('Nome do remetente', 'pressao-plugin'); ?></label>
+                        <input type="text" class="regular-text" data-field="conf-nome" maxlength="100"
+                               value="<?php echo esc_attr($conf['remetente_nome'] ?? ''); ?>" />
+                    </p>
+                    <p>
+                        <label><?php esc_html_e('E-mail do remetente', 'pressao-plugin'); ?></label>
+                        <input type="email" class="regular-text" data-field="conf-email" maxlength="200"
+                               value="<?php echo esc_attr($conf['remetente_email'] ?? ''); ?>" />
+                    </p>
+                    <p>
+                        <label><?php esc_html_e('Assunto', 'pressao-plugin'); ?></label>
+                        <input type="text" class="large-text" data-field="conf-assunto" maxlength="200"
+                               value="<?php echo esc_attr($conf['assunto'] ?? ''); ?>" />
+                    </p>
+                    <p>
+                        <label><?php esc_html_e('Texto do e-mail', 'pressao-plugin'); ?></label>
+                        <textarea class="large-text" rows="14" data-field="conf-texto" maxlength="10000"><?php echo esc_textarea($conf['texto'] ?? ''); ?></textarea>
+                        <span class="description"><?php esc_html_e('Texto puro. Separe os parágrafos com uma linha em branco; endereços (https:// ou www.) viram links; {nome} é trocado pelo primeiro nome da pessoa.', 'pressao-plugin'); ?></span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="pressao-agregado-editor pressao-pos-acao-card">
+                <h3><?php esc_html_e('Action Network', 'pressao-plugin'); ?></h3>
+                <p>
+                    <label class="pressao-pos-acao-inline">
+                        <input type="checkbox" data-field="an-ativo" <?php checked(!empty($an)); ?> />
+                        <?php esc_html_e('Criar/atualizar o contato no Action Network', 'pressao-plugin'); ?>
+                    </label>
+                </p>
+                <div data-pos-acao-campos="an">
+                    <p>
+                        <label><?php esc_html_e('Tags', 'pressao-plugin'); ?></label>
+                        <input type="text" class="regular-text" data-field="an-tags"
+                               value="<?php echo esc_attr($tags); ?>" placeholder="tarifazero" />
+                        <span class="description"><?php esc_html_e('Separe várias tags por vírgula. A chave de acesso do Action Network fica no servidor da API, não aqui.', 'pressao-plugin'); ?></span>
+                    </p>
+                </div>
+            </div>
+
+            <p class="pressao-redes-editor-actions">
+                <button type="button" class="button button-primary" data-action="salvar-pos-acao"><?php esc_html_e('Salvar', 'pressao-plugin'); ?></button>
+            </p>
+            <p class="pressao-agregado-editor-status pressao-pos-acao-status" role="status"></p>
+        </div>
+        <?php
+    }
+
+    public function ajax_salvar_pos_acao() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Sem permissão.', 'pressao-plugin')], 403);
+        }
+        check_ajax_referer(self::NONCE_POS_ACAO, 'nonce');
+        $campanha_id = $this->campanha_id_atual();
+
+        $permitidos = ['email', 'telefone', 'instagram', 'tiktok'];
+        $canais = isset($_POST['canais']) && is_array($_POST['canais'])
+            ? array_values(array_intersect($permitidos, array_map('sanitize_key', wp_unslash($_POST['canais']))))
+            : [];
+        if (!$canais) {
+            wp_send_json_error(['message' => __('Escolha ao menos um canal para disparar o pós-ação.', 'pressao-plugin')], 400);
+        }
+        $pos = ['canais' => $canais];
+
+        if (!empty($_POST['conf_ativo'])) {
+            $nome = trim(sanitize_text_field(wp_unslash($_POST['conf_nome'] ?? '')));
+            $email = trim(sanitize_email(wp_unslash($_POST['conf_email'] ?? '')));
+            $assunto = trim(sanitize_text_field(wp_unslash($_POST['conf_assunto'] ?? '')));
+            $texto = trim(sanitize_textarea_field(wp_unslash($_POST['conf_texto'] ?? '')));
+            if ($nome === '' || $assunto === '' || $texto === '') {
+                wp_send_json_error(['message' => __('Preencha nome do remetente, assunto e texto do e-mail.', 'pressao-plugin')], 400);
+            }
+            if (!is_email($email)) {
+                wp_send_json_error(['message' => __('E-mail do remetente inválido.', 'pressao-plugin')], 400);
+            }
+            $pos['confirmacao_email'] = [
+                'remetente_nome' => $nome,
+                'remetente_email' => $email,
+                'assunto' => $assunto,
+                'texto' => $texto,
+            ];
+        }
+
+        if (!empty($_POST['an_ativo'])) {
+            $tags = array_values(array_filter(array_map(
+                'trim',
+                explode(',', sanitize_text_field(wp_unslash($_POST['an_tags'] ?? '')))
+            ), 'strlen'));
+            if (!$tags) {
+                wp_send_json_error(['message' => __('Informe ao menos uma tag do Action Network.', 'pressao-plugin')], 400);
+            }
+            $pos['actionnetwork'] = ['tags' => array_values(array_unique($tags))];
+        }
+
+        $api = new PressaoPlugin_API();
+        $campanha = $api->atualizar_campanha($campanha_id, ['pos_acao' => $pos]);
+        if (is_wp_error($campanha)) {
+            wp_send_json_error(['message' => $campanha->get_error_message()], 400);
+        }
+        // API antiga ignora campos desconhecidos em silêncio: só confirmo se ela devolveu o pos_acao.
+        if (!is_array($campanha) || !array_key_exists('pos_acao', $campanha)) {
+            wp_send_json_error(['message' => __('A API não suporta o pós-ação. Atualize a pressao-api e tente de novo.', 'pressao-plugin')], 400);
+        }
+        wp_send_json_success(['pos_acao' => $campanha['pos_acao']]);
     }
 
     public function ajax_salvar_telefone_selecao() {

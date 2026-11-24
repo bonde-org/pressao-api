@@ -37,7 +37,7 @@ helm upgrade --install pressao-api ./helm \
   --set secrets.existingSecret=pressao-api-creds
 ```
 
-O Secret `pressao-api-creds` deve conter pelo menos `SECRET_KEY`, `KEYCLOAK_CLIENT_SECRET`, `SENDGRID_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`.
+O Secret `pressao-api-creds` deve conter pelo menos `SECRET_KEY`, `KEYCLOAK_CLIENT_SECRET`, `SENDGRID_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`. Opcional: `ACTIONNETWORK_API_KEY` (pós-ação; vazio desliga a integração com o Action Network).
 
 ## Ativar CloudNativePG
 

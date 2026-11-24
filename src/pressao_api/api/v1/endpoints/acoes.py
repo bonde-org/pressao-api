@@ -1,7 +1,7 @@
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pressao_api.core.database import get_db
@@ -40,6 +40,7 @@ from pressao_api.services.alvo_agregado import AlvoAgregadoService, membro_telef
 from pressao_api.services.confirmacao import incrementar_contador_se_confirmada
 from pressao_api.services.metricas import calculadora
 from pressao_api.services.orquestrador import orquestrador
+from pressao_api.services.pos_acao import agendar_pos_acao
 from pressao_api.services.telefone_ligacao import iniciar_tentativa
 from pressao_api.utils.validadores import (
     obter_mensagem_erro_compatibilidade,
@@ -98,6 +99,7 @@ async def _buscar_acao_autorizada(acao_id: UUID, current_user: dict, db: AsyncSe
 )
 async def criar_acao(
     request: CriarAcaoRequest,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -333,6 +335,10 @@ async def criar_acao(
                     acoes_atualizadas=atualizadas,
                 )
 
+        # Pós-ação (e-mail de confirmação + Action Network), em background e sem afetar a resposta
+        if acao.status == StatusAcaoEnum.CONCLUIDA:
+            await agendar_pos_acao(background_tasks, acao, campanha, repo)
+
         # ============================================
         # MÉTRICAS DE NEGÓCIO
         # ============================================
@@ -413,6 +419,7 @@ async def obter_status_acao(
 )
 async def confirmar_acao(
     acao_id: UUID,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -467,6 +474,9 @@ async def confirmar_acao(
 
     campanha_repo = CampanhaRepository(db)
     novo_total = await incrementar_contador_se_confirmada(acao, status_anterior, campanha_repo)
+
+    campanha = await campanha_repo.buscar_por_id(acao.campanha_id)
+    await agendar_pos_acao(background_tasks, acao, campanha, repo)
 
     acoes_tempo_confirmacao_seconds.labels(
         canal=acao.canal, campanha_id=str(acao.campanha_id)

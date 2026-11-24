@@ -111,6 +111,8 @@ secrets:
   KEYCLOAK_CLIENT_SECRET: "change-me"
   SENDGRID_API_KEY: "mock-key"
   SENDGRID_WEBHOOK_VERIFICATION_KEY: ""
+  # Pós-ação: vazio desliga a integração com o Action Network
+  ACTIONNETWORK_API_KEY: ""
   TWILIO_ACCOUNT_SID: "mock-sid"
   TWILIO_AUTH_TOKEN: "mock-token"
   TWILIO_API_KEY_SID: ""

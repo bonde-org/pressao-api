@@ -676,6 +676,70 @@
         });
     }
 
+    function initPosAcao($root) {
+        if (!$root.length) {
+            return;
+        }
+        const L = labels();
+
+        function msg(resp, xhr, fallback) {
+            if (resp && resp.data && resp.data.message) {
+                return resp.data.message;
+            }
+            if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                return xhr.responseJSON.data.message;
+            }
+            return fallback;
+        }
+
+        function syncCampos() {
+            ['conf', 'an'].forEach(function (k) {
+                const ativo = $root.find('[data-field="' + k + '-ativo"]').is(':checked');
+                $root.find('[data-pos-acao-campos="' + k + '"]').toggle(ativo);
+            });
+        }
+        $root.on('change', '[data-field="conf-ativo"], [data-field="an-ativo"]', syncCampos);
+        syncCampos();
+
+        $root.on('click', '[data-action="salvar-pos-acao"]', function () {
+            const $btn = $(this);
+            const $status = $root.find('.pressao-pos-acao-status');
+            const canais = $root.find('[data-field="canal"]:checked').map(function () {
+                return $(this).val();
+            }).get();
+            const val = function (f) {
+                return $root.find('[data-field="' + f + '"]').val() || '';
+            };
+            $status.text(L.saving || 'Salvando…').removeClass('is-error');
+            $btn.prop('disabled', true);
+            $.post(ajaxUrl(), {
+                action: 'pressao_admin_salvar_pos_acao',
+                nonce: $root.attr('data-nonce') || '',
+                canais: canais,
+                conf_ativo: $root.find('[data-field="conf-ativo"]').is(':checked') ? 1 : 0,
+                conf_nome: val('conf-nome'),
+                conf_email: val('conf-email'),
+                conf_assunto: val('conf-assunto'),
+                conf_texto: val('conf-texto'),
+                an_ativo: $root.find('[data-field="an-ativo"]').is(':checked') ? 1 : 0,
+                an_tags: val('an-tags')
+            })
+                .done(function (resp) {
+                    if (!resp || !resp.success) {
+                        $status.text(msg(resp, null, L.redesSaveError)).addClass('is-error');
+                        return;
+                    }
+                    $status.text(L.saved || 'Salvo.').removeClass('is-error');
+                })
+                .fail(function (xhr) {
+                    $status.text(msg(null, xhr, L.redesSaveError)).addClass('is-error');
+                })
+                .always(function () {
+                    $btn.prop('disabled', false);
+                });
+        });
+    }
+
     function initRedesSociais() {
         $('.pressao-redes, .pressao-agregado').each(function () {
             initBaloesTemplates($(this));
@@ -684,6 +748,7 @@
             initMembrosAgregado($(this));
             initTelefoneSelecao($(this));
         });
+        initPosAcao($('.pressao-pos-acao'));
     }
 
     function initBaloesTemplates($root) {
