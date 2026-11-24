@@ -345,6 +345,14 @@ Não cria ação na API. Ao copiar o link ou abrir WhatsApp/Instagram/Messenger,
 - Prefetch dos blobs ao abrir a tela; clique na imagem ou em “Baixar todas as imagens”.
 - Download/share de imagem **não** marca `__compartilhar`.
 
+### Pós-ação (aba **Pós-ação**)
+
+Edita, direto no WordPress, o e-mail de confirmação enviado ao ativista e a integração com o Action Network
+(tags). Os dados são gravados **na campanha vinculada** (`PUT /api/v1/campanhas/{id}`, campo `pos_acao`), e não
+em opções do site: outra campanha, mesmo no mesmo WordPress, não herda nem sobrescreve esta configuração. A chave
+do Action Network fica só no servidor da API. Se a API não devolver `pos_acao` (versão antiga), o salvar avisa
+em vez de fingir sucesso. Requer `pressao-api` com o pós-ação.
+
 ### Debug
 
 Para ativar o debug, no `wp-config.php`:

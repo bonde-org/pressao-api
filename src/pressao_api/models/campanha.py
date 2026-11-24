@@ -18,6 +18,8 @@ class Campanha(Base):
     acoes_confirmadas = Column(BigInteger, default=0, nullable=False)
     # Número Twilio (E.164) que liga para o ativista e aparece para o alvo
     telefone_origem = Column(String(20), nullable=True, unique=True)
+    # Configuração do pós-ação (Action Network e e-mail de confirmação); ver schemas.PosAcaoConfig
+    pos_acao = Column(JSON, nullable=True)
 
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

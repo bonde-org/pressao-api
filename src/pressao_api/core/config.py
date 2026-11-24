@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     TWILIO_WEBHOOK_URL: str = "/api/v1/webhooks/twilio"
     TELEFONE_TIMEOUT_TOQUE_SEG: int = 30
 
+    # Action Network (pós-ação). Vazio = integração desligada, mesmo com a campanha configurada.
+    ACTIONNETWORK_API_KEY: str = ""
+    ACTIONNETWORK_API_URL: str = "https://actionnetwork.org/api/v2"
+    ACTIONNETWORK_TIMEOUT_SEG: float = 10.0
+
     # Monitoring
     METRICS_ENABLED: bool = True
     LOG_LEVEL: str = "INFO"

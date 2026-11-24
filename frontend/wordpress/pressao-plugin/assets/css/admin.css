@@ -818,3 +818,21 @@
 		transform: none;
 	}
 }
+
+.pressao-pos-acao .pressao-pos-acao-card {
+	max-width: 52rem;
+}
+
+.pressao-pos-acao .pressao-pos-acao-card h3 {
+	margin-top: 0;
+}
+
+.pressao-pos-acao .pressao-pos-acao-inline {
+	display: inline-block;
+	margin: 0 1rem 0.25rem 0;
+	font-weight: 400;
+}
+
+.pressao-pos-acao textarea {
+	font-family: inherit;
+}

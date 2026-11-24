@@ -9,6 +9,7 @@ from sendgrid.helpers.mail import (
     HtmlContent,
     Mail,
     MailSettings,
+    PlainTextContent,
     ReplyTo,
     SandBoxMode,
     Subject,
@@ -56,7 +57,6 @@ class EmailService:
 
     def _get_client(self) -> SendGridAPIClient:
         if self._client is None:
-            logger.info("SENDGRID_API_KEY", api_key=settings.SENDGRID_API_KEY)
             self._client = SendGridAPIClient(settings.SENDGRID_API_KEY)
         return self._client
 
@@ -226,6 +226,80 @@ class EmailService:
             )
         except Exception as exc:  # noqa: BLE001
             logger.error("Falha ao enviar e-mail de pressão", error=str(exc), acao_id=acao_id)
+            return ResultadoEnvioEmail(
+                sucesso=False,
+                message_id=None,
+                sandbox=sandbox,
+                status="falha",
+                erro=str(exc),
+                destinatario=destinatario,
+                remetente=remetente_email,
+            )
+
+    def enviar_transacional(
+        self,
+        destinatario: str,
+        remetente_email: str,
+        remetente_nome: str | None,
+        assunto: str,
+        conteudo_html: str,
+        conteudo_texto: str,
+        campanha_id: str | None = None,
+    ) -> ResultadoEnvioEmail:
+        """
+        Envia um e-mail avulso ao ativista (ex.: confirmação pós-ação).
+
+        Diferente de `enviar_pressao`, NÃO leva `acao_id`/`disparo_id` nos custom args: os eventos do
+        webhook do SendGrid usam esses ids para alterar ações e disparos, e um bounce desta
+        mensagem não pode mexer no estado da ação. Respeita o modo sandbox.
+        """
+        self._validar_envio(destinatario, remetente_email, assunto, conteudo_html)
+
+        mail = Mail(
+            from_email=From(remetente_email, remetente_nome or remetente_email),
+            to_emails=To(destinatario),
+            subject=Subject(assunto),
+            plain_text_content=PlainTextContent(conteudo_texto),
+            html_content=HtmlContent(conteudo_html),
+        )
+        mail.add_custom_arg(CustomArg("tipo", "confirmacao_pos_acao"))
+        if campanha_id:
+            mail.add_custom_arg(CustomArg("campanha_id", campanha_id))
+
+        sandbox = bool(settings.SENDGRID_SANDBOX_MODE)
+        if sandbox:
+            mail.mail_settings = MailSettings(sandbox_mode=SandBoxMode(True))
+            if self._credencial_placeholder():
+                logger.info("E-mail de confirmação em sandbox (dry-run, API não chamada)")
+                return ResultadoEnvioEmail(
+                    sucesso=True,
+                    message_id=f"sandbox-{uuid.uuid4()}",
+                    sandbox=True,
+                    status="sandbox",
+                    destinatario=destinatario,
+                    remetente=remetente_email,
+                )
+
+        try:
+            response = self._get_client().send(mail)
+            status_code = getattr(response, "status_code", 0)
+            if status_code not in (200, 202):
+                raise RuntimeError(f"SendGrid retornou HTTP {status_code}")
+            headers = getattr(response, "headers", {}) or {}
+            message_id = (
+                headers.get("X-Message-Id") or headers.get("X-Message-ID") or str(uuid.uuid4())
+            )
+            logger.info("E-mail de confirmação enviado", sandbox=sandbox, status_code=status_code)
+            return ResultadoEnvioEmail(
+                sucesso=True,
+                message_id=str(message_id),
+                sandbox=sandbox,
+                status="sandbox" if sandbox else "enviado",
+                destinatario=destinatario,
+                remetente=remetente_email,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Falha ao enviar e-mail de confirmação", error=str(exc))
             return ResultadoEnvioEmail(
                 sucesso=False,
                 message_id=None,
