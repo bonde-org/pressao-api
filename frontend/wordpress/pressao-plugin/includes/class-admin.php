@@ -39,6 +39,7 @@ class PressaoPlugin_Admin {
         add_action('wp_ajax_pressao_admin_deletar_membro', [$this, 'ajax_deletar_membro']);
         add_action('wp_ajax_pressao_admin_salvar_telefone_selecao', [$this, 'ajax_salvar_telefone_selecao']);
         add_action('wp_ajax_pressao_admin_salvar_pos_acao', [$this, 'ajax_salvar_pos_acao']);
+        add_action('wp_ajax_pressao_admin_salvar_pos_acao_imagens', [$this, 'ajax_salvar_pos_acao_imagens']);
     }
     
     public function add_admin_menu() {
@@ -1719,8 +1720,47 @@ class PressaoPlugin_Admin {
                 <button type="button" class="button button-primary" data-action="salvar-pos-acao"><?php esc_html_e('Salvar', 'pressao-plugin'); ?></button>
             </p>
             <p class="pressao-agregado-editor-status pressao-pos-acao-status" role="status"></p>
+
+            <hr />
+            <div class="pressao-agregado-editor pressao-pos-acao-card pressao-pos-acao-imagens">
+                <h3><?php esc_html_e('Imagens para compartilhar', 'pressao-plugin'); ?></h3>
+                <p class="description"><?php esc_html_e('Aparecem na tela de compartilhamento depois da ação, para a pessoa baixar e postar nas redes. Salvas separadamente do restante desta aba.', 'pressao-plugin'); ?></p>
+                <?php $this->render_share_imagens_editor(is_array(get_option('pressao_compartilhamento', [])) ? get_option('pressao_compartilhamento', []) : []); ?>
+                <p class="pressao-redes-editor-actions">
+                    <button type="button" class="button button-primary" data-action="salvar-pos-acao-imagens"><?php esc_html_e('Salvar imagens', 'pressao-plugin'); ?></button>
+                </p>
+                <p class="pressao-agregado-editor-status pressao-pos-acao-imagens-status" role="status"></p>
+            </div>
         </div>
         <?php
+    }
+
+    /**
+     * Salva só as imagens para postar (e seus textos) na opção de compartilhamento, sem tocar nos
+     * demais campos dela (link, mensagem, URLs das redes...).
+     */
+    public function ajax_salvar_pos_acao_imagens() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Sem permissão.', 'pressao-plugin')], 403);
+        }
+        check_ajax_referer(self::NONCE_POS_ACAO, 'nonce');
+
+        $imagens = self::sanitize_share_imagens(isset($_POST['imagens']) ? wp_unslash($_POST['imagens']) : []);
+        foreach ($imagens as $imagem) {
+            if ($imagem['rotulo'] !== '' && !$imagem['imagem_id']) {
+                wp_send_json_error(['message' => __('Escolha uma imagem para cada item com rótulo (ou remova o item).', 'pressao-plugin')], 400);
+            }
+        }
+
+        $config = get_option('pressao_compartilhamento', []);
+        $config = is_array($config) ? $config : [];
+        $config['imagens_titulo'] = sanitize_text_field(wp_unslash($_POST['imagens_titulo'] ?? ''));
+        $config['imagens_subtitulo'] = sanitize_text_field(wp_unslash($_POST['imagens_subtitulo'] ?? ''));
+        $config['imagens_instrucao'] = sanitize_textarea_field(wp_unslash($_POST['imagens_instrucao'] ?? ''));
+        $config['imagens'] = $imagens;
+        update_option('pressao_compartilhamento', $config);
+
+        wp_send_json_success(['total' => count($imagens)]);
     }
 
     public function ajax_salvar_pos_acao() {
@@ -2277,6 +2317,32 @@ class PressaoPlugin_Admin {
             </p>
 
             <h4><?php esc_html_e('Imagens para postar', 'pressao-plugin'); ?></h4>
+            <p class="description">
+                <?php
+                printf(
+                    /* translators: %s: link da aba Pós-ação */
+                    esc_html__('As imagens para baixar e postar agora são editadas na aba %s.', 'pressao-plugin'),
+                    '<a href="' . esc_url(self::settings_url(['tab' => 'pos-acao'])) . '">' . esc_html__('Pós-ação', 'pressao-plugin') . '</a>'
+                );
+                ?>
+            </p>
+        </div>
+        <?php
+    }
+
+    /**
+     * Editor das imagens para postar (tela de compartilhamento). Mesmo markup do antigo bloco da aba
+     * Compartilhamento: o JS de adicionar/remover/selecionar é delegado por estas classes.
+     *
+     * @param array $config Opção pressao_compartilhamento.
+     */
+    private function render_share_imagens_editor(array $config) {
+        $imagens = isset($config['imagens']) && is_array($config['imagens']) ? $config['imagens'] : [];
+        if (empty($imagens)) {
+            $imagens = [[]];
+        }
+        ?>
+            <h4><?php esc_html_e('Imagens para postar', 'pressao-plugin'); ?></h4>
             <p>
                 <label>
                     <?php esc_html_e('Título do card', 'pressao-plugin'); ?><br>
@@ -2319,7 +2385,6 @@ class PressaoPlugin_Admin {
                     <?php esc_html_e('As imagens usam a Biblioteca de Mídia do WordPress (attachment ID).', 'pressao-plugin'); ?>
                 </p>
             </div>
-        </div>
         <?php
     }
 
@@ -2366,27 +2431,48 @@ class PressaoPlugin_Admin {
         <?php
     }
 
+    /**
+     * @param mixed $raw Lista de itens {rotulo, imagem_id}.
+     * @return array<int, array{rotulo: string, imagem_id: int}>
+     */
+    private static function sanitize_share_imagens($raw) {
+        $imagens = [];
+        if (!is_array($raw)) {
+            return $imagens;
+        }
+        foreach ($raw as $imagem) {
+            if (!is_array($imagem)) {
+                continue;
+            }
+            $rotulo = sanitize_text_field($imagem['rotulo'] ?? '');
+            $imagem_id = absint($imagem['imagem_id'] ?? 0);
+            if ($imagem_id && !wp_attachment_is_image($imagem_id)) {
+                $imagem_id = 0;
+            }
+            if ($rotulo === '' && !$imagem_id) {
+                continue;
+            }
+            $imagens[] = ['rotulo' => $rotulo, 'imagem_id' => $imagem_id];
+        }
+        return $imagens;
+    }
+
     public function sanitize_compartilhamento($value) {
         if (!is_array($value)) {
             return [];
         }
 
-        $imagens = [];
-        if (isset($value['imagens']) && is_array($value['imagens'])) {
-            foreach ($value['imagens'] as $imagem) {
-                if (!is_array($imagem)) {
-                    continue;
-                }
-                $rotulo = sanitize_text_field($imagem['rotulo'] ?? '');
-                $imagem_id = absint($imagem['imagem_id'] ?? 0);
-                if ($rotulo === '' && !$imagem_id) {
-                    continue;
-                }
-                $imagens[] = [
-                    'rotulo' => $rotulo,
-                    'imagem_id' => $imagem_id,
-                ];
-            }
+        // As imagens para postar são editadas na aba Pós-ação: quando este formulário não as envia,
+        // mantém o que já está salvo em vez de apagar.
+        $atual = get_option('pressao_compartilhamento', []);
+        $atual = is_array($atual) ? $atual : [];
+        if (!array_key_exists('imagens', $value)) {
+            $imagens = isset($atual['imagens']) && is_array($atual['imagens']) ? $atual['imagens'] : [];
+            $value['imagens_titulo'] = $value['imagens_titulo'] ?? ($atual['imagens_titulo'] ?? '');
+            $value['imagens_subtitulo'] = $value['imagens_subtitulo'] ?? ($atual['imagens_subtitulo'] ?? '');
+            $value['imagens_instrucao'] = $value['imagens_instrucao'] ?? ($atual['imagens_instrucao'] ?? '');
+        } else {
+            $imagens = self::sanitize_share_imagens($value['imagens']);
         }
 
         return [
