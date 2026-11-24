@@ -5,7 +5,9 @@ Não usa a sessão do banco da requisição, que já está fechada quando a tare
 """
 
 import asyncio
+from collections.abc import Coroutine
 from dataclasses import dataclass
+from typing import Any
 
 import structlog
 from fastapi import BackgroundTasks
@@ -58,7 +60,7 @@ def montar_job(acao: Acao, campanha: Campanha | None, *, primeira_acao: bool) ->
 
 async def executar(job: PosAcaoJob) -> None:
     """Executa os passos em paralelo; cada um isolado, falha de um não afeta o outro."""
-    tarefas = []
+    tarefas: list[Coroutine[Any, Any, object]] = []
     if job.config.actionnetwork and actionnetwork.integracao_ativa():
         tarefas.append(
             actionnetwork.registrar_contato(
