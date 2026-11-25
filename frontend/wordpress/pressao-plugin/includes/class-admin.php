@@ -1695,6 +1695,16 @@ class PressaoPlugin_Admin {
                         <textarea class="large-text" rows="14" data-field="conf-texto" maxlength="10000"><?php echo esc_textarea($conf['texto'] ?? ''); ?></textarea>
                         <span class="description"><?php esc_html_e('Texto puro. Separe os parágrafos com uma linha em branco; endereços (https:// ou www.) viram links; {nome} é trocado pelo primeiro nome da pessoa.', 'pressao-plugin'); ?></span>
                     </p>
+                    <p>
+                        <label><?php esc_html_e('Botão de compartilhar no WhatsApp: texto do botão', 'pressao-plugin'); ?></label>
+                        <input type="text" class="regular-text" data-field="conf-botao-texto" maxlength="60"
+                               value="<?php echo esc_attr($conf['botao_texto'] ?? 'Compartilhe'); ?>" />
+                    </p>
+                    <p>
+                        <label><?php esc_html_e('Mensagem enviada pelo botão', 'pressao-plugin'); ?></label>
+                        <textarea class="large-text" rows="6" data-field="conf-botao-whatsapp" maxlength="1000"><?php echo esc_textarea($conf['botao_whatsapp'] ?? ''); ?></textarea>
+                        <span class="description"><?php esc_html_e('O botão abre o WhatsApp com esta mensagem pronta para a pessoa escolher com quem compartilhar. Deixe vazio para não mostrar o botão no e-mail. O botão aparece onde você escrever [COMPARTILHE] (sozinho numa linha) no texto do e-mail; sem esse marcador, vai no fim.', 'pressao-plugin'); ?></span>
+                    </p>
                 </div>
             </div>
 
@@ -1796,6 +1806,8 @@ class PressaoPlugin_Admin {
                 'remetente_email' => $email,
                 'assunto' => $assunto,
                 'texto' => $texto,
+                'botao_texto' => trim(sanitize_text_field(wp_unslash($_POST['conf_botao_texto'] ?? ''))) ?: 'Compartilhe',
+                'botao_whatsapp' => trim(sanitize_textarea_field(wp_unslash($_POST['conf_botao_whatsapp'] ?? ''))) ?: null,
             ];
         }
 

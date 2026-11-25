@@ -222,6 +222,44 @@ class TestConfirmacaoEmail:
         assert '<a href="https://www.tarifazero.bonde.org">www.tarifazero.bonde.org</a>' in html
         assert html.count("<p") == 2
 
+    def test_botao_whatsapp_no_html_e_no_texto(self):
+        cfg = self._cfg().model_copy(
+            update={"botao_whatsapp": "Pressione Hugo Motta! www.tarifazero.bonde.org"}
+        )
+        link = "https://wa.me/?text=Pressione%20Hugo%20Motta%21%20www.tarifazero.bonde.org"
+        html = confirmacao_email.montar_html(cfg, "Maria")
+        assert f'<a href="{link}"' in html and ">Compartilhe</a>" in html
+        assert f"Compartilhe: {link}" in confirmacao_email.montar_texto(cfg, "Maria")
+
+    def test_botao_no_lugar_do_marcador(self):
+        cfg = self._cfg().model_copy(
+            update={
+                "texto": "Oi {nome}!\n\n[COMPARTILHE]\n\nSeguimos juntos!",
+                "botao_whatsapp": "msg",
+            }
+        )
+        html = confirmacao_email.montar_html(cfg, "Maria")
+        assert html.index("Oi Maria!") < html.index("wa.me") < html.index("Seguimos juntos!")
+        assert "[COMPARTILHE]" not in html and html.count("wa.me") == 1
+        texto = confirmacao_email.montar_texto(cfg, "Maria")
+        assert texto.index("wa.me") < texto.index("Seguimos") and "[COMPARTILHE]" not in texto
+
+    def test_marcador_sem_mensagem_some(self):
+        cfg = self._cfg().model_copy(update={"texto": "Oi\n\n{botao}\n\nTchau"})
+        assert "{botao}" not in confirmacao_email.montar_html(cfg, None)
+        assert "{botao}" not in confirmacao_email.montar_texto(cfg, None)
+
+    def test_sem_mensagem_nao_ha_botao(self):
+        cfg = self._cfg()
+        assert "wa.me" not in confirmacao_email.montar_html(cfg, None)
+        assert "wa.me" not in confirmacao_email.montar_texto(cfg, None)
+        assert (
+            PosAcaoConfig(
+                confirmacao_email={**POS_ACAO["confirmacao_email"], "botao_whatsapp": "  "}
+            ).confirmacao_email.botao_whatsapp
+            is None
+        )
+
     def test_html_escapa_conteudo(self):
         cfg = self._cfg().model_copy(update={"texto": "<script>x</script> oi"})
         assert "<script>" not in confirmacao_email.montar_html(cfg, None)

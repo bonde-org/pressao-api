@@ -768,6 +768,8 @@
                 conf_email: val('conf-email'),
                 conf_assunto: val('conf-assunto'),
                 conf_texto: val('conf-texto'),
+                conf_botao_texto: val('conf-botao-texto'),
+                conf_botao_whatsapp: val('conf-botao-whatsapp'),
                 an_ativo: $root.find('[data-field="an-ativo"]').is(':checked') ? 1 : 0,
                 an_tags: val('an-tags')
             })

@@ -47,6 +47,18 @@ class ConfirmacaoEmailConfig(BaseModel):
         max_length=10000,
         description="Texto puro; parágrafos separados por linha em branco. {nome} = 1º nome",
     )
+    botao_texto: str = Field(default="Compartilhe", min_length=1, max_length=60)
+    botao_whatsapp: str | None = Field(
+        None,
+        max_length=1000,
+        description="Mensagem enviada pelo botão de compartilhar no WhatsApp; vazio = sem botão",
+    )
+
+    @field_validator("botao_whatsapp")
+    @classmethod
+    def validate_botao_whatsapp(cls, v: str | None) -> str | None:
+        v = (v or "").strip()
+        return v or None
 
     @field_validator("remetente_email")
     @classmethod
