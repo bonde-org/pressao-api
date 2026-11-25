@@ -226,7 +226,7 @@ class TestConfirmacaoEmail:
         cfg = self._cfg().model_copy(
             update={"botao_whatsapp": "Pressione Hugo Motta! www.tarifazero.bonde.org"}
         )
-        link = "https://wa.me/?text=Pressione%20Hugo%20Motta%21%20www.tarifazero.bonde.org"
+        link = "https://api.whatsapp.com/send?text=Pressione%20Hugo%20Motta%21%20www.tarifazero.bonde.org"
         html = confirmacao_email.montar_html(cfg, "Maria")
         assert f'<a href="{link}"' in html and ">Compartilhe</a>" in html
         assert f"Compartilhe: {link}" in confirmacao_email.montar_texto(cfg, "Maria")
@@ -239,10 +239,17 @@ class TestConfirmacaoEmail:
             }
         )
         html = confirmacao_email.montar_html(cfg, "Maria")
-        assert html.index("Oi Maria!") < html.index("wa.me") < html.index("Seguimos juntos!")
-        assert "[COMPARTILHE]" not in html and html.count("wa.me") == 1
+        assert (
+            html.index("Oi Maria!")
+            < html.index("api.whatsapp.com")
+            < html.index("Seguimos juntos!")
+        )
+        assert "[COMPARTILHE]" not in html and html.count("api.whatsapp.com") == 1
         texto = confirmacao_email.montar_texto(cfg, "Maria")
-        assert texto.index("wa.me") < texto.index("Seguimos") and "[COMPARTILHE]" not in texto
+        assert (
+            texto.index("api.whatsapp.com") < texto.index("Seguimos")
+            and "[COMPARTILHE]" not in texto
+        )
 
     def test_marcador_sem_mensagem_some(self):
         cfg = self._cfg().model_copy(update={"texto": "Oi\n\n{botao}\n\nTchau"})
@@ -251,8 +258,8 @@ class TestConfirmacaoEmail:
 
     def test_sem_mensagem_nao_ha_botao(self):
         cfg = self._cfg()
-        assert "wa.me" not in confirmacao_email.montar_html(cfg, None)
-        assert "wa.me" not in confirmacao_email.montar_texto(cfg, None)
+        assert "api.whatsapp.com" not in confirmacao_email.montar_html(cfg, None)
+        assert "api.whatsapp.com" not in confirmacao_email.montar_texto(cfg, None)
         assert (
             PosAcaoConfig(
                 confirmacao_email={**POS_ACAO["confirmacao_email"], "botao_whatsapp": "  "}

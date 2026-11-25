@@ -2277,7 +2277,7 @@ class PressaoPlugin_Admin {
                               class="large-text"><?php echo esc_textarea($config['mensagem'] ?? ''); ?></textarea>
                 </label>
                 <span class="description">
-                    <?php esc_html_e('Usada no WhatsApp (wa.me/?text=) quando a URL customizada estiver vazia.', 'pressao-plugin'); ?>
+                    <?php esc_html_e('Usada no WhatsApp (api.whatsapp.com/send?text=) quando a URL customizada estiver vazia.', 'pressao-plugin'); ?>
                 </span>
             </p>
             <p>
