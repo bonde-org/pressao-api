@@ -253,9 +253,12 @@ class TestConfirmacaoEmail:
         cfg = self._cfg()
         assert "wa.me" not in confirmacao_email.montar_html(cfg, None)
         assert "wa.me" not in confirmacao_email.montar_texto(cfg, None)
-        assert PosAcaoConfig(
-            confirmacao_email={**POS_ACAO["confirmacao_email"], "botao_whatsapp": "  "}
-        ).confirmacao_email.botao_whatsapp is None
+        assert (
+            PosAcaoConfig(
+                confirmacao_email={**POS_ACAO["confirmacao_email"], "botao_whatsapp": "  "}
+            ).confirmacao_email.botao_whatsapp
+            is None
+        )
 
     def test_html_escapa_conteudo(self):
         cfg = self._cfg().model_copy(update={"texto": "<script>x</script> oi"})
