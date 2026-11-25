@@ -1154,7 +1154,9 @@ JSON), editável por `PUT /api/v1/campanhas/{id}` ou pela aba **Pós-ação** do
       "remetente_nome": "Annie do BONDE",
       "remetente_email": "mobilizacao@bonde.org",
       "assunto": "Tarifa Zero já - vamos chegar mais longe!",
-      "texto": "Valeu, {nome}!\n\nAcesse www.tarifazero.bonde.org e compartilhe."
+      "texto": "Valeu, {nome}!\n\nAcesse www.tarifazero.bonde.org e compartilhe.",
+      "botao_texto": "Compartilhe",
+      "botao_whatsapp": "Mensagem que o botão abre no WhatsApp (opcional; vazio = sem botão)"
     },
     "actionnetwork": { "tags": ["tarifazero"] }
   }
