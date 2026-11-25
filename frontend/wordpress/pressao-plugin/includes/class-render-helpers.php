@@ -147,7 +147,7 @@ class PressaoPlugin_Render_Helpers {
 
         $whatsapp_url = isset($config['whatsapp_url']) ? trim((string) $config['whatsapp_url']) : '';
         if ($whatsapp_url === '' && $mensagem !== '') {
-            $whatsapp_url = 'https://wa.me/?text=' . rawurlencode($mensagem);
+            $whatsapp_url = 'https://api.whatsapp.com/send?text=' . rawurlencode($mensagem);
         }
 
         // X tem link oficial com texto pré-preenchido: mesmo fallback do WhatsApp.

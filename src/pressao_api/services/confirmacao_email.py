@@ -37,7 +37,7 @@ def link_whatsapp(cfg: ConfirmacaoEmailConfig) -> str | None:
     """Link que abre o WhatsApp com a mensagem de compartilhamento já escrita."""
     if not cfg.botao_whatsapp:
         return None
-    return f"https://wa.me/?text={quote(cfg.botao_whatsapp, safe='')}"
+    return f"https://api.whatsapp.com/send?text={quote(cfg.botao_whatsapp, safe='')}"
 
 
 def montar_texto(cfg: ConfirmacaoEmailConfig, nome: str | None) -> str:
@@ -60,8 +60,9 @@ def montar_html(cfg: ConfirmacaoEmailConfig, nome: str | None) -> str:
         botao = (
             '<p style="margin:24px 0"><a href="'
             + html.escape(link, quote=True)
-            + '" style="display:inline-block;background:#25D366;color:#fff;font-weight:bold;'
-            'text-decoration:none;padding:14px 28px;border-radius:6px">'
+            + '" style="display:inline-block;background:#000000;color:#ffffff;font-weight:500;'
+            "font-size:16px;line-height:24px;text-decoration:none;padding:10px 32px;"
+            'border:1px solid #000000;border-radius:80px">'
             + html.escape(cfg.botao_texto)
             + "</a></p>"
         )
